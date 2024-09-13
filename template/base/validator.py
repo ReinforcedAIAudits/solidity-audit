@@ -28,6 +28,8 @@ import bittensor as bt
 from typing import List, Union
 from traceback import print_exception
 
+import torch
+
 from template.base.neuron import BaseNeuron
 from template.base.utils.weight_utils import (
     process_weights_for_netuid,
@@ -362,11 +364,13 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.info("Saving validator state.")
 
         # Save the state of the validator to file.
-        np.savez(
-            self.config.neuron.full_path + "/state.npz",
-            step=self.step,
-            scores=self.scores,
-            hotkeys=self.hotkeys,
+        torch.save(
+            {
+                "step": self.step,
+                "scores": self.scores,
+                "hotkeys": self.hotkeys,
+            },
+            self.config.neuron.full_path + "/state.pt",
         )
 
     def load_state(self):
@@ -374,7 +378,7 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.info("Loading validator state.")
 
         # Load the state of the validator from file.
-        state = np.load(self.config.neuron.full_path + "/state.npz")
+        state = torch.load(self.config.neuron.full_path + "/state.pt")
         self.step = state["step"]
         self.scores = state["scores"]
         self.hotkeys = state["hotkeys"]

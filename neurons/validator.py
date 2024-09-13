@@ -19,14 +19,18 @@
 
 
 import time
+from typing import List
 
 # Bittensor
 import bittensor as bt
+import torch
 
 # import base validator class which takes care of most of the boilerplate
 from template.base.validator import BaseValidatorNeuron
+
 # Bittensor Validator Template:
 from template.validator import forward
+from unique_subnet.protocol import UniqueSynapse
 
 
 class Validator(BaseValidatorNeuron):
@@ -55,8 +59,72 @@ class Validator(BaseValidatorNeuron):
         - Rewarding the miners
         - Updating the scores
         """
+        miner_uids = self.metagraph.n.item()
+        bt.logging.info(f"Miner uids: {miner_uids}")
+
+        synapse = UniqueSynapse(nums1=2 , nums2=3)
+        bt.logging.info(f"Axons: {self.metagraph.axons}")
+
+        responses = self.dendrite.query(
+            axons=[self.metagraph.axons[1]],
+            synapse=synapse,
+            deserialize=False,
+        )
+
+        bt.logging.info(f"Received responses: {responses}")
+
+        rewards = self.get_rewards(responses)
+
+        bt.logging.info(f"Scored responses: {rewards}")
+
+        self.update_scores(rewards, [1])
         # TODO(developer): Rewrite this function based on your protocol definition.
-        return await forward(self)
+        # return await forward(self)
+
+    def get_number_reward(self, true_number: int, predicted_number: int) -> float:
+        """
+        Calculate the reward based on the proximity of the predicted number to the true number.
+
+        Args:
+        - true_number (int): The true number.
+        - predicted_number (int): The predicted number.
+
+        Returns:
+        - float: The reward value, normalized to be between 0 and 1.
+        """
+        max_difference = 10
+
+        difference = abs(true_number - predicted_number)
+
+        if difference == 0:
+            return 1.0
+        elif difference <= max_difference:
+            res = 1.0 - (difference / max_difference)
+            return 0.5
+        else:
+            return 0.0
+
+   
+
+    def reward(self, response: UniqueSynapse) -> float:
+        predictions = response.response
+        if predictions is None:
+            return 0.0
+        return  self.get_number_reward(response.nums1 + response.nums2, predictions)
+        
+       
+
+    def get_rewards(
+        self,
+        responses: List[UniqueSynapse],
+    ) -> torch.FloatTensor:
+        arr = [self.reward(response) for response in responses]
+        bt.logging.info(f"rewards: {arr}")
+        result = torch.FloatTensor(
+           arr 
+        )
+        bt.logging.info(f"rewards: {result}")
+        return result
 
 
 # The main function parses the configuration and runs the validator.
