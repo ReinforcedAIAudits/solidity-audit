@@ -18,6 +18,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 
+import random
 import time
 from typing import List
 
@@ -59,17 +60,21 @@ class Validator(BaseValidatorNeuron):
         - Rewarding the miners
         - Updating the scores
         """
-        miner_uids = self.metagraph.n.item()
+        # miner_uids = self.get_random_uids(
+        #     k=min(self.config.neuron.sample_size, self.metagraph.n.item())
+        # )
+        miner_uids = []
         bt.logging.info(f"Miner uids: {miner_uids}")
 
-        synapse = UniqueSynapse(nums1=2 , nums2=3)
+        synapse = UniqueSynapse(num1=2, num2=3)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
         responses = self.dendrite.query(
-            axons=[self.metagraph.axons[1]],
+            axons=[self.metagraph.axons[5]],
             synapse=synapse,
             deserialize=False,
         )
+        
 
         bt.logging.info(f"Received responses: {responses}")
 
@@ -77,7 +82,7 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Scored responses: {rewards}")
 
-        self.update_scores(rewards, [1])
+        self.update_scores(rewards, [5])
         # TODO(developer): Rewrite this function based on your protocol definition.
         # return await forward(self)
 
@@ -104,15 +109,11 @@ class Validator(BaseValidatorNeuron):
         else:
             return 0.0
 
-   
-
     def reward(self, response: UniqueSynapse) -> float:
         predictions = response.response
         if predictions is None:
             return 0.0
-        return  self.get_number_reward(response.nums1 + response.nums2, predictions)
-        
-       
+        return self.get_number_reward(response.num1 + response.num2, predictions)
 
     def get_rewards(
         self,
@@ -120,12 +121,66 @@ class Validator(BaseValidatorNeuron):
     ) -> torch.FloatTensor:
         arr = [self.reward(response) for response in responses]
         bt.logging.info(f"rewards: {arr}")
-        result = torch.FloatTensor(
-           arr 
-        )
+        result = torch.FloatTensor(arr)
         bt.logging.info(f"rewards: {result}")
         return result
 
+
+    def get_random_uids(self, k: int, exclude: List[int] = None) -> torch.LongTensor:
+        """Returns k available random uids from the metagraph.
+        Args:
+            k (int): Number of uids to return.
+            exclude (List[int]): List of uids to exclude from the random sampling.
+        Returns:
+            uids (torch.LongTensor): Randomly sampled available uids.
+        Notes:
+            If `k` is larger than the number of available `uids`, set `k` to the number of available `uids`.
+        """
+        candidate_uids = []
+        avail_uids = []
+
+        for uid in range(self.metagraph.n.item()):
+            uid_is_available = check_uid_availability(
+                self.metagraph, uid, self.config.neuron.vpermit_tao_limit
+            )
+            uid_is_not_excluded = exclude is None or uid not in exclude
+
+            if uid_is_available:
+                avail_uids.append(uid)
+                if uid_is_not_excluded:
+                    candidate_uids.append(uid)
+
+        # Check if candidate_uids contain enough for querying, if not grab all avaliable uids
+        available_uids = candidate_uids
+        if len(candidate_uids) < k:
+            available_uids += random.sample(
+                [uid for uid in avail_uids if uid not in candidate_uids],
+                k - len(candidate_uids),
+            )
+        uids = torch.tensor(random.sample(available_uids, k))
+        return uids
+    
+
+def check_uid_availability(
+    metagraph: "bt.metagraph.Metagraph", uid: int, vpermit_tao_limit: int
+) -> bool:
+    """Check if uid is available. The UID should be available if it is serving and has less than vpermit_tao_limit stake
+    Args:
+        metagraph (:obj: bt.metagraph.Metagraph): Metagraph object
+        uid (int): uid to be checked
+        vpermit_tao_limit (int): Validator permit tao limit
+    Returns:
+        bool: True if uid is available, False otherwise
+    """
+    # Filter non serving axons.
+    if not metagraph.axons[uid].is_serving:
+        return False
+    # Filter validator permit > 1024 stake.
+    if metagraph.validator_permit[uid]:
+        if metagraph.S[uid] > vpermit_tao_limit:
+            return False
+    # Available otherwise.
+    return True
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":

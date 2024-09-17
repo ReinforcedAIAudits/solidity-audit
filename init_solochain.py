@@ -5,6 +5,8 @@ from bittensor.commands.register import RegisterCommand
 from bittensor.commands.root import RootRegisterCommand
 from bittensor.commands.transfer import TransferCommand
 from bittensor.commands.wallets import WalletCreateCommand
+from bittensor.commands.stake import StakeCommand
+
 
 OWNER_NAME = "owner"
 VALIDATOR_NAME = "validator"
@@ -128,3 +130,28 @@ for wallet in [validator_wallet, miner_wallet]:
         ],
         wallet.path,
     )
+
+exec_command(
+    StakeCommand,
+    [
+        "stake",
+        "add",
+        "--wallet.name",
+        validator_wallet.name,
+        "--hotkey",
+        validator_wallet.hotkey_str,
+    ],
+)
+
+exec_command(
+    TransferCommand,
+    [
+        "wallet",
+        "transfer",
+        "--amount",
+        "15000",
+        "--dest",
+        validator_wallet.coldkey.ss58_address,
+    ],
+    alice_wallet.path,
+)
