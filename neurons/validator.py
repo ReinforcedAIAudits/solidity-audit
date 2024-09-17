@@ -70,7 +70,7 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
         responses = self.dendrite.query(
-            axons=[self.metagraph.axons[5]],
+            axons=[self.metagraph.axons[1]],
             synapse=synapse,
             deserialize=False,
         )
@@ -82,7 +82,7 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Scored responses: {rewards}")
 
-        self.update_scores(rewards, [5])
+        self.update_scores(rewards, [1])
         # TODO(developer): Rewrite this function based on your protocol definition.
         # return await forward(self)
 
