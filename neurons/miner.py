@@ -21,6 +21,7 @@ import random
 import time
 import typing
 import bittensor as bt
+import requests
 
 # Bittensor Miner Template:
 import template
@@ -58,12 +59,14 @@ class Miner(BaseMinerNeuron):
         The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
-        bt.logging.info("!!!!!!!!!!!!!!!!!!!!!")
         bt.logging.info(synapse)
-        response = synapse.num1 + synapse.num2 + random.randint(0, 10)
+        result = requests.post(
+            "http://localhost:5000/add", json={"a": synapse.num1, "b": synapse.num2}
+        )
+        
         time.sleep(12)
-        # Attach response to synapse and return it.
-        synapse.response = response
+        print(result.json())
+        synapse.response = result.json()["result"]
 
         return synapse
 

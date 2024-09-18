@@ -24,6 +24,7 @@ from typing import List
 
 # Bittensor
 import bittensor as bt
+import requests
 import torch
 
 # import base validator class which takes care of most of the boilerplate
@@ -63,26 +64,31 @@ class Validator(BaseValidatorNeuron):
         # miner_uids = self.get_random_uids(
         #     k=min(self.config.neuron.sample_size, self.metagraph.n.item())
         # )
-        miner_uids = []
+        MINER_UID = 3
+        miner_uids = [MINER_UID]
         bt.logging.info(f"Miner uids: {miner_uids}")
 
         synapse = UniqueSynapse(num1=2, num2=3)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
         responses = self.dendrite.query(
-            axons=[self.metagraph.axons[1]],
+            axons=[self.metagraph.axons[uid] for uid in miner_uids],
             synapse=synapse,
             deserialize=False,
-        )
-        
-
+        )     
         bt.logging.info(f"Received responses: {responses}")
+        
+        for miner_uid, response in zip(miner_uids, responses):
+            requests.post(f"http://localhost:5001/validate?uid={miner_uid}", json=response)
+            
+            if not (requests.get(f"http://localhost:5001/get_validation_for_miner?{miner_uid}")):
+                raise ValueError('Response from miner is not int')    
 
         rewards = self.get_rewards(responses)
 
         bt.logging.info(f"Scored responses: {rewards}")
 
-        self.update_scores(rewards, [1])
+        self.update_scores(rewards, [MINER_UID])
         # TODO(developer): Rewrite this function based on your protocol definition.
         # return await forward(self)
 
