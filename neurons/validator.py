@@ -29,6 +29,7 @@ import torch
 from template.base.validator import BaseValidatorNeuron
 
 # Bittensor Validator Template:
+from template.utils.uids import get_random_uids
 from template.validator import forward
 from unique_subnet.protocol import UniqueSynapse
 
@@ -61,12 +62,24 @@ class Validator(BaseValidatorNeuron):
         """
         miner_uids = self.metagraph.n.item()
         bt.logging.info(f"Miner uids: {miner_uids}")
+        active_uids = [
+            index
+            for index, is_active in enumerate(self.metagraph.active)
+            if is_active == 1
+        ]
+        bt.logging.info(f"active UIDs: {active_uids}")
+        axon_count = len(self.metagraph.axons) - 1
 
-        synapse = UniqueSynapse(nums1=2 , nums2=3)
+        miner_selection_size = min(axon_count, self.config.neuron.sample_size)
+        miner_uids = get_random_uids(self, k=miner_selection_size, exclude=[self.uid])
+
+        bt.logging.info(f"Selected UIDs: {miner_uids}")
+        bt.logging.info(f"Self UID: {self.uid}")
+        synapse = UniqueSynapse(nums1=2, nums2=3)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
         responses = self.dendrite.query(
-            axons=[self.metagraph.axons[1]],
+            axons=[self.metagraph.axons[uid] for uid in miner_uids],
             synapse=synapse,
             deserialize=False,
         )
@@ -77,7 +90,7 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Scored responses: {rewards}")
 
-        self.update_scores(rewards, [1])
+        self.update_scores(rewards, miner_uids)
         # TODO(developer): Rewrite this function based on your protocol definition.
         # return await forward(self)
 
@@ -104,15 +117,11 @@ class Validator(BaseValidatorNeuron):
         else:
             return 0.0
 
-   
-
     def reward(self, response: UniqueSynapse) -> float:
         predictions = response.response
         if predictions is None:
             return 0.0
-        return  self.get_number_reward(response.nums1 + response.nums2, predictions)
-        
-       
+        return self.get_number_reward(response.nums1 + response.nums2, predictions)
 
     def get_rewards(
         self,
@@ -120,9 +129,7 @@ class Validator(BaseValidatorNeuron):
     ) -> torch.FloatTensor:
         arr = [self.reward(response) for response in responses]
         bt.logging.info(f"rewards: {arr}")
-        result = torch.FloatTensor(
-           arr 
-        )
+        result = torch.FloatTensor(arr)
         bt.logging.info(f"rewards: {result}")
         return result
 
