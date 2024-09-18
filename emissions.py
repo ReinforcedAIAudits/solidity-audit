@@ -60,7 +60,7 @@ def create_sudo_extrinsic(
 interface.submit_extrinsic(
     create_sudo_extrinsic(
         "AdminUtils",
-        "SudoSetWeightsSetRateLimit",
+        "sudo_set_target_stakes_per_interval",
         {"netuid": NET_UID, "weightsSetRateLimit": 0},
     )
 )

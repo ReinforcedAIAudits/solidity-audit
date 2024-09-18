@@ -1,18 +1,58 @@
 from typing import List, Tuple
 import bittensor
-from bittensor.commands.network import RegisterSubnetworkCommand
+from bittensor.commands.network import RegisterSubnetworkCommand, SubnetSudoCommand
 from bittensor.commands.register import RegisterCommand
 from bittensor.commands.root import RootRegisterCommand
 from bittensor.commands.transfer import TransferCommand
 from bittensor.commands.wallets import WalletCreateCommand
 from bittensor.commands.stake import StakeCommand
+from substrateinterface import SubstrateInterface, Keypair
 
 
 OWNER_NAME = "owner"
 VALIDATOR_NAME = "validator"
 MINER_NAME = "miner"
+ROOT_ID = 0
+NET_UID = 1
+SUBNET_TEMPO = 10
+EMISSION_TEMPO = 30
 
 subtensor = bittensor.subtensor(network="ws://localhost:9946")
+interface = SubstrateInterface("ws://localhost:9946")
+
+keypair_alice = Keypair.create_from_uri("//Alice")
+keypair_bob = Keypair.create_from_uri("//Bob")
+
+def create_extrinsic(
+    pallet: str, method: str, params: dict, keypair: Keypair = keypair_alice
+):
+    return interface.create_signed_extrinsic(
+        call=interface.compose_call(
+            call_module=pallet,
+            call_function=method,
+            call_params=params,
+        ),
+        keypair=keypair,
+    )
+
+
+def create_sudo_extrinsic(
+    pallet: str, method: str, params: dict, keypair: Keypair = keypair_alice
+):
+    return interface.create_signed_extrinsic(
+        call=interface.compose_call(
+            call_module="Sudo",
+            call_function="sudo",
+            call_params={
+                "call": interface.compose_call(
+                    call_module=pallet,
+                    call_function=method,
+                    call_params=params,
+                ).value
+            },
+        )
+    )
+
 
 
 def exec_command(command, extra_args: List[str], wallet_path=None):
@@ -130,6 +170,56 @@ for wallet in [validator_wallet, miner_wallet]:
         ],
         wallet.path,
     )
+
+exec_command(
+    SubnetSudoCommand,
+    [
+        "sudo",
+        "set",
+        "--netuid",
+        "1",
+        "--param",
+        "'weights_rate_limit'",
+        "--value",
+        "0",
+    ],
+)
+
+exec_command(
+    SubnetSudoCommand,
+    [
+        "sudo",
+        "set",
+        "--netuid",
+        "0",
+        "--param",
+        "'weights_rate_limit'",
+        "--value",
+        "0",
+    ],
+)
+
+interface.submit_extrinsic(
+    create_sudo_extrinsic(
+        "AdminUtils",
+        "sudo_set_target_stakes_per_interval",
+        {"target_stakes_per_interval": 1000},
+    )
+)
+
+# exec_command(
+#     SubnetSudoCommand,
+#     [
+#         "sudo",
+#         "set",
+#         "--netuid",
+#         "1",
+#         "--param",
+#         "'weights_rate_limit'",
+#         "--value",
+#         "0",
+#     ],
+# )
 
 exec_command(
     StakeCommand,
