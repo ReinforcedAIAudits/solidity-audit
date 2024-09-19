@@ -18,6 +18,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 
+import os
 import random
 import time
 from typing import List
@@ -34,6 +35,7 @@ from template.base.validator import BaseValidatorNeuron
 from template.utils.uids import get_random_uids
 from template.validator import forward
 from unique_subnet.protocol import UniqueSynapse
+from dotenv import load_dotenv
 
 
 class Validator(BaseValidatorNeuron):
@@ -63,13 +65,13 @@ class Validator(BaseValidatorNeuron):
         - Updating the scores
         """
         miner_uids = self.metagraph.n.item()
-        bt.logging.info(f"Miner uids: {miner_uids}")
+        bt.logging.info(f"Metagraph uids: {miner_uids}")
         active_uids = [
             index
             for index, is_active in enumerate(self.metagraph.active)
             if is_active == 1
         ]
-        bt.logging.info(f"active UIDs: {active_uids}")
+        bt.logging.info(f"Active UIDs: {active_uids}")
         axon_count = len(self.metagraph.axons) - 1
 
         miner_selection_size = min(axon_count, self.config.neuron.sample_size)
@@ -77,7 +79,7 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
-        synapse = UniqueSynapse(nums1=2, nums2=3)
+        synapse = UniqueSynapse(num1=2, num2=3)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
         responses = self.dendrite.query(
@@ -88,9 +90,9 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info(f"Received responses: {responses}")
         
         for miner_uid, response in zip(miner_uids, responses):
-            requests.post(f"http://localhost:5001/validate?uid={miner_uid}", json={"result": response.response})
+            requests.post(f"{os.getenv('VALIDATOR_SERVER')}/validate?uid={miner_uid}", json={"result": response.response})
             
-            if not (requests.get(f"http://localhost:5001/get_validation_for_miner?uid={miner_uid}")):
+            if not (requests.get(f"{os.getenv('VALIDATOR_SERVER')}/get_validation_for_miner?uid={miner_uid}")):
                 raise ValueError('Response from miner is not int')    
 
         rewards = self.get_rewards(responses)
@@ -128,7 +130,7 @@ class Validator(BaseValidatorNeuron):
         predictions = response.response
         if predictions is None:
             return 0.0
-        return self.get_number_reward(response.nums1 + response.nums2, predictions)
+        return self.get_number_reward(response.num1 + response.num2, predictions)
 
     def get_rewards(
         self,
@@ -142,6 +144,7 @@ class Validator(BaseValidatorNeuron):
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
+    load_dotenv()
     with Validator() as validator:
         while True:
             bt.logging.info(f"Validator running... {time.time()}")

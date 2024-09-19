@@ -17,10 +17,12 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import os
 import random
 import time
 import typing
 import bittensor as bt
+from dotenv import load_dotenv
 import requests
 
 # Bittensor Miner Template:
@@ -59,15 +61,15 @@ class Miner(BaseMinerNeuron):
         The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
-        bt.logging.info(synapse)
+        bt.logging.info(f"Received synapse from validator {synapse}")
         result = requests.post(
-            "http://localhost:5000/add", json={"a": synapse.num1, "b": synapse.num2}
+            f"{os.getenv('MINER_SERVER')}/add", json={"a": synapse.num1, "b": synapse.num2}
         )
         
         time.sleep(12)
-        print(result.json())
+        bt.logging.info(f"Response from miner server: {result.json()}")
+        
         synapse.response = result.json()["result"]
-
         return synapse
 
     async def blacklist(self, synapse: UniqueSynapse) -> typing.Tuple[bool, str]:
@@ -169,6 +171,7 @@ class Miner(BaseMinerNeuron):
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
+    load_dotenv()
     with Miner() as miner:
         while True:
             bt.logging.info(f"Miner running... {time.time()}")
