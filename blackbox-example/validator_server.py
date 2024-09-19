@@ -12,12 +12,13 @@ execution_events = {}
 
 
 @app.post("/validate")
-async def validate(uid: int = Query(), synapse: UniqueSynapse = Body()):
+async def validate(uid: int = Query(), result: dict = Body()):
     event = asyncio.Event()
     execution_events[uid] = event
 
     await asyncio.sleep(5)
-    miners_synapses[uid] = type(synapse.response) == int
+    print(result)
+    miners_synapses[uid] = type(result["result"]) == int
 
     event.set()
 

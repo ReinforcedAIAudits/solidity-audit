@@ -23,6 +23,7 @@ interface = SubstrateInterface("ws://localhost:9946")
 
 keypair_alice = Keypair.create_from_uri("//Alice")
 keypair_bob = Keypair.create_from_uri("//Bob")
+keypair_bob_hot = Keypair.create_from_uri("//BobHot")
 
 
 def create_extrinsic(
@@ -123,6 +124,8 @@ def transfer_funds_if_needed(wallet: bittensor.wallet, alice_wallet: bittensor.w
 
 
 alice_keypair, alice_wallet = setup_wallet("//Alice")
+alice_hot = bittensor.Keypair.create_from_uri("//AliceHot")
+
 
 for name in [OWNER_NAME, VALIDATOR_NAME, MINER_NAME]:
     create_wallet(name)
@@ -146,21 +149,11 @@ exec_command(
     owner_wallet.path,
 )
 
-print(subtensor.get_subnet_owner(1))
-print(subtensor.get_subnet_owner(0))
-
-print(owner_wallet.coldkeypub.ss58_address)
-print(validator_wallet.coldkeypub.ss58_address)
-print(miner_wallet.coldkeypub.ss58_address)
-
-print(alice_keypair.ss58_address)
-print(keypair_bob.ss58_address)
-
 # receipt = interface.submit_extrinsic(
 #     create_extrinsic(
 #         "SubtensorModule",
-#         "burned_register",
-#         {"netuid": 0, "hotkey": alice_keypair.ss58_address},
+#         "register_network",
+#         {},
 #     ),
 #     wait_for_finalization=True,
 # )
@@ -170,34 +163,49 @@ print(keypair_bob.ss58_address)
 #         f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
 #     )
 
-receipt = interface.submit_extrinsic(
-    create_extrinsic(
-        "SubtensorModule",
-        "burned_register",
-        {"netuid": 1, "hotkey": alice_keypair.ss58_address},
-    ),
-    wait_for_finalization=True,
-)
+# receipt = interface.submit_extrinsic(
+#     create_extrinsic(
+#         "SubtensorModule",
+#         "burned_register",
+#         {"netuid": 1, "hotkey": alice_hot.ss58_address},
+#     ),
+#     wait_for_finalization=True,
+# )
 
-if not receipt.is_success:
-    raise ValueError(
-        f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
-    )
+# if not receipt.is_success:
+#     raise ValueError(
+#         f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
+#     )
+
+# receipt = interface.submit_extrinsic(
+#     create_extrinsic(
+#         "SubtensorModule",
+#         "burned_register",
+#         {"netuid": 1, "hotkey": keypair_bob_hot.ss58_address},
+#         keypair_bob
+#     ),
+#     wait_for_finalization=True,
+# )
+
+# if not receipt.is_success:
+#     raise ValueError(
+#         f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
+#     )
 
 
-receipt = interface.submit_extrinsic(
-    create_extrinsic(
-        "SubtensorModule",
-        "burned_register",
-        {"netuid": 1, "hotkey": keypair_bob.ss58_address},
-    ),
-    wait_for_finalization=True,
-)
+# receipt = interface.submit_extrinsic(
+#     create_extrinsic(
+#         "SubtensorModule",
+#         "burned_register",
+#         {"netuid": 1, "hotkey": keypair_bob.ss58_address},
+#     ),
+#     wait_for_finalization=True,
+# )
 
-if not receipt.is_success:
-    raise ValueError(
-        f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
-    )
+# if not receipt.is_success:
+#     raise ValueError(
+#         f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
+#     )
 
 exec_command(
     RootRegisterCommand,
@@ -212,6 +220,15 @@ exec_command(
     validator_wallet.path,
 )
 
+# receipt = interface.submit_extrinsic(
+#     create_extrinsic(
+#         "SubtensorModule",
+#         "root_register",
+#         {"hotkey": alice_hot.ss58_address},
+#     ),
+#     wait_for_finalization=True,
+# )
+
 for wallet in [validator_wallet, miner_wallet]:
     exec_command(
         RegisterCommand,
@@ -225,6 +242,7 @@ for wallet in [validator_wallet, miner_wallet]:
         ],
         wallet.path,
     )
+    time.sleep(5)
 
 # exec_command(
 #     SubnetSudoCommand,
@@ -258,157 +276,126 @@ for wallet in [validator_wallet, miner_wallet]:
 # #     ],
 # # )
 
-# receipt = interface.submit_extrinsic(
-#     create_sudo_extrinsic(
-#         "AdminUtils",
-#         "sudo_set_weights_set_rate_limit",
-#         {"netuid": 0, "weights_set_rate_limit": 0}
-#     ),
-#     wait_for_finalization=True,
-# )
+receipt = interface.submit_extrinsic(
+    create_sudo_extrinsic(
+        "AdminUtils",
+        "sudo_set_weights_set_rate_limit",
+        {"netuid": 1, "weights_set_rate_limit": 0}
+    ),
+    wait_for_finalization=True,
+)
 
-# if not receipt.is_success:
-#     raise ValueError(
-#         f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
-#     )
+if not receipt.is_success:
+    raise ValueError(
+        f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
+    )
 
-# receipt = interface.submit_extrinsic(
-#     create_sudo_extrinsic(
-#         "AdminUtils",
-#         "sudo_set_target_stakes_per_interval",
-#         {"target_stakes_per_interval": 1000},
-#     ),
-#     wait_for_finalization=True,
-# )
+receipt = interface.submit_extrinsic(
+    create_sudo_extrinsic(
+        "AdminUtils",
+        "sudo_set_weights_set_rate_limit",
+        {"netuid": 0, "weights_set_rate_limit": 0}
+    ),
+    wait_for_finalization=True,
+)
 
-# if not receipt.is_success:
-#     raise ValueError(
-#         f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
-#     )
+if not receipt.is_success:
+    raise ValueError(
+        f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
+    )
 
-# # exec_command(
-# #     SubnetSudoCommand,
-# #     [
-# #         "sudo",
-# #         "set",
-# #         "--netuid",
-# #         "1",
-# #         "--param",
-# #         "target_regs_per_interval",
-# #         "--value",
-# #         "1000",
-# #         "--wallet.name",
-# #         owner_wallet.name,
-# #     ],
-# # )
+receipt = interface.submit_extrinsic(
+    create_sudo_extrinsic(
+        "AdminUtils",
+        "sudo_set_target_stakes_per_interval",
+        {"target_stakes_per_interval": 1000},
+    ),
+    wait_for_finalization=True,
+)
 
-# receipt = interface.submit_extrinsic(
-#     create_sudo_extrinsic(
-#         "AdminUtils",
-#         "sudo_set_target_registrations_per_interval",
-#         {"netuid": 1, "target_registrations_per_interval": 1000},
-#     ),
-#     wait_for_finalization=True,
-# )
+if not receipt.is_success:
+    raise ValueError(
+        f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
+    )
 
-# if not receipt.is_success:
-#     raise ValueError(
-#         f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
-#     )
+receipt = interface.submit_extrinsic(
+    create_sudo_extrinsic(
+        "AdminUtils",
+        "sudo_set_target_registrations_per_interval",
+        {"netuid": 1, "target_registrations_per_interval": 1000},
+    ),
+    wait_for_finalization=True,
+)
 
-# receipt = interface.submit_extrinsic(
-#     create_sudo_extrinsic(
-#         "AdminUtils",
-#         "sudo_set_tx_rate_limit",
-#         {"tx_rate_limit": 0},
-#     ),
-#     wait_for_finalization=True,
-# )
+if not receipt.is_success:
+    raise ValueError(
+        f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
+    )
 
-# if not receipt.is_success:
-#     raise ValueError(
-#         f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
-#     )
+receipt = interface.submit_extrinsic(
+    create_sudo_extrinsic(
+        "AdminUtils",
+        "sudo_set_tx_rate_limit",
+        {"tx_rate_limit": 0},
+    ),
+    wait_for_finalization=True,
+)
 
-# receipt = interface.submit_extrinsic(
-#     create_sudo_extrinsic(
-#         "AdminUtils",
-#         "sudo_set_tempo",
-#         {"netuid": 1, "tempo": 10},
-#     ),
-#     wait_for_finalization=True,
-# )
+if not receipt.is_success:
+    raise ValueError(
+        f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
+    )
 
-# if not receipt.is_success:
-#     raise ValueError(
-#         f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
-#     )
+receipt = interface.submit_extrinsic(
+    create_sudo_extrinsic(
+        "AdminUtils",
+        "sudo_set_tempo",
+        {"netuid": 1, "tempo": 10},
+    ),
+    wait_for_finalization=True,
+)
 
-# receipt = interface.submit_extrinsic(
-#     create_sudo_extrinsic(
-#         "AdminUtils",
-#         "sudo_set_tempo",
-#         {"netuid": 0, "tempo": 10},
-#     ),
-#     wait_for_finalization=True,
-# )
+if not receipt.is_success:
+    raise ValueError(
+        f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
+    )
 
-# if not receipt.is_success:
-#     raise ValueError(
-#         f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
-#     )
-# # exec_command(
-# #     SubnetSudoCommand,
-# #     [
-# #         "sudo",
-# #         "set",
-# #         "--netuid",
-# #         "1",
-# #         "--param",
-# #         "tempo",
-# #         "--value",
-# #         "10",
-# #         "--wallet.name",
-# #         owner_wallet.name,
-# #     ],
-# # )
+receipt = interface.submit_extrinsic(
+    create_sudo_extrinsic(
+        "AdminUtils",
+        "sudo_set_tempo",
+        {"netuid": 0, "tempo": 10},
+    ),
+    wait_for_finalization=True,
+)
 
-# # exec_command(
-# #     SubnetSudoCommand,
-# #     [
-# #         "sudo",
-# #         "set",
-# #         "--netuid",
-# #         "0",
-# #         "--param",
-# #         "tempo",
-# #         "--value",
-# #         "10",
-# #         "--wallet.name",
-# #         owner_wallet.name,
-# #     ],
-# # )
+if not receipt.is_success:
+    raise ValueError(
+        f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
+    )
 
-# receipt = interface.submit_extrinsic(
-#     create_sudo_extrinsic(
-#         "AdminUtils",
-#         "sudo_set_hotkey_emission_tempo",
-#         {"emission_tempo": 30},
-#     ),
-#     wait_for_finalization=True,
-# )
+receipt = interface.submit_extrinsic(
+    create_sudo_extrinsic(
+        "AdminUtils",
+        "sudo_set_hotkey_emission_tempo",
+        {"emission_tempo": 30},
+    ),
+    wait_for_finalization=True,
+)
 
-# if not receipt.is_success:
-#     raise ValueError(
-#         f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
-#     )
+if not receipt.is_success:
+    raise ValueError(
+        f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
+    )
+
+# # time.sleep(5)
 
 # receipt = interface.submit_extrinsic(
 #     create_extrinsic(
 #         "SubtensorModule",
 #         "set_weights",
 #         {"netuid": 1, "dests": [0, 1], "weights": [0, 0], "version_key": 0},
-#         keypair_bob,
+#         keypair_bob_hot,
 #     ),
 #     wait_for_finalization=True,
 # )
@@ -417,6 +404,7 @@ for wallet in [validator_wallet, miner_wallet]:
 #     raise ValueError(
 #         f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
 #     )
+
 
 # receipt = interface.submit_extrinsic(
 #     create_extrinsic(
@@ -424,11 +412,12 @@ for wallet in [validator_wallet, miner_wallet]:
 #         "set_root_weights",
 #         {
 #             "netuid": 0,
-#             "hotkey": alice_keypair.ss58_address,
+#             "hotkey": alice_hot.ss58_address,
 #             "dests": [0, 1],
 #             "weights": [65535, 65535],
 #             "version_key": 0,
 #         },
+#         keypair_alice
 #     ),
 #     wait_for_finalization=True,
 # )

@@ -64,7 +64,7 @@ class Validator(BaseValidatorNeuron):
         # miner_uids = self.get_random_uids(
         #     k=min(self.config.neuron.sample_size, self.metagraph.n.item())
         # )
-        MINER_UID = 3
+        MINER_UID = 1
         miner_uids = [MINER_UID]
         bt.logging.info(f"Miner uids: {miner_uids}")
 
@@ -79,9 +79,9 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info(f"Received responses: {responses}")
         
         for miner_uid, response in zip(miner_uids, responses):
-            requests.post(f"http://localhost:5001/validate?uid={miner_uid}", json=response)
+            requests.post(f"http://localhost:5001/validate?uid={miner_uid}", json={"result": response.response})
             
-            if not (requests.get(f"http://localhost:5001/get_validation_for_miner?{miner_uid}")):
+            if not (requests.get(f"http://localhost:5001/get_validation_for_miner?uid={miner_uid}")):
                 raise ValueError('Response from miner is not int')    
 
         rewards = self.get_rewards(responses)
