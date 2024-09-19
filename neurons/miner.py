@@ -21,6 +21,7 @@ import random
 import time
 import typing
 import bittensor as bt
+import requests
 
 # Bittensor Miner Template:
 import template
@@ -44,9 +45,7 @@ class Miner(BaseMinerNeuron):
 
         # TODO(developer): Anything specific to your use case you can do here
 
-    async def forward(
-        self, synapse: UniqueSynapse
-    ) -> UniqueSynapse:
+    async def forward(self, synapse: UniqueSynapse) -> UniqueSynapse:
         """
         Processes the incoming 'Dummy' synapse by performing a predefined operation on the input data.
         This method should be replaced with actual logic relevant to the miner's purpose.
@@ -60,18 +59,18 @@ class Miner(BaseMinerNeuron):
         The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
-        bt.logging.info("!!!!!!!!!!!!!!!!!!!!!")
         bt.logging.info(synapse)
-        response  = synapse.nums1 + synapse.nums2 + random.randint(0, 10)
+        result = requests.post(
+            "http://localhost:5000/add", json={"a": synapse.num1, "b": synapse.num2}
+        )
+        
         time.sleep(12)
-        # Attach response to synapse and return it.
-        synapse.response = response
+        print(result.json())
+        synapse.response = result.json()["result"]
 
         return synapse
 
-    async def blacklist(
-        self, synapse: UniqueSynapse
-    ) -> typing.Tuple[bool, str]:
+    async def blacklist(self, synapse: UniqueSynapse) -> typing.Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.
@@ -154,7 +153,7 @@ class Miner(BaseMinerNeuron):
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return 0.0
-        
+
         # TODO(developer): Define how miners should prioritize requests.
         caller_uid = self.metagraph.hotkeys.index(
             synapse.dendrite.hotkey

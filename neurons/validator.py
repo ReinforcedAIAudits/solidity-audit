@@ -18,11 +18,13 @@
 # DEALINGS IN THE SOFTWARE.
 
 
+import random
 import time
 from typing import List
 
 # Bittensor
 import bittensor as bt
+import requests
 import torch
 
 # import base validator class which takes care of most of the boilerplate
@@ -82,9 +84,14 @@ class Validator(BaseValidatorNeuron):
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
             synapse=synapse,
             deserialize=False,
-        )
-
+        )     
         bt.logging.info(f"Received responses: {responses}")
+        
+        for miner_uid, response in zip(miner_uids, responses):
+            requests.post(f"http://localhost:5001/validate?uid={miner_uid}", json={"result": response.response})
+            
+            if not (requests.get(f"http://localhost:5001/get_validation_for_miner?uid={miner_uid}")):
+                raise ValueError('Response from miner is not int')    
 
         rewards = self.get_rewards(responses)
 
@@ -132,7 +139,6 @@ class Validator(BaseValidatorNeuron):
         result = torch.FloatTensor(arr)
         bt.logging.info(f"rewards: {result}")
         return result
-
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":

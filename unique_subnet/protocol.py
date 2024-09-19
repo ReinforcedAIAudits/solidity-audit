@@ -1,12 +1,13 @@
 from typing import List, Optional
 import bittensor as bt
 
+
 class UniqueSynapse(bt.Synapse):
 
     time_elapsed: int = 0
 
-    nums1: int
-    nums2: int
+    num1: int
+    num2: int
 
     response: Optional[int] = None
 
