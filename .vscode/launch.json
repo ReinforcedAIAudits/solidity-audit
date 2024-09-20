@@ -19,7 +19,8 @@
         "--wallet.hotkey",
         "default",
         "--logging.debug"
-      ]
+      ],
+      "justMyCode": false
     },
     {
       "name": "Miner",
