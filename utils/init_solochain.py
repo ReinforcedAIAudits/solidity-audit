@@ -135,111 +135,114 @@ def transfer_funds_if_needed(wallet: bittensor.wallet, alice_wallet: bittensor.w
         )
 
 
-# Setup wallets
-alice_keypair, alice_wallet = setup_wallet("//Alice")
-alice_hot = bittensor.Keypair.create_from_uri("//AliceHot")
+def init():
+    _, alice_wallet = setup_wallet("//Alice")
 
-for name in [OWNER_NAME, VALIDATOR_NAME, MINER_NAME]:
-    create_wallet(name)
-    wallet = bittensor.wallet(name, "default")
-    transfer_funds_if_needed(wallet, alice_wallet)
+    for name in [OWNER_NAME, VALIDATOR_NAME, MINER_NAME]:
+        create_wallet(name)
+        wallet = bittensor.wallet(name, "default")
+        transfer_funds_if_needed(wallet, alice_wallet)
 
-# Get wallets
-owner_wallet = bittensor.wallet(OWNER_NAME, "default")
-validator_wallet = bittensor.wallet(VALIDATOR_NAME, "default")
-miner_wallet = bittensor.wallet(MINER_NAME, "default")
+    # Get wallets
+    owner_wallet = bittensor.wallet(OWNER_NAME, "default")
+    validator_wallet = bittensor.wallet(VALIDATOR_NAME, "default")
+    miner_wallet = bittensor.wallet(MINER_NAME, "default")
 
-# Register commands
-exec_command(
-    RegisterSubnetworkCommand,
-    ["s", "create", "--netuid", str(NET_UID), "--wallet.name", owner_wallet.name],
-    owner_wallet.path,
-)
-
-exec_command(
-    RootRegisterCommand,
-    [
-        "root",
-        "register",
-        "--netuid",
-        str(NET_UID),
-        "--wallet.name",
-        validator_wallet.name,
-    ],
-    validator_wallet.path,
-)
-
-for wallet in [validator_wallet, miner_wallet]:
+    # Register commands
     exec_command(
-        RegisterCommand,
-        ["s", "register", "--netuid", str(NET_UID), "--wallet.name", wallet.name],
-        wallet.path,
+        RegisterSubnetworkCommand,
+        ["s", "create", "--netuid", str(NET_UID), "--wallet.name", owner_wallet.name],
+        owner_wallet.path,
     )
-    time.sleep(5)
 
-# Set various limits and tempos
-submit_sudo_extrinsic(
-    "sudo_set_weights_set_rate_limit",
-    {"netuid": NET_UID, "weights_set_rate_limit": 0},
-)
-submit_sudo_extrinsic(
-    "sudo_set_weights_set_rate_limit",
-    {"netuid": ROOT_ID, "weights_set_rate_limit": 0},
-)
-submit_sudo_extrinsic(
-    "sudo_set_target_stakes_per_interval", {"target_stakes_per_interval": 1000}
-)
-submit_sudo_extrinsic(
-    "sudo_set_target_registrations_per_interval",
-    {"netuid": NET_UID, "target_registrations_per_interval": 1000},
-)
-submit_sudo_extrinsic("sudo_set_tx_rate_limit", {"tx_rate_limit": 0})
-submit_sudo_extrinsic("sudo_set_tempo", {"netuid": NET_UID, "tempo": SUBNET_TEMPO})
-submit_sudo_extrinsic("sudo_set_tempo", {"netuid": ROOT_ID, "tempo": SUBNET_TEMPO})
-submit_sudo_extrinsic(
-    "sudo_set_hotkey_emission_tempo", {"emission_tempo": EMISSION_TEMPO}
-)
-
-exec_command(
-    StakeCommand,
-    [
-        "stake",
-        "add",
-        "--amount",
-        "10000",
-        "--wallet.name",
-        validator_wallet.name,
-        "--hotkey",
-        validator_wallet.hotkey_str,
-    ],
-)
-exec_command(
-    TransferCommand,
-    [
-        "wallet",
-        "transfer",
-        "--amount",
-        "15000",
-        "--dest",
-        validator_wallet.coldkey.ss58_address,
-    ],
-    alice_wallet.path,
-)
-
-for netuid in [ROOT_ID, NET_UID]:
     exec_command(
-        RootSetWeightsCommand,
+        RootRegisterCommand,
         [
-            "r",
-            "weights",
+            "root",
+            "register",
             "--netuid",
-            str(netuid),
-            "--weights",
-            "33",
+            str(NET_UID),
             "--wallet.name",
             validator_wallet.name,
-            "--wait_for_finalization",
-            "True",
         ],
         validator_wallet.path,
     )
+
+    for wallet in [validator_wallet, miner_wallet]:
+        exec_command(
+            RegisterCommand,
+            ["s", "register", "--netuid", str(NET_UID), "--wallet.name", wallet.name],
+            wallet.path,
+        )
+        time.sleep(5)
+
+    # Set various limits and tempos
+    submit_sudo_extrinsic(
+        "sudo_set_weights_set_rate_limit",
+        {"netuid": NET_UID, "weights_set_rate_limit": 0},
+    )
+    submit_sudo_extrinsic(
+        "sudo_set_weights_set_rate_limit",
+        {"netuid": ROOT_ID, "weights_set_rate_limit": 0},
+    )
+    submit_sudo_extrinsic(
+        "sudo_set_target_stakes_per_interval", {"target_stakes_per_interval": 1000}
+    )
+    submit_sudo_extrinsic(
+        "sudo_set_target_registrations_per_interval",
+        {"netuid": NET_UID, "target_registrations_per_interval": 1000},
+    )
+    submit_sudo_extrinsic("sudo_set_tx_rate_limit", {"tx_rate_limit": 0})
+    submit_sudo_extrinsic("sudo_set_tempo", {"netuid": NET_UID, "tempo": SUBNET_TEMPO})
+    submit_sudo_extrinsic("sudo_set_tempo", {"netuid": ROOT_ID, "tempo": SUBNET_TEMPO})
+    submit_sudo_extrinsic(
+        "sudo_set_hotkey_emission_tempo", {"emission_tempo": EMISSION_TEMPO}
+    )
+
+    exec_command(
+        StakeCommand,
+        [
+            "stake",
+            "add",
+            "--amount",
+            "10000",
+            "--wallet.name",
+            validator_wallet.name,
+            "--hotkey",
+            validator_wallet.hotkey_str,
+        ],
+    )
+    exec_command(
+        TransferCommand,
+        [
+            "wallet",
+            "transfer",
+            "--amount",
+            "15000",
+            "--dest",
+            validator_wallet.coldkey.ss58_address,
+        ],
+        alice_wallet.path,
+    )
+
+    for netuid in [ROOT_ID, NET_UID]:
+        exec_command(
+            RootSetWeightsCommand,
+            [
+                "r",
+                "weights",
+                "--netuid",
+                str(netuid),
+                "--weights",
+                "33",
+                "--wallet.name",
+                validator_wallet.name,
+                "--wait_for_finalization",
+                "True",
+            ],
+            validator_wallet.path,
+        )
+
+
+if __name__ == "__main__":
+    init()
