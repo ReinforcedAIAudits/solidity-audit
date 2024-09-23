@@ -26,7 +26,6 @@ from typing import List
 # Bittensor
 import bittensor as bt
 import requests
-import torch
 
 # import base validator class which takes care of most of the boilerplate
 from template.base.validator import BaseValidatorNeuron
@@ -86,14 +85,21 @@ class Validator(BaseValidatorNeuron):
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
             synapse=synapse,
             deserialize=False,
-        )     
+        )
         bt.logging.info(f"Received responses: {responses}")
-        
+
         for miner_uid, response in zip(miner_uids, responses):
-            requests.post(f"{os.getenv('VALIDATOR_SERVER')}/validate?uid={miner_uid}", json={"result": response.response})
-            
-            if not (requests.get(f"{os.getenv('VALIDATOR_SERVER')}/get_validation_for_miner?uid={miner_uid}")):
-                raise ValueError('Response from miner is not int')    
+            requests.post(
+                f"{os.getenv('VALIDATOR_SERVER')}/validate?uid={miner_uid}",
+                json={"result": response.response},
+            )
+
+            if not (
+                requests.get(
+                    f"{os.getenv('VALIDATOR_SERVER')}/get_validation_for_miner?uid={miner_uid}"
+                )
+            ):
+                raise ValueError("Response from miner is not int")
 
         rewards = self.get_rewards(responses)
 
@@ -135,12 +141,9 @@ class Validator(BaseValidatorNeuron):
     def get_rewards(
         self,
         responses: List[UniqueSynapse],
-    ) -> torch.FloatTensor:
-        arr = [self.reward(response) for response in responses]
-        bt.logging.info(f"rewards: {arr}")
-        result = torch.FloatTensor(arr)
-        bt.logging.info(f"rewards: {result}")
-        return result
+    ) -> list[float]:
+        return [self.reward(response) for response in responses]
+
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":

@@ -63,12 +63,13 @@ class Miner(BaseMinerNeuron):
         """
         bt.logging.info(f"Received synapse from validator {synapse}")
         result = requests.post(
-            f"{os.getenv('MINER_SERVER')}/add", json={"a": synapse.num1, "b": synapse.num2}
+            f"{os.getenv('MINER_SERVER')}/add",
+            json={"a": synapse.num1, "b": synapse.num2},
         )
-        
-        time.sleep(12)
+
+        time.sleep(6)
         bt.logging.info(f"Response from miner server: {result.json()}")
-        
+
         synapse.response = result.json()["result"]
         return synapse
 
