@@ -22,9 +22,9 @@ import os
 import random
 import time
 from typing import List
-
 # Bittensor
 import bittensor as bt
+from fastapi.encoders import jsonable_encoder
 import requests
 
 # import base validator class which takes care of most of the boilerplate
@@ -35,30 +35,6 @@ from template.utils.uids import get_random_uids
 from template.validator import forward
 from ai_audits.protocol import AuditsSynapse
 from dotenv import load_dotenv
-
-
-contract_code: str = """
-contract Wallet {
-    mapping (address => uint) userBalance;
-   
-    function getBalance(address u) constant returns(uint){
-        return userBalance[u];
-    }
-
-    function addToBalance() payable{
-        userBalance[msg.sender] += msg.value;
-    }   
-
-    function withdrawBalance(){
-        // send userBalance[msg.sender] ethers to msg.sender
-        // if mgs.sender is a contract, it will call its fallback function
-        if( ! (msg.sender.call.value(userBalance[msg.sender])() ) ){
-            throw;
-        }
-        userBalance[msg.sender] = 0;
-    }   
-}
-"""
 
 
 class Validator(BaseValidatorNeuron):
@@ -102,8 +78,9 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
+        contract = requests.get(f"{os.getenv('VALIDATOR_SERVER')}/generate_contract").text
         random_number = random.randint(0, 1000)
-        mutated_contract_code = contract_code.replace(
+        mutated_contract_code = contract.replace(
             "contract Wallet", f"contract Wallet_{random_number}"
         )
         synapse = AuditsSynapse(contract_code=mutated_contract_code)
@@ -118,17 +95,13 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info(f"Received responses: {responses}")
 
         for miner_uid, response in zip(miner_uids, responses):
-            requests.post(
-                f"{os.getenv('VALIDATOR_SERVER')}/validate?uid={miner_uid}",
-                json={"result": response.response},
+            validate_result = requests.post(
+                f"{os.getenv('VALIDATOR_SERVER')}/validate",
+                json=jsonable_encoder(response.response),
             )
-
-            if not (
-                requests.get(
-                    f"{os.getenv('VALIDATOR_SERVER')}/get_validation_for_miner?uid={miner_uid}"
-                )
-            ):
-                raise ValueError("Response from miner is not int")
+            if validate_result.status_code != 200:
+                bt.logging.error(f"Miner with uid {miner_uid} sent not valid data. Description: {validate_result.json()}")
+                raise ValueError("Response from miner is not valid")
 
         rewards = self.get_rewards(responses)
 
@@ -165,7 +138,10 @@ class Validator(BaseValidatorNeuron):
         predictions = response.response
         if predictions is None:
             return 0.0
-        return self.get_number_reward(response.num1 + response.num2, predictions)
+        # return self.get_number_reward(response.num1 + response.num2, predictions)
+        
+        # TODO rewards system
+        return 0.5
 
     def get_rewards(
         self,

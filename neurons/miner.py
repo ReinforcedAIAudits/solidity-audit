@@ -63,16 +63,15 @@ class Miner(BaseMinerNeuron):
         """
         bt.logging.info(f"Received synapse from validator {synapse}")
         result = requests.post(
-            f"{os.getenv('MINER_SERVER')}/submit", synapse.contract_code
+            f"{os.getenv('MINER_SERVER')}/example-endpoint", synapse.contract_code
         )
 
         json = result.json()
         bt.logging.info(f"Response from miner server: {result.json()}")
         vulnerabilities = [
             VulnerabilityReport(
-                **vuln,
+                **result.json(),
             )
-            for vuln in result.json()
         ]
 
         synapse.response = vulnerabilities
