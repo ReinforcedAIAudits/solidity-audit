@@ -30,7 +30,7 @@ import template
 
 # import base miner class which takes care of most of the boilerplate
 from template.base.miner import BaseMinerNeuron
-from unique_subnet.protocol import UniqueSynapse
+from ai_audits.protocol import AuditsSynapse, VulnerabilityReport
 
 
 class Miner(BaseMinerNeuron):
@@ -47,7 +47,7 @@ class Miner(BaseMinerNeuron):
 
         # TODO(developer): Anything specific to your use case you can do here
 
-    async def forward(self, synapse: UniqueSynapse) -> UniqueSynapse:
+    async def forward(self, synapse: AuditsSynapse) -> AuditsSynapse:
         """
         Processes the incoming 'Dummy' synapse by performing a predefined operation on the input data.
         This method should be replaced with actual logic relevant to the miner's purpose.
@@ -63,17 +63,22 @@ class Miner(BaseMinerNeuron):
         """
         bt.logging.info(f"Received synapse from validator {synapse}")
         result = requests.post(
-            f"{os.getenv('MINER_SERVER')}/add",
-            json={"a": synapse.num1, "b": synapse.num2},
+            f"{os.getenv('MINER_SERVER')}/submit", synapse.contract_code
         )
 
-        time.sleep(6)
+        json = result.json()
         bt.logging.info(f"Response from miner server: {result.json()}")
+        vulnerabilities = [
+            VulnerabilityReport(
+                **vuln,
+            )
+            for vuln in result.json()
+        ]
 
-        synapse.response = result.json()["result"]
+        synapse.response = vulnerabilities
         return synapse
 
-    async def blacklist(self, synapse: UniqueSynapse) -> typing.Tuple[bool, str]:
+    async def blacklist(self, synapse: AuditsSynapse) -> typing.Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.
@@ -133,7 +138,7 @@ class Miner(BaseMinerNeuron):
         )
         return False, "Hotkey recognized!"
 
-    async def priority(self, synapse: UniqueSynapse) -> float:
+    async def priority(self, synapse: AuditsSynapse) -> float:
         """
         The priority function determines the order in which requests are handled. More valuable or higher-priority
         requests are processed before others. You should design your own priority mechanism with care.

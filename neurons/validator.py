@@ -33,8 +33,32 @@ from template.base.validator import BaseValidatorNeuron
 # Bittensor Validator Template:
 from template.utils.uids import get_random_uids
 from template.validator import forward
-from unique_subnet.protocol import UniqueSynapse
+from ai_audits.protocol import AuditsSynapse
 from dotenv import load_dotenv
+
+
+contract_code: str = """
+contract Wallet {
+    mapping (address => uint) userBalance;
+   
+    function getBalance(address u) constant returns(uint){
+        return userBalance[u];
+    }
+
+    function addToBalance() payable{
+        userBalance[msg.sender] += msg.value;
+    }   
+
+    function withdrawBalance(){
+        // send userBalance[msg.sender] ethers to msg.sender
+        // if mgs.sender is a contract, it will call its fallback function
+        if( ! (msg.sender.call.value(userBalance[msg.sender])() ) ){
+            throw;
+        }
+        userBalance[msg.sender] = 0;
+    }   
+}
+"""
 
 
 class Validator(BaseValidatorNeuron):
@@ -78,13 +102,18 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
-        synapse = UniqueSynapse(num1=2, num2=3)
+        random_number = random.randint(0, 1000)
+        mutated_contract_code = contract_code.replace(
+            "contract Wallet", f"contract Wallet_{random_number}"
+        )
+        synapse = AuditsSynapse(contract_code=mutated_contract_code)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
         responses = self.dendrite.query(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
             synapse=synapse,
             deserialize=False,
+            timeout=600,
         )
         bt.logging.info(f"Received responses: {responses}")
 
@@ -132,7 +161,7 @@ class Validator(BaseValidatorNeuron):
         else:
             return 0.0
 
-    def reward(self, response: UniqueSynapse) -> float:
+    def reward(self, response: AuditsSynapse) -> float:
         predictions = response.response
         if predictions is None:
             return 0.0
@@ -140,7 +169,7 @@ class Validator(BaseValidatorNeuron):
 
     def get_rewards(
         self,
-        responses: List[UniqueSynapse],
+        responses: List[AuditsSynapse],
     ) -> list[float]:
         return [self.reward(response) for response in responses]
 

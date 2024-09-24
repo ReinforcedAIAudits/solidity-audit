@@ -26,7 +26,7 @@
       "name": "Miner",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/neurons/validator.py",
+      "program": "${workspaceFolder}/neurons/miner.py",
       "console": "integratedTerminal",
       "args": [
         "--netuid 1",
@@ -37,7 +37,8 @@
         "--wallet.hotkey",
         "default",
         "--logging.debug"
-      ]
+      ],
+      "justMyCode": false
     }
   ]
 }
