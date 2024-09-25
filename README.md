@@ -1,23 +1,20 @@
 <div align="center">
 
 # **Solidity-Audit** <!-- omit in toc -->
-</div>
 
 ## An Incentivized and Decentralized Subtensor Network <!-- omit in toc -->
+</div>
 
 
 - [Machine Requirements](#machine-requirements)
   - [Validator](#validator-requirements)
   - [Miner](#miner-requirements)
-- [Fast Setup and Run](#fast-setup-and-run)
-  - [Validator](#validator-fast-setup-and-run)
-  - [Miner](#miner-fast-setup-and-run)
 - [Installation](#installation)
-  - [Install SubVortex](#install-subvortex)
+  - [Install SolidityAudit](#install-solidityaudit)
   - [Install Subtensor](#install-local-subtensor)
-  - [Install Redis](#install-redis)
-  - [Install Wandb](#install-wandb)
-- [Registering your wallet](#registering-your-wallet)
+- [Blackboxes](#blackboxes)
+  - [Miner blackbox](#miner-blackbox)
+  - [Validator blackbox](#validator-blackbox)
 - [Running a Miner](#running-a-miner)
 - [Running a Validator](#running-a-validator)
 
@@ -25,7 +22,6 @@
 ## Introduction
 
 Subtensor nodes play a vital role in the Bittensor network, governing various aspects such as incentivization, governance, and network health. Solidity-Audit aims to enhance the decentralization and functionality of Bittensor by establishing an incentivized network of subtensors.
-
 
 
 ## Machine requirements
@@ -48,166 +44,146 @@ For validator, you need a CPU machine (no GPU needed!).
 
 For more information, take a look on the [min requirements](./min_compute.yml)
 
-## Fast Setup and Run
-
-For a quick and seamless setup, we provide a comprehensive script that installs and runs a miner or validator, taking care of everything from installation to execution.
-
-### Setup and run a miner <a id="miner-fast-setup-and-run"></a>
-
-> **IMPORTANT** <br />
-> To use the full script, you have to follow the steps to install the subnet (**EXCEPT** executing **subnet_setup.sh**) by following the [Subnet guide](./scripts/subnet/README.md)
-
-Be sure you are in the **Solidity-Audit** directory, if not
-
-```
-cd solidity-audit
-```
-
-Then, you can run the script
-
-```
-./scripts/setup_and_run.sh -t miner
-```
-
-> IMPORTANT
->
-> - If you any prompts, just confirm them
-> - Other options are available, pleaser take a look
-
-Check the available options by running
-
-```
-./scripts/setup_and_run.sh -h
-```
-
-Once the script is successfully executed, you'll have a miner up and running—nothing else required!
-
-Of course, if you have specific settings in mind, you can use this script as a base and update anything you want to tailor your experience to your needs.
-
-Finally, if you prefer setup and run the miner in a more controlled way, you can follow the different sections below.
-
-### Setup and run a validator <a id="validator-fast-setup-and-run"></a>
-
-> **IMPORTANT** <br />
-> To use the full script, you have to follow the steps to install the subnet (**EXCEPT** executing **subnet_setup.sh**) by following the [Subnet guide](./scripts/subnet/README.md)
-
-Be sure you are in the **SubVortex** directory, if not
-
-```
-cd SubVortex
-```
-
-Then, you can run the script
-
-```
-./scripts/setup_and_run.sh -t validator
-```
-
-Check the available options by running
-
-```
-./scripts/setup_and_run.sh -h
-```
-
-Once the script is successfully executed, you'll have a validator up and running—nothing else required!
-
-Of course, if you have specific settings in mind, you can use this script as a base and update anything you want to tailor your experience to your needs.
-
-Finally, if you prefer setup and run the validator in a more controlled way, you can follow the different sections below.
-
 ## Installation
 
-### Pre-requisite
+### Install SolidityAudit
 
-- Local Subtensor is mandatory for all miners, and highly recommended for validators.
-- Validators will need to install and configure Redis
+To install the subnet, you need to make some simple instructions:
 
-### Install SubVortex
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+```
 
-To install the subnet, refer to the [Subnet guide](./scripts/subnet/README.md)
+This commands will create virtual python environment and install required dependencies.
 
 ### Install Local Subtensor
 
-To install a local subtensor, refer to the [Subtensor guide](./scripts/subtensor/README.md)
+To install a local subtensor, begin by installing the required dependencies for running a Substrate node.
 
+#### Install Subtensor dependencies
 
-### Registering your wallet
+Update your system packages and install additional required libraries and tools:
 
-In order to run either a miner or a validator, you will need to have a wallet registered to the subnet. If you do not already have wallet set up on the server, following the steps below:
-
-If you are restoring an existing wallet:
-
-```
-btcli w regen_coldkey --wallet.name YOUR_WALLET_NAME
-btcli w regen_hotkey --wallet.name YOUR_WALLET_NAME --wallet.hotkey YOUR_HOTKEY_NAME
+```bash
+sudo apt update
+sudo apt install --assume-yes make build-essential git clang curl libssl-dev llvm libudev-dev protobuf-compiler
 ```
 
-If you are creating the wallet for the first time:
+#### Install Rust and Cargo
 
-```
-btcli w new_coldkey --wallet.name YOUR_WALLET_NAME
-btcli w new_hotkey --wallet.name YOUR_WALLET_NAME --wallet.hotkey YOUR_HOTKEY_NAME
-```
+Rust is the programming language used in Substrate development. Cargo is Rust package manager.
 
-Once your wallet is ready, ensure you have sufficient funds to register to the subnet. To register, use the following command:
+Install rust and cargo and update your shell's source to include Cargo's path:
 
-```
-btcli s register --netuid <SUBNET_UID> --subtensor.network local --wallet.name YOUR_WALLET_NAME --wallet.hotkey YOUR_HOTKEY_NAME
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
 ```
 
-Once you have successfully registered your wallet, you are now ready to start either your miner or validator.
+#### Clone the subtensor repository
 
-### Running a Miner
+This step fetches the subtensor codebase to your local machine.
 
-> IMPORTANT: Before running a miner, be sure you have a local subtensor up and running. Please see the [Subtensor guide](./scripts/subtensor/README.md) for more details.
+```bash
+git clone https://github.com/opentensor/subtensor.git
+```
 
-> IMPORTANT: **wandb** **IS NOT** for miners, **ONLY FOR** validators.
 
-To run a miner, navigate to the SubVortex directory. It is highly recommended to run via a process manager like PM2.
+#### Setup Rust
+
+This step ensures that you have the nightly toolchain and the WebAssembly (wasm) compilation target. Note that this step will run the subtensor chain on your terminal directly, hence we advise that you run this as a background process using PM2 or other software.
+
+```bash
+./subtensor/scripts/init.sh
+```
+
+
+#### Run subtensor
+
+Build the binary with the faucet feature enabled and run the localnet script and turn off the attempt to build the binary (as we have already done this above):
+
+```bash
+cargo build -p node-subtensor --profile production --features pow-faucet
+./scripts/localnet.sh
+```
+
+#### Initialize network
+
+Execute this command to create wallets, register your subnetwork, set weights, and perform other essential tasks. This is a crucial step for the proper functioning of the node:
+
+```bash
+python utils/init_solochain.py
+```
+
+> **NOTE:**
+> In this script, you can modify the names of the wallets being created, add passwords to them, and adjust the values for root and subnet weights.
+
+
+## Blackboxes
+
+To fully leverage the capabilities of the `SoldityAudit` subnetwork, it is essential to implement the logic for your blackboxes. 
+
+The first blackbox is required for the miner, enabling it to send data for processing, and subsequently receive, structure, and return that data to the validator within the synapse. 
+
+The second blackbox is necessary for the validator, whose responsibilities include generating tasks and verifying the structural correctness of the miner's responses.
+
+However, for testing purposes, you can use the templates implemented in `blackbox_example/`.
+
+> **NOTE:** Remember to create your `.env` file, which should include the addresses of your blackboxes in the variables `MINER_SERVER` and `VALIDATOR_SERVER`. For testing purposes, you can use the command `cp .env-example .env`.
+
+### Miner blackbox
+
+To run the miner blackbox example , you simply need to execute the command:
+
+```bash
+python blackbox_example/miner_server.py
+```
+
+### Validator blackbox
+
+To run the validator blackbox example , you simply need to execute the command:
+
+```bash
+python blackbox_example/validator_server.py
+```
+
+## Running a Miner
+
+> **IMPORTANT:** Before running a miner, be sure you have a local subtensor up and running. Please see the [Subtensor guide](#install-local-subtensor) for more details.
+
+To run a miner, navigate to the `solidity-audit` directory, run this command:
 
 ```
-pm2 start neurons/miner.py \
-  --name MINER_NAME \
-  --interpreter <PATH_TO_PYTHON_LIBRARY> -- \
-  --netuid <SUBNET_UID> \
-  --wallet.name YOUR_WALLET_NAME \
-  --wallet.hotkey YOUR_HOTKEY_NAME \
-  --subtensor.network local \
-  --logging.debug \
-  --auto-update
+python neurons/miner.py \
+ --netuid <SUBNET_UID> \
+ --wallet.name <YOUR_MINER_WALLET_NAME>
+ --wallet.hotkey <YOUR_HOTKEY_NAME> \
+ --subtensor.network local \
+ --subtensor.chain_endpoint ws://127.0.0.1:9946 \
+ --logging.debug 
+
 ```
 
 > IMPORTANT: Do not run more than one miner per machine. Running multiple miners will result in the loss of incentive and emissions on all miners.
 
-To enable the firewall, add the `--firewall.on` flag. It is highly recommended to enable the firewall to protect your miner from attacks that could impact your score. For more details about the firewall, please refer to our [firewall guide](./docs/features/firewall.md)
+## Running a Validator
 
-### Running a Validator
+> **IMPORTANT:** Before running a validator, be sure you have a local subtensor up and running. Please see the [Subtensor guide](#install-local-subtensor) for more details.
 
-> IMPORTANT: Before running a validator, be sure you have a redis up and running. Please see the [Redis guide](./scripts/redis/README.md) for more details.
-
-> IMPORTANT: Before running a validator, be sure you have a local subtensor up and running. Please see the [Subtensor guide](./scripts/subtensor/README.md) for more details.
-
-> IMPORTANT: By default wandb is enabled when running a validator. It is **HIGHLY RECOMMANDED** to not disable it as it enables everyone to access various statistics for better performance on the subnet but if you want to do it, just add `--wandb.off` to the followed pm2 command. If you want to keep wandb enabled, please refer to the [Wandb guide](./docs/wandb/wandb.md) for more details as there are some manually steps to go throught before running the validator.
-
-> Please use `--database.index <INDEX>`if you have multiple subnet sharing the same redis instance and the index 1 (default value) is already taken by another subnet
-
-Similar to running a miner in the above section, navigate to the SubVortex directory and run the following to launch in PM2.
+Similar to running a miner in the above section, navigate to the `solidity-audit` directory and run the following:
 
 ```
-pm2 start neurons/validator.py \
-  --name VALIDATOR_NAME \
-  --interpreter <PATH_TO_PYTHON_LIBRARY> -- \
-  --netuid <SUBNET_UID> \
-  --wallet.name YOUR_WALLET_NAME \
-  --wallet.hotkey YOUR_HOTKEY_NAME \
+python neurons/validator.py \
+  --netuid <NET_UID> \
+  --wallet.name <YOUR_VALIDATOR_WALLET_NAME> \
+  --wallet.hotkey <YOUR_HOTKEY_NAME> \
   --subtensor.network local \
-  --logging.debug \
-  --auto-update
+  --subtensor.chain_endpoint ws://127.0.0.1:9946 \
+  --logging.debug
 ```
 
-> NOTE: if you run a validator in testnet do not forget to add the argument `--subtensor.network test` or `--subtensor.chain_endpoint ws://<LOCAL_SUBTENSOR_IP>:9944` (the local subtensor has to target the network testnet)
-
-> NOTE: to access the wandb UI to get statistics about the miners, you can click on this [link](https://wandb.ai/eclipsevortext/subvortex-team) and choose the validator run you want.
-
-> NOTE: by default the dumps created by the auto-update will be stored in /etc/redis. If you want to change the location, please use `--database.redis_dump_path`.
+> NOTE: if you run a validator in testnet do not forget to add the argument `--subtensor.network test` or `--subtensor.chain_endpoint ws://<LOCAL_SUBTENSOR_IP>:9946` (the local subtensor has to target the network testnet)
 
