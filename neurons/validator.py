@@ -22,6 +22,7 @@ import os
 import random
 import time
 from typing import List
+
 # Bittensor
 import bittensor as bt
 from fastapi.encoders import jsonable_encoder
@@ -32,7 +33,6 @@ from template.base.validator import BaseValidatorNeuron
 
 # Bittensor Validator Template:
 from template.utils.uids import get_random_uids
-from template.validator import forward
 from ai_audits.protocol import AuditsSynapse
 from dotenv import load_dotenv
 
@@ -78,7 +78,9 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
-        contract = requests.get(f"{os.getenv('VALIDATOR_SERVER')}/generate_contract").text
+        contract = requests.get(
+            f"{os.getenv('VALIDATOR_SERVER')}/generate_contract"
+        ).text
 
         synapse = AuditsSynapse(contract_code=contract)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
@@ -91,22 +93,33 @@ class Validator(BaseValidatorNeuron):
         )
         bt.logging.info(f"Received responses: {responses}")
 
+        rewards = self.validate_responses(miner_uids, responses)
+
+        bt.logging.info(f"Scored responses: {rewards}")
+
+        self.update_scores(rewards, miner_uids)
+
+    def validate_responses(self, miner_uids: int, responses: List[AuditsSynapse]):
         rewards = []
         for miner_uid, response in zip(miner_uids, responses):
             validate_result = requests.post(
                 f"{os.getenv('VALIDATOR_SERVER')}/validate",
                 json=jsonable_encoder(response.response),
             )
+
             if validate_result.status_code != 200:
-                bt.logging.error(f"Miner with uid {miner_uid} sent not valid data. Description: {validate_result.json()}")
+                bt.logging.error(
+                    f"Miner with uid {miner_uid} sent not valid data. Description: {validate_result.json()}"
+                )
                 rewards.append(0.0)
+            else:
+                bt.logging.info(
+                    f"Miner with uid {miner_uid} sent valid data. Miner job is successful!"
+                )
+                rewards.append(1.0)
 
-            rewards.append(1.0)
+        return rewards
 
-
-        bt.logging.info(f"Scored responses: {rewards}")
-
-        self.update_scores(rewards, miner_uids)
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":

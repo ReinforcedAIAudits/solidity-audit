@@ -46,10 +46,9 @@ contract Wallet {
     }   
 }
 """
-    random_number = random.randint(0, 1,000,000,000,000)
     mutated_contract_code = contract.replace(
-            "contract Wallet", f"contract Wallet_{random_number}"
-        )
+        "contract Wallet", f"contract Wallet_{int(time.time())}"
+    )
 
     logger.info(f"Generated contract: {mutated_contract_code}")
     return mutated_contract_code
@@ -62,10 +61,13 @@ async def validate(vulnerability_report: List[VulnerabilityReport] = Body()):
             logger.info("Not all fields presented at vulnerability report")
             raise HTTPException(status_code=400, detail="Incorrect report")
 
-        if not report.from_line < report.to_line:
+        if (
+            report.from_line > report.to_line
+            or report.from_line != 12
+            or report.to_line != 19
+        ):
             logger.info("Incorrect location information")
             raise HTTPException(status_code=400, detail="Incorrect lines information")
-
     return
 
 
