@@ -57,8 +57,8 @@ contract Wallet {
 @app.post("/validate")
 async def validate(vulnerability_report: List[VulnerabilityReport] = Body()):
     for report in vulnerability_report:
-        if not all(value is not None for value in vars(report).values()):
-            logger.info("Not all fields presented at vulnerability report")
+        if any(value is None for value in report.dict().values()):
+            logger.info("Not all fields presented in vulnerability report")
             return {"result": 0.0}
 
         if (
@@ -66,8 +66,9 @@ async def validate(vulnerability_report: List[VulnerabilityReport] = Body()):
             or report.from_line != 12
             or report.to_line != 19
         ):
-            logger.info("Incorrect location information")
+            logger.info("Incorrect location information for report: %s", report)
             return {"result": 0.0}
+
     return {"result": 1.0}
 
 

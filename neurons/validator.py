@@ -26,8 +26,6 @@ from typing import List
 # Bittensor
 import bittensor as bt
 from fastapi.encoders import jsonable_encoder
-import requests
-import requests.adapters
 
 # import base validator class which takes care of most of the boilerplate
 from template.base.validator import BaseValidatorNeuron
@@ -49,7 +47,6 @@ class Validator(BaseValidatorNeuron):
 
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
-
         bt.logging.info("load_state()")
         self.load_state()
 
@@ -79,7 +76,7 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
-        contract = requests.get(
+        contract = self.session.get(
             f"{os.getenv('VALIDATOR_SERVER')}/generate_contract"
         ).text
 
@@ -104,19 +101,16 @@ class Validator(BaseValidatorNeuron):
         rewards = []
         for response in responses:
             if response:
-                retries = requests.adapters.Retry(
-                    total=5, status_forcelist=[404, 500, 501, 502]
-                )
-                session = requests.Session()
-                session.mount(
-                    "https://", requests.adapters.HTTPAdapter(max_retries=retries)
-                )
-                validate_result = session.post(
+                validate_result = self.session.post(
                     f"{os.getenv('VALIDATOR_SERVER')}/validate",
                     json=jsonable_encoder(response.response),
                 )
 
-                rewards.append(validate_result.json()["result"])
+                if validate_result.status_code != 200:
+                    bt.logging.error("Miner synapse is incorrect. Scored reward is 0")
+                    rewards.append(0.0)
+                else:
+                    rewards.append(validate_result.json().get("result", 0.0))
             else:
                 bt.logging.error("Miner respond with empty synapse")
                 rewards.append(0.0)

@@ -62,7 +62,7 @@ class Miner(BaseMinerNeuron):
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
         bt.logging.info(f"Received synapse from validator {synapse}")
-        result = requests.post(
+        result = self.session.post(
             f"{os.getenv('MINER_SERVER')}/submit", synapse.contract_code
         )
 
