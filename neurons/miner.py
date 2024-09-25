@@ -74,9 +74,9 @@ class Miner(BaseMinerNeuron):
         bt.logging.info(f"Response from miner server: {json}")
         vulnerabilities = [
             VulnerabilityReport(
-                **vlns,
+                **vuln,
             )
-            for vlns in json
+            for vuln in json
         ]
 
         synapse.response = vulnerabilities
