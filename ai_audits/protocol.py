@@ -8,7 +8,7 @@ class VulnerabilityReport(BaseModel):
         ...,
         title="From Line",
         description="The starting line number of the vulnerability in the source code.",
-        alias="from",  # Используйте 'from' как alias для парсинга JSON
+        alias="from",
     )
     to_line: int = Field(
         ...,
