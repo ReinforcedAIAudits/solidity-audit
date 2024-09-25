@@ -1,5 +1,6 @@
 import logging
 
+import random
 import time
 from typing import List
 
@@ -45,9 +46,13 @@ contract Wallet {
     }   
 }
 """
+    random_number = random.randint(0, 1,000,000,000,000)
+    mutated_contract_code = contract.replace(
+            "contract Wallet", f"contract Wallet_{random_number}"
+        )
 
-    logger.info(f"Generated contract: {contract}")
-    return contract
+    logger.info(f"Generated contract: {mutated_contract_code}")
+    return mutated_contract_code
 
 
 @app.post("/validate")

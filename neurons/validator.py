@@ -79,11 +79,8 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
         contract = requests.get(f"{os.getenv('VALIDATOR_SERVER')}/generate_contract").text
-        random_number = random.randint(0, 1000)
-        mutated_contract_code = contract.replace(
-            "contract Wallet", f"contract Wallet_{random_number}"
-        )
-        synapse = AuditsSynapse(contract_code=mutated_contract_code)
+
+        synapse = AuditsSynapse(contract_code=contract)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
         responses = self.dendrite.query(
@@ -94,6 +91,7 @@ class Validator(BaseValidatorNeuron):
         )
         bt.logging.info(f"Received responses: {responses}")
 
+        rewards = []
         for miner_uid, response in zip(miner_uids, responses):
             validate_result = requests.post(
                 f"{os.getenv('VALIDATOR_SERVER')}/validate",
@@ -101,54 +99,14 @@ class Validator(BaseValidatorNeuron):
             )
             if validate_result.status_code != 200:
                 bt.logging.error(f"Miner with uid {miner_uid} sent not valid data. Description: {validate_result.json()}")
-                raise ValueError("Response from miner is not valid")
+                rewards.append(0.0)
 
-        rewards = self.get_rewards(responses)
+            rewards.append(1.0)
+
 
         bt.logging.info(f"Scored responses: {rewards}")
 
         self.update_scores(rewards, miner_uids)
-        # TODO(developer): Rewrite this function based on your protocol definition.
-        # return await forward(self)
-
-    def get_number_reward(self, true_number: int, predicted_number: int) -> float:
-        """
-        Calculate the reward based on the proximity of the predicted number to the true number.
-
-        Args:
-        - true_number (int): The true number.
-        - predicted_number (int): The predicted number.
-
-        Returns:
-        - float: The reward value, normalized to be between 0 and 1.
-        """
-        max_difference = 10
-
-        difference = abs(true_number - predicted_number)
-
-        if difference == 0:
-            return 1.0
-        elif difference <= max_difference:
-            res = 1.0 - (difference / max_difference)
-            return 0.5
-        else:
-            return 0.0
-
-    def reward(self, response: AuditsSynapse) -> float:
-        predictions = response.response
-        if predictions is None:
-            return 0.0
-        # return self.get_number_reward(response.num1 + response.num2, predictions)
-        
-        # TODO rewards system
-        return 0.5
-
-    def get_rewards(
-        self,
-        responses: List[AuditsSynapse],
-    ) -> list[float]:
-        return [self.reward(response) for response in responses]
-
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
