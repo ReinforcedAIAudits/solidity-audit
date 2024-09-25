@@ -59,7 +59,7 @@ async def validate(vulnerability_report: List[VulnerabilityReport] = Body()):
     for report in vulnerability_report:
         if not all(value is not None for value in vars(report).values()):
             logger.info("Not all fields presented at vulnerability report")
-            raise HTTPException(status_code=400, detail="Incorrect report")
+            return {"result": 0.0}
 
         if (
             report.from_line > report.to_line
@@ -67,8 +67,8 @@ async def validate(vulnerability_report: List[VulnerabilityReport] = Body()):
             or report.to_line != 19
         ):
             logger.info("Incorrect location information")
-            raise HTTPException(status_code=400, detail="Incorrect lines information")
-    return
+            return {"result": 0.0}
+    return {"result": 1.0}
 
 
 if __name__ == "__main__":

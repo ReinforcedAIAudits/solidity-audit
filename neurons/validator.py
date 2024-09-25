@@ -27,6 +27,7 @@ from typing import List
 import bittensor as bt
 from fastapi.encoders import jsonable_encoder
 import requests
+import requests.adapters
 
 # import base validator class which takes care of most of the boilerplate
 from template.base.validator import BaseValidatorNeuron
@@ -93,30 +94,32 @@ class Validator(BaseValidatorNeuron):
         )
         bt.logging.info(f"Received responses: {responses}")
 
-        rewards = self.validate_responses(miner_uids, responses)
+        rewards = self.validate_responses(responses)
 
         bt.logging.info(f"Scored responses: {rewards}")
 
         self.update_scores(rewards, miner_uids)
 
-    def validate_responses(self, miner_uids: int, responses: List[AuditsSynapse]):
+    def validate_responses(self, responses: List[AuditsSynapse]):
         rewards = []
-        for miner_uid, response in zip(miner_uids, responses):
-            validate_result = requests.post(
-                f"{os.getenv('VALIDATOR_SERVER')}/validate",
-                json=jsonable_encoder(response.response),
-            )
+        for response in responses:
+            if response:
+                retries = requests.adapters.Retry(
+                    total=5, status_forcelist=[404, 500, 501, 502]
+                )
+                session = requests.Session()
+                session.mount(
+                    "https://", requests.adapters.HTTPAdapter(max_retries=retries)
+                )
+                validate_result = session.post(
+                    f"{os.getenv('VALIDATOR_SERVER')}/validate",
+                    json=jsonable_encoder(response.response),
+                )
 
-            if validate_result.status_code != 200:
-                bt.logging.error(
-                    f"Miner with uid {miner_uid} sent not valid data. Description: {validate_result.json()}"
-                )
-                rewards.append(0.0)
+                rewards.append(validate_result.json()["result"])
             else:
-                bt.logging.info(
-                    f"Miner with uid {miner_uid} sent valid data. Miner job is successful!"
-                )
-                rewards.append(1.0)
+                bt.logging.error("Miner respond with empty synapse")
+                rewards.append(0.0)
 
         return rewards
 
