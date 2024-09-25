@@ -7,7 +7,7 @@ class VulnerabilityReport(BaseModel):
     from_line: int = Field(
         ...,
         title="From Line",
-        description="The starting line number of the vulnerability in the source code.",
+        description="The starting line number of the vulnerability in the source code. The line numbers start from one.",
         serialization_alias="from",
         validation_alias=AliasChoices("from", "from_line"),
     )
