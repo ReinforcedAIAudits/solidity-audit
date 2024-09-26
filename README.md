@@ -126,7 +126,7 @@ python utils/init_solochain.py
 
 To fully leverage the capabilities of the `SoldityAudit` subnetwork, it is essential to implement the logic for your blackboxes. 
 
-The first blackbox is required for the miner, enabling it to send data for processing, and subsequently receive, structure, and return that data to the validator within the synapse. 
+The first blackbox is required for the miner, enabling it to send data for processing, and subsequently receive, structure, and return that data to the validator within a synapse. 
 
 The second blackbox is necessary for the validator, whose responsibilities include generating tasks and verifying the structural correctness of the miner's responses.
 
