@@ -97,25 +97,24 @@ class Validator(BaseValidatorNeuron):
 
         self.update_scores(rewards, miner_uids)
 
-    def validate_responses(self, responses: List[AuditsSynapse]):
-        rewards = []
-        for response in responses:
-            if response:
-                validate_result = self.session.post(
-                    f"{os.getenv('VALIDATOR_SERVER')}/validate",
-                    json=jsonable_encoder(response.response),
-                )
+    def validate_responses(self, responses: List[AuditsSynapse]) -> List[float]:
+        return [self.validate_response(response) for response in responses]
 
-                if validate_result.status_code != 200:
-                    bt.logging.error("Miner synapse is incorrect. Scored reward is 0")
-                    rewards.append(0.0)
-                else:
-                    rewards.append(validate_result.json().get("result", 0.0))
+    def validate_response(self, response: AuditsSynapse) -> float:
+        if response:
+            validate_result = self.session.post(
+                f"{os.getenv('VALIDATOR_SERVER')}/validate",
+                json=jsonable_encoder(response.response),
+            )
+
+            if validate_result.status_code != 200:
+                bt.logging.error("Miner synapse is incorrect. Scored reward is 0")
+                return 0.0
             else:
-                bt.logging.error("Miner respond with empty synapse")
-                rewards.append(0.0)
-
-        return rewards
+                return validate_result.json().get("result", 0.0)
+        else:
+            bt.logging.error("Miner respond with empty synapse")
+            return 0.0
 
 
 # The main function parses the configuration and runs the validator.
