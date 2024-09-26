@@ -21,7 +21,7 @@
 
 ## Introduction
 
-Subtensor nodes play a vital role in the Bittensor network, governing various aspects such as incentivization, governance, and network health. Solidity-Audit aims to enhance the decentralization and functionality of Bittensor by establishing an incentivized network of subtensors.
+Subtensor nodes play a vital role in the Bittensor network, governing various aspects such as incentivization, governance, and network health. Solidity-Audit aims to provide a decentralized platform for validating Solidity smart contracts and identifying potential vulnerabilities. With the increasing reliance on blockchain technology and smart contracts, ensuring their security has become critical to prevent financial loss and exploitation. This subnet will utilize distributed machine learning models to analyze and evaluate Solidity contracts for potential weaknesses or flaws, contributing to the overall security and trustworthiness of decentralized applications (dApps).
 
 
 ## Machine requirements
