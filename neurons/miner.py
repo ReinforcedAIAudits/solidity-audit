@@ -66,7 +66,7 @@ class Miner(BaseMinerNeuron):
         result = create_session().post(
             f"{os.getenv('MINER_SERVER')}/submit", synapse.contract_code
         )
-
+        # TODO: Remove the error and allow sending a synapse with an empty response + log this event
         if result.status_code != 200:
             bt.logging.info(f"Not successful AI response. Description: {result.text}")
             raise ValueError("Contract audit is not successful!")
