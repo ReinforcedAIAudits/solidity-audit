@@ -1,213 +1,189 @@
 <div align="center">
 
-# **Bittensor Subnet Template** <!-- omit in toc -->
-[![Discord Chat](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
+# **Solidity-Audit** <!-- omit in toc -->
 
----
-
-## The Incentivized Internet <!-- omit in toc -->
-
-[Discord](https://discord.gg/bittensor) • [Network](https://taostats.io/) • [Research](https://bittensor.com/whitepaper)
+## An Incentivized and Decentralized Subtensor Network <!-- omit in toc -->
 </div>
 
----
-- [Quickstarter template](#quickstarter-template)
-- [Introduction](#introduction)
-  - [Example](#example)
+
+- [Machine Requirements](#machine-requirements)
+  - [Validator](#validator-requirements)
+  - [Miner](#miner-requirements)
 - [Installation](#installation)
-  - [Before you proceed](#before-you-proceed)
-  - [Install](#install)
-- [Writing your own incentive mechanism](#writing-your-own-incentive-mechanism)
-- [Writing your own subnet API](#writing-your-own-subnet-api)
-- [Subnet Links](#subnet-links)
-- [License](#license)
+  - [Install SolidityAudit](#install-solidityaudit)
+  - [Install Subtensor](#install-local-subtensor)
+- [Blackboxes](#blackboxes)
+  - [Miner blackbox](#miner-blackbox)
+  - [Validator blackbox](#validator-blackbox)
+- [Running a Miner](#running-a-miner)
+- [Running a Validator](#running-a-validator)
 
----
-## Quickstarter template
-
-This template contains all the required installation instructions, scripts, and files and functions for:
-- Building Bittensor subnets.
-- Creating custom incentive mechanisms and running these mechanisms on the subnets. 
-
-In order to simplify the building of subnets, this template abstracts away the complexity of the underlying blockchain and other boilerplate code. While the default behavior of the template is sufficient for a simple subnet, you should customize the template in order to meet your specific requirements.
----
 
 ## Introduction
 
-**IMPORTANT**: If you are new to Bittensor subnets, read this section before proceeding to [Installation](#installation) section. 
+Subtensor nodes play a vital role in the Bittensor network, governing various aspects such as incentivization, governance, and network health. Solidity-Audit aims to provide a decentralized platform for validating Solidity smart contracts and identifying potential vulnerabilities. With the increasing reliance on blockchain technology and smart contracts, ensuring their security has become critical to prevent financial loss and exploitation. This subnet will utilize distributed machine learning models to analyze and evaluate Solidity contracts for potential weaknesses or flaws, contributing to the overall security and trustworthiness of decentralized applications (dApps).
 
-The Bittensor blockchain hosts multiple self-contained incentive mechanisms called **subnets**. Subnets are playing fields in which:
-- Subnet miners who produce value, and
-- Subnet validators who produce consensus
 
-determine together the proper distribution of TAO for the purpose of incentivizing the creation of value, i.e., generating digital commodities, such as intelligence or data. 
+## Machine requirements
 
-Each subnet consists of:
-- Subnet miners and subnet validators.
-- A protocol using which the subnet miners and subnet validators interact with one another. This protocol is part of the incentive mechanism.
-- The Bittensor API using which the subnet miners and subnet validators interact with Bittensor's onchain consensus engine [Yuma Consensus](https://bittensor.com/documentation/validating/yuma-consensus). The Yuma Consensus is designed to drive these actors: subnet validators and subnet miners, into agreement on who is creating value and what that value is worth. 
+In terms of Operation System, you have to follow the requirements
 
-This starter template is split into three primary files. To write your own incentive mechanism, you should edit these files. These files are:
-1. `template/protocol.py`: Contains the definition of the protocol used by subnet miners and subnet validators.
-2. `neurons/miner.py`: Script that defines the subnet miner's behavior, i.e., how the subnet miner responds to requests from subnet validators.
-3. `neurons/validator.py`: This script defines the subnet validator's behavior, i.e., how the subnet validator requests information from the subnet miners and determines the scores.
+- Ubuntu (>= 22.04)
+- Others - please share with us to update our docs.
 
-### Example
+### Miner <a id="miner-requirements"></a>
 
-The Bittensor Subnet 1 for Text Prompting is built using this template. See [prompting](https://github.com/macrocosm-os/prompting) for how to configure the files and how to add monitoring and telemetry and support multiple miner types. Also see this Subnet 1 in action on [Taostats](https://taostats.io/subnets/netuid-1/) explorer.
+For miner, you need a CPU machine (no GPU needed!) with the same requirements as a local subtensor. Go to the [Subtensor github](https://github.com/opentensor/subtensor) for more information;.
 
----
+For more information, take a look on the [min requirements](./min_compute.yml)
+
+
+### Validator <a id="validator-requirements"></a>
+
+For validator, you need a CPU machine (no GPU needed!).
+
+For more information, take a look on the [min requirements](./min_compute.yml)
 
 ## Installation
 
-### Before you proceed
-Before you proceed with the installation of the subnet, note the following: 
+### Install SolidityAudit
 
-- Use these instructions to run your subnet locally for your development and testing, or on Bittensor testnet or on Bittensor mainnet. 
-- **IMPORTANT**: We **strongly recommend** that you first run your subnet locally and complete your development and testing before running the subnet on Bittensor testnet. Furthermore, make sure that you next run your subnet on Bittensor testnet before running it on the Bittensor mainnet.
-- You can run your subnet either as a subnet owner, or as a subnet validator or as a subnet miner. 
-- **IMPORTANT:** Make sure you are aware of the minimum compute requirements for your subnet. See the [Minimum compute YAML configuration](./min_compute.yml).
-- Note that installation instructions differ based on your situation: For example, installing for local development and testing will require a few additional steps compared to installing for testnet. Similarly, installation instructions differ for a subnet owner vs a validator or a miner. 
+To install the subnet, you need to make some simple instructions:
 
-### Install
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+```
 
-- **Running locally**: Follow the step-by-step instructions described in this section: [Running Subnet Locally](./docs/running_on_staging.md).
-- **Running on Bittensor testnet**: Follow the step-by-step instructions described in this section: [Running on the Test Network](./docs/running_on_testnet.md).
-- **Running on Bittensor mainnet**: Follow the step-by-step instructions described in this section: [Running on the Main Network](./docs/running_on_mainnet.md).
+This commands will create virtual python environment and install required dependencies.
 
----
+### Install Local Subtensor
 
-## Writing your own incentive mechanism
+To install a local subtensor, begin by installing the required dependencies for running a Substrate node.
 
-As described in [Quickstarter template](#quickstarter-template) section above, when you are ready to write your own incentive mechanism, update this template repository by editing the following files. The code in these files contains detailed documentation on how to update the template. Read the documentation in each of the files to understand how to update the template. There are multiple **TODO**s in each of the files identifying sections you should update. These files are:
-- `template/protocol.py`: Contains the definition of the wire-protocol used by miners and validators.
-- `neurons/miner.py`: Script that defines the miner's behavior, i.e., how the miner responds to requests from validators.
-- `neurons/validator.py`: This script defines the validator's behavior, i.e., how the validator requests information from the miners and determines the scores.
-- `template/forward.py`: Contains the definition of the validator's forward pass.
-- `template/reward.py`: Contains the definition of how validators reward miner responses.
+#### Install Subtensor dependencies
 
-In addition to the above files, you should also update the following files:
-- `README.md`: This file contains the documentation for your project. Update this file to reflect your project's documentation.
-- `CONTRIBUTING.md`: This file contains the instructions for contributing to your project. Update this file to reflect your project's contribution guidelines.
-- `template/__init__.py`: This file contains the version of your project.
-- `setup.py`: This file contains the metadata about your project. Update this file to reflect your project's metadata.
-- `docs/`: This directory contains the documentation for your project. Update this directory to reflect your project's documentation.
+Update your system packages and install additional required libraries and tools:
 
-__Note__
-The `template` directory should also be renamed to your project name.
----
+```bash
+sudo apt update
+sudo apt install --assume-yes make build-essential git clang curl libssl-dev llvm libudev-dev protobuf-compiler
+```
 
-# Writing your own subnet API
-To leverage the abstract `SubnetsAPI` in Bittensor, you can implement a standardized interface. This interface is used to interact with the Bittensor network and can be used by a client to interact with the subnet through its exposed axons.
+#### Install Rust and Cargo
 
-What does Bittensor communication entail? Typically two processes, (1) preparing data for transit (creating and filling `synapse`s) and (2), processing the responses received from the `axon`(s).
+Rust is the programming language used in Substrate development. Cargo is Rust package manager.
 
-This protocol uses a handler registry system to associate bespoke interfaces for subnets by implementing two simple abstract functions:
-- `prepare_synapse`
-- `process_responses`
+Install rust and cargo and update your shell's source to include Cargo's path:
 
-These can be implemented as extensions of the generic `SubnetsAPI` interface.  E.g.:
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
 
+#### Clone the subtensor repository
 
-This is abstract, generic, and takes(`*args`, `**kwargs`) for flexibility. See the extremely simple base class:
-```python
-class SubnetsAPI(ABC):
-    def __init__(self, wallet: "bt.wallet"):
-        self.wallet = wallet
-        self.dendrite = bt.dendrite(wallet=wallet)
+This step fetches the subtensor codebase to your local machine.
 
-    async def __call__(self, *args, **kwargs):
-        return await self.query_api(*args, **kwargs)
-
-    @abstractmethod
-    def prepare_synapse(self, *args, **kwargs) -> Any:
-        """
-        Prepare the synapse-specific payload.
-        """
-        ...
-
-    @abstractmethod
-    def process_responses(self, responses: List[Union["bt.Synapse", Any]]) -> Any:
-        """
-        Process the responses from the network.
-        """
-        ...
-
+```bash
+git clone https://github.com/opentensor/subtensor.git
 ```
 
 
-Here is a toy example:
+#### Setup Rust
 
-```python
-from bittensor.subnets import SubnetsAPI
-from MySubnet import MySynapse
+This step ensures that you have the nightly toolchain and the WebAssembly (wasm) compilation target. Note that this step will run the subtensor chain on your terminal directly, hence we advise that you run this as a background process using PM2 or other software.
 
-class MySynapseAPI(SubnetsAPI):
-    def __init__(self, wallet: "bt.wallet"):
-        super().__init__(wallet)
-        self.netuid = 99
-
-    def prepare_synapse(self, prompt: str) -> MySynapse:
-        # Do any preparatory work to fill the synapse
-        data = do_prompt_injection(prompt)
-
-        # Fill the synapse for transit
-        synapse = StoreUser(
-            messages=[data],
-        )
-        # Send it along
-        return synapse
-
-    def process_responses(self, responses: List[Union["bt.Synapse", Any]]) -> str:
-        # Look through the responses for information required by your application
-        for response in responses:
-            if response.dendrite.status_code != 200:
-                continue
-            # potentially apply post processing
-            result_data = postprocess_data_from_response(response)
-        # return data to the client
-        return result_data
+```bash
+./subtensor/scripts/init.sh
 ```
 
-You can use a subnet API to the registry by doing the following:
-1. Download and install the specific repo you want
-1. Import the appropriate API handler from bespoke subnets
-1. Make the query given the subnet specific API
 
+#### Run subtensor
 
+Build the binary with the faucet feature enabled and run the localnet script and turn off the attempt to build the binary (as we have already done this above):
 
-# Subnet Links
-In order to see real-world examples of subnets in-action, see the `subnet_links.py` document or access them from inside the `template` package by:
-```python
-import template
-template.SUBNET_LINKS
-[{'name': 'sn0', 'url': ''},
- {'name': 'sn1', 'url': 'https://github.com/opentensor/prompting/'},
- {'name': 'sn2', 'url': 'https://github.com/bittranslateio/bittranslate/'},
- {'name': 'sn3', 'url': 'https://github.com/gitphantomman/scraping_subnet/'},
- {'name': 'sn4', 'url': 'https://github.com/manifold-inc/targon/'},
-...
-]
+```bash
+cargo build -p node-subtensor --profile production --features pow-faucet
+./scripts/localnet.sh
 ```
 
-## License
-This repository is licensed under the MIT License.
-```text
-# The MIT License (MIT)
-# Copyright © 2024 Opentensor Foundation
+#### Initialize network
 
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+Execute this command to create wallets, register your subnetwork, set weights, and perform other essential tasks. This is a crucial step for the proper functioning of the node:
 
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-# the Software.
-
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
+```bash
+python utils/init_solochain.py
 ```
+
+> **NOTE:**
+> In this script, you can modify the names of the wallets being created, add passwords to them, and adjust the values for root and subnet weights.
+
+
+## Blackboxes
+
+To fully leverage the capabilities of the `SoldityAudit` subnetwork, it is essential to implement the logic for your blackboxes. 
+
+The first blackbox is required for the miner, enabling it to send data for processing, and subsequently receive, structure, and return that data to the validator within a synapse. 
+
+The second blackbox is necessary for the validator, whose responsibilities include generating tasks and verifying the structural correctness of the miner's responses.
+
+However, for testing purposes, you can use the templates implemented in `blackbox_example/`.
+
+> **NOTE:** Remember to create your `.env` file, which should include the addresses of your blackboxes in the variables `MINER_SERVER` and `VALIDATOR_SERVER`. For testing purposes, you can use the command `cp .env-example .env`.
+
+### Miner blackbox
+
+To run the miner blackbox example , you simply need to execute the command:
+
+```bash
+python blackbox_example/miner_server.py
+```
+
+### Validator blackbox
+
+To run the validator blackbox example , you simply need to execute the command:
+
+```bash
+python blackbox_example/validator_server.py
+```
+
+## Running a Miner
+
+> **IMPORTANT:** Before running a miner, be sure you have a local subtensor up and running. Please see the [Subtensor guide](#install-local-subtensor) for more details.
+
+To run a miner, navigate to the `solidity-audit` directory, run this command:
+
+```
+python neurons/miner.py \
+ --netuid <SUBNET_UID> \
+ --wallet.name <YOUR_MINER_WALLET_NAME>
+ --wallet.hotkey <YOUR_HOTKEY_NAME> \
+ --subtensor.network local \
+ --subtensor.chain_endpoint ws://127.0.0.1:9946 \
+ --logging.debug 
+
+```
+
+> IMPORTANT: Do not run more than one miner per machine. Running multiple miners will result in the loss of incentive and emissions on all miners.
+
+## Running a Validator
+
+> **IMPORTANT:** Before running a validator, be sure you have a local subtensor up and running. Please see the [Subtensor guide](#install-local-subtensor) for more details.
+
+Similar to running a miner in the above section, navigate to the `solidity-audit` directory and run the following:
+
+```
+python neurons/validator.py \
+  --netuid <NET_UID> \
+  --wallet.name <YOUR_VALIDATOR_WALLET_NAME> \
+  --wallet.hotkey <YOUR_HOTKEY_NAME> \
+  --subtensor.network local \
+  --subtensor.chain_endpoint ws://127.0.0.1:9946 \
+  --logging.debug
+```
+
+> NOTE: if you run a validator in testnet do not forget to add the argument `--subtensor.network test` or `--subtensor.chain_endpoint ws://<LOCAL_SUBTENSOR_IP>:9946` (the local subtensor has to target the network testnet)
+
