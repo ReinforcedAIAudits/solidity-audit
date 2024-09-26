@@ -28,6 +28,7 @@ import bittensor as bt
 from fastapi.encoders import jsonable_encoder
 
 # import base validator class which takes care of most of the boilerplate
+from blackbox_example.subnet_utils import create_session
 from template.base.validator import BaseValidatorNeuron
 
 # Bittensor Validator Template:
@@ -76,7 +77,7 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
-        contract = self.session.get(
+        contract = create_session().get(
             f"{os.getenv('VALIDATOR_SERVER')}/generate_contract"
         ).text
 
@@ -102,7 +103,7 @@ class Validator(BaseValidatorNeuron):
 
     def validate_response(self, response: AuditsSynapse) -> float:
         if response:
-            validate_result = self.session.post(
+            validate_result = create_session().post(
                 f"{os.getenv('VALIDATOR_SERVER')}/validate",
                 json=jsonable_encoder(response.response),
             )

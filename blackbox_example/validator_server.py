@@ -57,10 +57,6 @@ contract Wallet {
 @app.post("/validate")
 async def validate(vulnerability_report: List[VulnerabilityReport] = Body()):
     for report in vulnerability_report:
-        if any(value is None for value in report.dict().values()):
-            logger.info("Not all fields presented in vulnerability report")
-            return {"result": 0.0}
-
         if (
             report.from_line > report.to_line
             or report.from_line != 12

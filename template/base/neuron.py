@@ -22,9 +22,6 @@ import bittensor as bt
 
 from abc import ABC, abstractmethod
 
-import requests
-import requests.adapters
-
 # Sync calls set weights and also resyncs the metagraph.
 from template.utils.config import check_config, add_args, config
 from template.utils.misc import ttl_get_block
@@ -67,7 +64,6 @@ class BaseNeuron(ABC):
         self.config = self.config()
         self.config.merge(base_config)
         self.check_config(self.config)
-        self.session = self.create_session()
 
         # Set up logging with the provided configuration.
         bt.logging.set_config(config=self.config.logging)
@@ -105,15 +101,6 @@ class BaseNeuron(ABC):
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
         self.step = 0
-
-    def create_session(self):
-        retries = requests.adapters.Retry(
-            total=10, status_forcelist=[404, 500, 501, 502, 503, 504]
-        )
-        session = requests.Session()
-        session.mount("https://", requests.adapters.HTTPAdapter(max_retries=retries))
-        session.mount("http://", requests.adapters.HTTPAdapter(max_retries=retries))
-        return session
 
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse:

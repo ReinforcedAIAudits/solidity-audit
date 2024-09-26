@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 import requests
 
 # Bittensor Miner Template:
+from blackbox_example.subnet_utils import create_session
 import template
 
 # import base miner class which takes care of most of the boilerplate
@@ -62,7 +63,7 @@ class Miner(BaseMinerNeuron):
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
         bt.logging.info(f"Received synapse from validator {synapse}")
-        result = self.session.post(
+        result = create_session().post(
             f"{os.getenv('MINER_SERVER')}/submit", synapse.contract_code
         )
 
