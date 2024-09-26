@@ -35,14 +35,9 @@ In terms of Operation System, you have to follow the requirements
 
 For miner, you need a CPU machine (no GPU needed!) with the same requirements as a local subtensor. Go to the [Subtensor github](https://github.com/opentensor/subtensor) for more information;.
 
-For more information, take a look on the [min requirements](./min_compute.yml)
-
-
 ### Validator <a id="validator-requirements"></a>
 
 For validator, you need a CPU machine (no GPU needed!).
-
-For more information, take a look on the [min requirements](./min_compute.yml)
 
 ## Installation
 
