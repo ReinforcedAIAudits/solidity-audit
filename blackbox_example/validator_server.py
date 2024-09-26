@@ -57,11 +57,7 @@ contract Wallet {
 @app.post("/validate")
 async def validate(vulnerability_report: List[VulnerabilityReport] = Body()):
     for report in vulnerability_report:
-        if (
-            report.from_line > report.to_line
-            or report.from_line != 12
-            or report.to_line != 19
-        ):
+        if report.from_line != 12 or report.to_line != 19:
             logger.info("Incorrect location information for report: %s", report)
             return {"result": 0.0}
 
