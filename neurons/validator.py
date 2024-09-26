@@ -25,40 +25,16 @@ from typing import List
 
 # Bittensor
 import bittensor as bt
-import requests
+from fastapi.encoders import jsonable_encoder
 
 # import base validator class which takes care of most of the boilerplate
+from blackbox_example.subnet_utils import create_session
 from template.base.validator import BaseValidatorNeuron
 
 # Bittensor Validator Template:
 from template.utils.uids import get_random_uids
-from template.validator import forward
 from ai_audits.protocol import AuditsSynapse
 from dotenv import load_dotenv
-
-
-contract_code: str = """
-contract Wallet {
-    mapping (address => uint) userBalance;
-   
-    function getBalance(address u) constant returns(uint){
-        return userBalance[u];
-    }
-
-    function addToBalance() payable{
-        userBalance[msg.sender] += msg.value;
-    }   
-
-    function withdrawBalance(){
-        // send userBalance[msg.sender] ethers to msg.sender
-        // if mgs.sender is a contract, it will call its fallback function
-        if( ! (msg.sender.call.value(userBalance[msg.sender])() ) ){
-            throw;
-        }
-        userBalance[msg.sender] = 0;
-    }   
-}
-"""
 
 
 class Validator(BaseValidatorNeuron):
@@ -72,7 +48,6 @@ class Validator(BaseValidatorNeuron):
 
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
-
         bt.logging.info("load_state()")
         self.load_state()
 
@@ -102,11 +77,11 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
-        random_number = random.randint(0, 1000)
-        mutated_contract_code = contract_code.replace(
-            "contract Wallet", f"contract Wallet_{random_number}"
-        )
-        synapse = AuditsSynapse(contract_code=mutated_contract_code)
+        contract = create_session().get(
+            f"{os.getenv('VALIDATOR_SERVER')}/generate_contract"
+        ).text
+
+        synapse = AuditsSynapse(contract_code=contract)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
         responses = self.dendrite.query(
@@ -117,61 +92,30 @@ class Validator(BaseValidatorNeuron):
         )
         bt.logging.info(f"Received responses: {responses}")
 
-        for miner_uid, response in zip(miner_uids, responses):
-            requests.post(
-                f"{os.getenv('VALIDATOR_SERVER')}/validate?uid={miner_uid}",
-                json={"result": response.response},
-            )
-
-            if not (
-                requests.get(
-                    f"{os.getenv('VALIDATOR_SERVER')}/get_validation_for_miner?uid={miner_uid}"
-                )
-            ):
-                raise ValueError("Response from miner is not int")
-
-        rewards = self.get_rewards(responses)
+        rewards = self.validate_responses(responses)
 
         bt.logging.info(f"Scored responses: {rewards}")
 
         self.update_scores(rewards, miner_uids)
-        # TODO(developer): Rewrite this function based on your protocol definition.
-        # return await forward(self)
 
-    def get_number_reward(self, true_number: int, predicted_number: int) -> float:
-        """
-        Calculate the reward based on the proximity of the predicted number to the true number.
+    def validate_responses(self, responses: List[AuditsSynapse]) -> List[float]:
+        return [self.validate_response(response) for response in responses]
 
-        Args:
-        - true_number (int): The true number.
-        - predicted_number (int): The predicted number.
+    def validate_response(self, response: AuditsSynapse) -> float:
+        if response:
+            validate_result = create_session().post(
+                f"{os.getenv('VALIDATOR_SERVER')}/validate",
+                json=jsonable_encoder(response.response),
+            )
 
-        Returns:
-        - float: The reward value, normalized to be between 0 and 1.
-        """
-        max_difference = 10
-
-        difference = abs(true_number - predicted_number)
-
-        if difference == 0:
-            return 1.0
-        elif difference <= max_difference:
-            res = 1.0 - (difference / max_difference)
-            return 0.5
+            if validate_result.status_code != 200:
+                bt.logging.error("Miner synapse is incorrect. Scored reward is 0")
+                return 0.0
+            else:
+                return validate_result.json().get("result", 0.0)
         else:
+            bt.logging.error("Miner respond with empty synapse")
             return 0.0
-
-    def reward(self, response: AuditsSynapse) -> float:
-        predictions = response.response
-        if predictions is None:
-            return 0.0
-        return self.get_number_reward(response.num1 + response.num2, predictions)
-
-    def get_rewards(
-        self,
-        responses: List[AuditsSynapse],
-    ) -> list[float]:
-        return [self.reward(response) for response in responses]
 
 
 # The main function parses the configuration and runs the validator.

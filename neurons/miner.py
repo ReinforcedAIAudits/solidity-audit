@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 import requests
 
 # Bittensor Miner Template:
+from blackbox_example.subnet_utils import create_session
 import template
 
 # import base miner class which takes care of most of the boilerplate
@@ -62,17 +63,21 @@ class Miner(BaseMinerNeuron):
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
         bt.logging.info(f"Received synapse from validator {synapse}")
-        result = requests.post(
+        result = create_session().post(
             f"{os.getenv('MINER_SERVER')}/submit", synapse.contract_code
         )
+        # TODO: Remove the error and allow sending a synapse with an empty response + log this event
+        if result.status_code != 200:
+            bt.logging.info(f"Not successful AI response. Description: {result.text}")
+            raise ValueError("Contract audit is not successful!")
 
         json = result.json()
-        bt.logging.info(f"Response from miner server: {result.json()}")
+        bt.logging.info(f"Response from miner server: {json}")
         vulnerabilities = [
             VulnerabilityReport(
                 **vuln,
             )
-            for vuln in result.json()
+            for vuln in json
         ]
 
         synapse.response = vulnerabilities
