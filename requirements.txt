@@ -1,8 +1,8 @@
-bittensor>=7
-starlette>=0.30.0
-pydantic>=2
-rich>=13
-pytest>=8
-numpy>=1
-setuptools>=68
-python-dotenv>=1
+bittensor==7.4.0
+starlette==0.37.2
+pydantic==2.9.2
+rich==13.8.1
+pytest==8.3.3
+numpy==1.26.4
+setuptools==68
+python-dotenv==1.0.1
