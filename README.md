@@ -33,11 +33,11 @@ In terms of Operation System, you have to follow the requirements
 
 ### Miner <a id="miner-requirements"></a>
 
-For miner, you need a CPU machine (no GPU needed!) with the same requirements as a local subtensor. Go to the [Subtensor github](https://github.com/opentensor/subtensor) for more information;.
+For miner, a CPU machine with the same requirements as a local Subtensor is necessary. It is important to note that a GPU is not required for this implementation, as the primary functionality is handled by a [separate service](https://github.com/ReinforcedAIAudits/solidity-audit/blob/main/blackbox_example/miner_server.py) that operates independently of miner. For more detailed information, please visit the [Subtensor GitHub](https://github.com/opentensor/subtensor).
 
 ### Validator <a id="validator-requirements"></a>
 
-For validator, you need a CPU machine (no GPU needed!).
+For validator, a CPU machine with the same requirements as a local Subtensor is necessary. It is important to note that a GPU is not required for this implementation, as the primary functionality is handled by a [separate service](https://github.com/ReinforcedAIAudits/solidity-audit/blob/main/blackbox_example/validator_server.py) that operates independently of validator.
 
 ## Installation
 
