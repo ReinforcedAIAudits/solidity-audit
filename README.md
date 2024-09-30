@@ -116,6 +116,9 @@ python utils/init_solochain.py
 > **NOTE:**
 > In this script, you can modify the names of the wallets being created, add passwords to them, and adjust the values for root and subnet weights.
 
+> **IMPORTANT:**
+> Before using script you **MUST** to create config.yml in bittensor folder. For testing, you can execute command `cp conf-example.yml ~/.bittensor/config.yml`.
+
 
 ## Blackboxes
 

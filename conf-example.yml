@@ -1,0 +1,22 @@
+chain: ws://127.0.0.1:9946
+network: local
+no_cache: False
+wallet_hotkey: null
+wallet_name: null
+wallet_path: ~/.bittensor/wallets
+metagraph_cols:
+  ACTIVE: true
+  AXON: true
+  COLDKEY: true
+  CONSENSUS: true
+  DIVIDENDS: true
+  EMISSION: true
+  HOTKEY: true
+  INCENTIVE: true
+  RANK: true
+  STAKE: true
+  TRUST: true
+  UID: true
+  UPDATED: true
+  VAL: true
+  VTRUST: true
