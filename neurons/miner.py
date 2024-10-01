@@ -64,7 +64,9 @@ class Miner(BaseMinerNeuron):
         """
         bt.logging.info(f"Received synapse from validator {synapse}")
         result = create_session().post(
-            f"{os.getenv('MINER_SERVER')}/submit", synapse.contract_code
+            f"{os.getenv('MINER_SERVER')}/submit",
+            synapse.contract_code,
+            headers={"Content-Type": "text/plain"},
         )
         # TODO: Remove the error and allow sending a synapse with an empty response + log this event
         if result.status_code != 200:
