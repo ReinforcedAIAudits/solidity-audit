@@ -109,8 +109,8 @@ class Validator(BaseValidatorNeuron):
         reference_report: List[VulnerabilityReport] = [],
     ) -> List[float]:
         return [
-            self.validate_reports_by_reference(response.response, reference_report)
-            for response in responses
+            self.validate_reports_by_reference(synapse.response, reference_report)
+            for synapse in responses
         ]
 
     def validate_reports_by_reference(
