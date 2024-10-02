@@ -66,6 +66,7 @@ contract Wallet {
     )
 
     logger.info(f"Generated contract: {mutated_contract_code}")
+    # TODO: fix it in the future
     return SimpleNamespace(code=mutated_contract_code, report=report)
 
 
