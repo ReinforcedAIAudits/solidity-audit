@@ -118,7 +118,7 @@ class Validator(BaseValidatorNeuron):
         report: List[VulnerabilityReport] | None,
         reference_report: List[VulnerabilityReport],
     ) -> float:
-        if report is None:
+        if report is None or not reference_report:
             return 0.0
 
         finded_vulns = [vuln.vulnerability_class for vuln in report]
