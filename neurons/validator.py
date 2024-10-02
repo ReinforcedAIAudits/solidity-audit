@@ -21,7 +21,7 @@
 import os
 import random
 import time
-from typing import List
+from typing import Counter, List
 
 # Bittensor
 import bittensor as bt
@@ -33,8 +33,9 @@ from template.base.validator import BaseValidatorNeuron
 
 # Bittensor Validator Template:
 from template.utils.uids import get_random_uids
-from ai_audits.protocol import AuditsSynapse
+from ai_audits.protocol import AuditsSynapse, VulnerabilityReport
 from dotenv import load_dotenv
+import numpy as np
 
 
 class Validator(BaseValidatorNeuron):
@@ -77,11 +78,15 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
-        contract = create_session().get(
-            f"{os.getenv('VALIDATOR_SERVER')}/generate_contract"
-        ).text
-
-        synapse = AuditsSynapse(contract_code=contract)
+        task_from_service = (
+            create_session()
+            .get(f"{os.getenv('VALIDATOR_SERVER')}/generate_contract")
+            .json()
+        )
+        reference_report = [
+            VulnerabilityReport(**vuln) for vuln in task_from_service["report"]
+        ]
+        synapse = AuditsSynapse(contract_code=task_from_service["code"])
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
         responses = self.dendrite.query(
@@ -92,29 +97,50 @@ class Validator(BaseValidatorNeuron):
         )
         bt.logging.info(f"Received responses: {responses}")
 
-        rewards = self.validate_responses(responses)
+        rewards = self.validate_responses(responses, reference_report)
 
         bt.logging.info(f"Scored responses: {rewards}")
 
         self.update_scores(rewards, miner_uids)
 
-    def validate_responses(self, responses: List[AuditsSynapse]) -> List[float]:
-        return [self.validate_response(response) for response in responses]
+    def validate_responses(
+        self,
+        responses: List[AuditsSynapse],
+        reference_report: List[VulnerabilityReport] = [],
+    ) -> List[float]:
+        return [
+            self.validate_reports_by_reference(synapse.response, reference_report)
+            for synapse in responses
+        ]
 
-    def validate_response(self, response: AuditsSynapse) -> float:
-        if response:
-            validate_result = create_session().post(
-                f"{os.getenv('VALIDATOR_SERVER')}/validate",
-                json=jsonable_encoder(response.response),
-            )
+    def validate_reports_by_reference(
+        self,
+        report: List[VulnerabilityReport] | None,
+        reference_report: List[VulnerabilityReport],
+    ) -> float:
+        if report is None or not reference_report:
+            return 0.0
 
-            if validate_result.status_code != 200:
-                bt.logging.error("Miner synapse is incorrect. Scored reward is 0")
-                return 0.0
-            else:
-                return validate_result.json().get("result", 0.0)
+        finded_vulns = [vuln.vulnerability_class for vuln in report]
+        reference_vulns = [vuln.vulnerability_class for vuln in reference_report]
+        finded_count = Counter(finded_vulns)
+        reference_count = Counter(reference_vulns)
+
+        intersection = [
+            vuln
+            for vuln in finded_vulns
+            for _ in range(min(finded_count[vuln], reference_count[vuln]))
+        ]
+
+        return len(intersection) / len(reference_vulns)
+
+    # TODO: This function is currently unused, but may be useful in the future. Consider re-evaluating its necessity before removing.
+    def validate_report(
+        self, report: VulnerabilityReport, reference_report: VulnerabilityReport
+    ) -> float:
+        if report.vulnerability_class == reference_report.vulnerability_class:
+            return 1.0
         else:
-            bt.logging.error("Miner respond with empty synapse")
             return 0.0
 
 
