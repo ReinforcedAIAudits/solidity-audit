@@ -38,7 +38,7 @@ from template.base.utils.weight_utils import (
 from template.mock import MockDendrite
 from template.utils.config import add_validator_args
 
-CYCLE_TIME = 24
+CYCLE_TIME = 3600
 
 
 class BaseValidatorNeuron(BaseNeuron):
