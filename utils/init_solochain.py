@@ -1,9 +1,9 @@
 import time
-from typing import List, Tuple
+from typing import Tuple
 import bittensor
-from bittensor_cli import CLIManager
+from bittensor_wallet import Wallet
 from substrateinterface import SubstrateInterface, Keypair
-from websocket import WebSocketBadStatusException, WebSocketConnectionClosedException
+from websocket import WebSocketConnectionClosedException
 
 # Constants
 OWNER_NAME = "owner"
@@ -22,11 +22,6 @@ substrate = SubstrateInterface(url=NETWORK_URL)
 
 # Keypairs
 keypair_alice = Keypair.create_from_uri("//Alice")
-
-
-# CLI Manager
-btcli = CLIManager()
-btcli.main_callback()
 
 
 def create_extrinsic(
@@ -55,6 +50,26 @@ def create_sudo_extrinsic(
         ),
         keypair=keypair,
     )
+
+
+def submit_extrinsic(
+    pallet: str, method: str, params: dict, keypair: Keypair = keypair_alice
+):
+    try:
+        receipt = substrate.submit_extrinsic(
+            create_extrinsic(pallet, method, params, keypair),
+            wait_for_finalization=True,
+            wait_for_inclusion=True,
+        )
+        if not receipt.is_success:
+            raise ValueError(
+                f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
+            )
+    except (
+        WebSocketConnectionClosedException,
+        BrokenPipeError,
+    ):
+        substrate.connect_websocket()
 
 
 def submit_sudo_extrinsic(method: str, params: dict):
@@ -87,67 +102,54 @@ def setup_wallet(uri: str) -> Tuple[bittensor.Keypair, bittensor.wallet]:
     return keypair, wallet
 
 
-def create_wallet(name: str):
-    btcli.wallet_create_wallet(
-        wallet_name=name,
-        wallet_hotkey="default",
-        use_password=False,
-        quiet=False,
-        wallet_path="~/.bittensor/wallets",
-        n_words=21,
-    )
-
-
 def transfer_funds_if_needed(wallet: bittensor.wallet, alice_wallet: bittensor.wallet):
     if subtensor.get_balance(wallet.coldkey.ss58_address).tao < 10000.0:
-        btcli.wallet_transfer(
-            destination_ss58_address=wallet.coldkey.ss58_address,
-            amount=15000,
-            wallet_name=alice_wallet.name,
-            wallet_hotkey=alice_wallet.hotkey_str,
-            wallet_path=alice_wallet.path,
-            quiet=False,
-            network=NETWORK_TYPE,
-            chain=NETWORK_URL,
+        submit_extrinsic(
+            "Balances",
+            "transfer_allow_death",
+            {"dest": wallet.coldkey.ss58_address, "value": 15000000000000},
         )
+        print(f"[INFO] Money successfully transferred to {wallet.name}.")
 
 
 def init():
     _, alice_wallet = setup_wallet("//Alice")
 
     for name in [OWNER_NAME, VALIDATOR_NAME, MINER_NAME]:
-        create_wallet(name)
-        wallet = bittensor.wallet(name, "default")
+        wallet = Wallet(name).create_new_coldkey(
+            n_words=21, use_password=False, overwrite=True
+        )
         transfer_funds_if_needed(wallet, alice_wallet)
 
     # Get wallets
-    owner_wallet = bittensor.wallet(OWNER_NAME, "default")
-    validator_wallet = bittensor.wallet(VALIDATOR_NAME, "default")
-    miner_wallet = bittensor.wallet(MINER_NAME, "default")
+    owner_wallet = Wallet(OWNER_NAME, "default")
+    validator_wallet = Wallet(VALIDATOR_NAME, "default")
+    miner_wallet = Wallet(MINER_NAME, "default")
 
     # Register commands
-
-    btcli.subnets_create(
-        wallet_name=owner_wallet.name,
-        wallet_hotkey=owner_wallet.hotkey_str,
-        wallet_path=owner_wallet.path,
-        quiet=False,
+    submit_extrinsic(
+        "SubtensorModule",
+        "register_network",
+        {"immunity_period": 0, "reg_allowed": True},
+        owner_wallet.coldkey,
     )
 
-    btcli.root_register(
-        wallet_name=validator_wallet.name,
-        wallet_hotkey=validator_wallet.hotkey_str,
-        wallet_path=validator_wallet.path,
-        quiet=False,
+    submit_extrinsic(
+        "SubtensorModule",
+        "root_register",
+        {"hotkey": validator_wallet.hotkey.ss58_address},
+        owner_wallet.coldkey,
     )
 
     for wallet in [validator_wallet, miner_wallet]:
-        btcli.subnets_register(
-            netuid=NET_UID,
-            wallet_name=wallet.name,
-            wallet_path=wallet.path,
-            wallet_hotkey=wallet.hotkey_str,
-            quiet=False,
+        submit_extrinsic(
+            "SubtensorModule",
+            "burned_register",
+            {
+                "netuid": NET_UID,
+                "hotkey": wallet.hotkey.ss58_address,
+            },
+            owner_wallet.coldkey,
         )
         time.sleep(5)
 
@@ -174,42 +176,33 @@ def init():
         "sudo_set_hotkey_emission_tempo", {"emission_tempo": EMISSION_TEMPO}
     )
 
-    btcli.stake_add(
-        amount=10000,
-        max_stake=15000,
-        stake_all=False,
-        include_hotkeys=validator_wallet.hotkey.ss58_address,
-        hotkey_ss58_address=validator_wallet.hotkey.ss58_address,
-        exclude_hotkeys=None,
-        wallet_name=validator_wallet.name,
-        wallet_path=validator_wallet.path,
-        all_hotkeys=False,
-        wallet_hotkey=validator_wallet.hotkey_str,
-        quiet=False,
-        network=NETWORK_TYPE,
-        chain=NETWORK_URL,
+    submit_extrinsic(
+        "SubtensorModule",
+        "add_stake",
+        {
+            "hotkey": validator_wallet.hotkey.ss58_address,
+            "amount_staked": 10000000000000,
+        },
+        validator_wallet.coldkey,
     )
 
-    btcli.wallet_transfer(
-        destination_ss58_address=validator_wallet.coldkey.ss58_address,
-        amount=10000,
-        wallet_name=alice_wallet.name,
-        wallet_hotkey=alice_wallet.hotkey_str,
-        wallet_path=alice_wallet.path,
-        quiet=False,
-        network=NETWORK_TYPE,
-        chain=NETWORK_URL,
+    submit_extrinsic(
+        "Balances",
+        "transfer_allow_death",
+        {"dest": validator_wallet.coldkey.ss58_address, "value": 10000000000000},
     )
 
-    btcli.root_set_weights(
-        netuids=None,
-        weights=None,
-        wallet_name=None,
-        wallet_hotkey=None,
-        wallet_path=None,
-        quiet=False,
-        network=NETWORK_TYPE,
-        chain=NETWORK_URL,
+    submit_extrinsic(
+        "SubtensorModule",
+        "set_root_weights",
+        {
+            "dests": [0, 1],
+            "weights": [65, 65],
+            "netuid": 0,
+            "version_key": 0,
+            "hotkey": validator_wallet.hotkey.ss58_address,
+        },
+        owner_wallet.coldkey,
     )
 
 
