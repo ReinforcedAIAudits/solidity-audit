@@ -10,7 +10,6 @@ OWNER_NAME = "owner"
 VALIDATOR_NAME = "validator"
 MINER_NAME = "miner"
 ROOT_ID = 0
-NET_UID = 1
 SUBNET_TEMPO = 10
 EMISSION_TEMPO = 30
 NETWORK_TYPE = "local"
@@ -65,6 +64,7 @@ def submit_extrinsic(
             raise ValueError(
                 f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
             )
+        return receipt
     except (
         WebSocketConnectionClosedException,
         BrokenPipeError,
@@ -88,6 +88,16 @@ def submit_sudo_extrinsic(method: str, params: dict):
         BrokenPipeError,
     ):
         substrate.connect_websocket()
+
+
+def extract_net_id_from_events(events: list) -> int:
+    for event in list(map(lambda e: e.value, events)):
+        if (
+            event["module_id"] == "SubtensorModule"
+            and event["event_id"] == "NetworkAdded"
+        ):
+            return event["attributes"][0]
+    raise ValueError(f"Not found network creation in {events}")
 
 
 def setup_wallet(uri: str) -> Tuple[bittensor.Keypair, bittensor.wallet]:
@@ -116,8 +126,10 @@ def init():
     _, alice_wallet = setup_wallet("//Alice")
 
     for name in [OWNER_NAME, VALIDATOR_NAME, MINER_NAME]:
-        wallet = Wallet(name).create_new_coldkey(
-            n_words=21, use_password=False, overwrite=True
+        wallet = (
+            Wallet(name)
+            .create_new_coldkey(n_words=21, use_password=False, overwrite=True)
+            .create_new_hotkey(n_words=21, use_password=False, overwrite=True)
         )
         transfer_funds_if_needed(wallet, alice_wallet)
 
@@ -127,12 +139,14 @@ def init():
     miner_wallet = Wallet(MINER_NAME, "default")
 
     # Register commands
-    submit_extrinsic(
+    register_network_receipt = submit_extrinsic(
         "SubtensorModule",
         "register_network",
         {"immunity_period": 0, "reg_allowed": True},
         owner_wallet.coldkey,
     )
+
+    net_uid = extract_net_id_from_events(register_network_receipt.triggered_events)
 
     submit_extrinsic(
         "SubtensorModule",
@@ -146,17 +160,16 @@ def init():
             "SubtensorModule",
             "burned_register",
             {
-                "netuid": NET_UID,
+                "netuid": net_uid,
                 "hotkey": wallet.hotkey.ss58_address,
             },
             owner_wallet.coldkey,
         )
-        time.sleep(5)
 
     # Set various limits and tempos
     submit_sudo_extrinsic(
         "sudo_set_weights_set_rate_limit",
-        {"netuid": NET_UID, "weights_set_rate_limit": 0},
+        {"netuid": net_uid, "weights_set_rate_limit": 0},
     )
     submit_sudo_extrinsic(
         "sudo_set_weights_set_rate_limit",
@@ -167,10 +180,10 @@ def init():
     )
     submit_sudo_extrinsic(
         "sudo_set_target_registrations_per_interval",
-        {"netuid": NET_UID, "target_registrations_per_interval": 1000},
+        {"netuid": net_uid, "target_registrations_per_interval": 1000},
     )
     submit_sudo_extrinsic("sudo_set_tx_rate_limit", {"tx_rate_limit": 0})
-    submit_sudo_extrinsic("sudo_set_tempo", {"netuid": NET_UID, "tempo": SUBNET_TEMPO})
+    submit_sudo_extrinsic("sudo_set_tempo", {"netuid": net_uid, "tempo": SUBNET_TEMPO})
     submit_sudo_extrinsic("sudo_set_tempo", {"netuid": ROOT_ID, "tempo": SUBNET_TEMPO})
     submit_sudo_extrinsic(
         "sudo_set_hotkey_emission_tempo", {"emission_tempo": EMISSION_TEMPO}
@@ -196,7 +209,7 @@ def init():
         "SubtensorModule",
         "set_root_weights",
         {
-            "dests": [0, 1],
+            "dests": [0, net_uid],
             "weights": [65, 65],
             "netuid": 0,
             "version_key": 0,
