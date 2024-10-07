@@ -14,21 +14,17 @@ class VulnerabilityReport(BaseModel):
     to_line: int = Field(
         ...,
         title="To Line",
-        description="The ending line number of the vulnerability in the source code.",
+        description="The ending line number of the vulnerability in the source code (inclusive).",
         serialization_alias="to",
         validation_alias=AliasChoices("to", "to_line"),
     )
+    # TODO: It needs to be an enum.
     vulnerability_class: str = Field(
         ...,
         title="Vulnerability Class",
         description="The category of the vulnerability.",
         serialization_alias="vulnerabilityClass",
         validation_alias=AliasChoices("vulnerabilityClass", "vulnerability_class"),
-    )
-    description: str = Field(
-        ...,
-        title="Description",
-        description="A detailed explanation of the vulnerability.",
     )
     test_case: str = Field(
         ...,
@@ -37,17 +33,22 @@ class VulnerabilityReport(BaseModel):
         serialization_alias="testCase",
         validation_alias=AliasChoices("testCase", "test_case"),
     )
+    description: str = Field(
+        ...,
+        title="Description",
+        description="A detailed explanation of the vulnerability.",
+    )
     prior_art: list[str] = Field(
         default_factory=list,
         title="Prior Art",
-        description="Known vulnerabilities that are similar or related.",
+        description="Human-readable vulnerability description, in markdown.",
         serialization_alias="priorArt",
         validation_alias=AliasChoices("priorArt", "prior_art"),
     )
     fixed_lines: str = Field(
         ...,
         title="Fixed Lines",
-        description="Code lines that fix the vulnerability.",
+        description="Fixed version of the original source.",
         serialization_alias="fixedLines",
         validation_alias=AliasChoices("fixedLines", "fixed_lines"),
     )
