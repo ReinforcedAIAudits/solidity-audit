@@ -1,0 +1,13 @@
+[
+    {
+        "from": 12,
+        "to": 19,
+        "vulnerabilityClass": "Reentrancy",
+        "testCase": "An attacker can create a malicious contract that calls the `withdrawBalance` function and then calls the `addToBalance` function in the fallback function. This will allow the attacker to withdraw more funds than they have deposited",
+        "description": "The `withdrawBalance` function is vulnerable to reentrancy attacks because it does not update the `userBalance` mapping before sending the funds. This allows an attacker to call the `withdrawBalance` function multiple times before the `userBalance` mapping is updated",
+        "priorArt": [
+            "DAO hack"
+        ],
+        "fixedLines": "function withdrawBalance(){\n    uint balance = userBalance[msg.sender];\n    userBalance[msg.sender] = 0;\n    msg.sender.transfer(balance);\n}"
+    }
+]

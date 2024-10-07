@@ -10,7 +10,13 @@ import dotenv
 from fastapi import Body, FastAPI, HTTPException
 
 from ai_audits.protocol import VulnerabilityReport
+from ai_audits.contract_provider import FileContractProvdier
 
+CONTRACT_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "contract_templates"
+)
+
+PROVIDER = FileContractProvdier(CONTRACT_DIR)
 app = FastAPI()
 
 miners_verifications = {}
@@ -22,54 +28,10 @@ dotenv.load_dotenv()
 @app.get("/generate_contract")
 async def generate_contract():
 
-    logger.info("Generating contract...")
-    time.sleep(4)
-
-    # Do some stuff...
-
-    contract = """
-contract Wallet {
-    mapping (address => uint) userBalance;
-   
-    function getBalance(address u) constant returns(uint){
-        return userBalance[u];
-    }
-
-    function addToBalance() payable{
-        userBalance[msg.sender] += msg.value;
-    }   
-
-    function withdrawBalance(){
-        // send userBalance[msg.sender] ethers to msg.sender
-        // if mgs.sender is a contract, it will call its fallback function
-        if( ! (msg.sender.call.value(userBalance[msg.sender])() ) ){
-            throw;
-        }
-        userBalance[msg.sender] = 0;
-    }   
-}
-"""
-    report = [
-        VulnerabilityReport(
-            from_line=12,
-            to_line=19,
-            vulnerability_class="Reentrancy",
-            description="The `withdrawBalance` function is vulnerable to a reentrancy attack. "
-            "The function first sends Ether to the caller using `msg.sender.call.value(...)()`, and only then sets the user's balance to zero. "
-            "This allows an attacker to re-enter the `withdrawBalance` function before the balance is set to zero, potentially draining the contract's funds",
-            test_case="pragma solidity ^0.4.0;\n\ncontract Attacker {\n    Wallet public wallet;\n\n    function Attacker(address _walletAddress) {\n        wallet = Wallet(_walletAddress);\n    }\n\n    function attack() public payable {\n        wallet.addToBalance.value(msg.value)();\n        wallet.withdrawBalance();\n    }\n\n    function () payable {\n        if (wallet.getBalance(this) > 0) {\n            wallet.withdrawBalance();\n        }\n    }\n}",
-            prior_art=["The DAO Hack", "Parity Multisig Wallet Hack"],
-            fixed_lines="function withdrawBalance() {\n    uint amount = userBalance[msg.sender];\n    userBalance[msg.sender] = 0;\n    if (!msg.sender.call.value(amount)()) {\n        throw;\n    }\n}",
-        )
-    ]
-
-    mutated_contract_code = contract.replace(
-        "contract Wallet", f"contract Wallet_{int(time.time())}"
-    )
-
-    logger.info(f"Generated contract: {mutated_contract_code}")
+    pair = PROVIDER.get_random_pair()
+    logger.info(f"Generated pair: {pair}")
     # TODO: fix it in the future
-    return SimpleNamespace(code=mutated_contract_code, report=report)
+    return pair
 
 
 @app.post("/validate")
