@@ -36,12 +36,12 @@ class VulnerabilityReport(BaseModel):
     description: str = Field(
         ...,
         title="Description",
-        description="A detailed explanation of the vulnerability.",
+        description="Human-readable vulnerability description, in markdown",
     )
     prior_art: list[str] = Field(
         default_factory=list,
         title="Prior Art",
-        description="Human-readable vulnerability description, in markdown.",
+        description="Similar vulnerabilities encountered in wild before",
         serialization_alias="priorArt",
         validation_alias=AliasChoices("priorArt", "prior_art"),
     )
