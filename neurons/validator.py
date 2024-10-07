@@ -34,6 +34,7 @@ from template.base.validator import BaseValidatorNeuron
 # Bittensor Validator Template:
 from template.utils.uids import get_random_uids
 from ai_audits.protocol import AuditsSynapse, VulnerabilityReport
+from ai_audits.contract_provider import TemplatePair
 from dotenv import load_dotenv
 import numpy as np
 
@@ -83,10 +84,10 @@ class Validator(BaseValidatorNeuron):
             .get(f"{os.getenv('VALIDATOR_SERVER')}/generate_contract")
             .json()
         )
-        reference_report = [
-            VulnerabilityReport(**vuln) for vuln in task_from_service["report"]
-        ]
-        synapse = AuditsSynapse(contract_code=task_from_service["code"])
+        print(f"{task_from_service}")
+        pair = TemplatePair(**task_from_service)
+
+        synapse = AuditsSynapse(contract_code=pair.contract)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
         responses = self.dendrite.query(
@@ -97,7 +98,7 @@ class Validator(BaseValidatorNeuron):
         )
         bt.logging.info(f"Received responses: {responses}")
 
-        rewards = self.validate_responses(responses, reference_report)
+        rewards = self.validate_responses(responses, pair.vulnerability_report)
 
         bt.logging.info(f"Scored responses: {rewards}")
 
