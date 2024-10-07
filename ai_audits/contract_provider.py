@@ -3,7 +3,7 @@ import os
 import random
 import time
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
+from pydantic import AliasChoices, BaseModel, Field
 from .protocol import VulnerabilityReport
 
 
@@ -46,9 +46,10 @@ class FileContractProvdier:
 
     def __init__(self, path_to_contract_folder: str) -> None:
         self._path = path_to_contract_folder
-        self._pairs = FileContractProvdier.find_pairs(self._path)
+        self._pairs = self.find_pairs(self._path)
 
-    def find_pairs(path_to_folder: str):
+    @classmethod
+    def find_pairs(cls, path_to_folder: str):
         base_files = {}
 
         for filename in os.listdir(path_to_folder):
