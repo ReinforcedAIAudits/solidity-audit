@@ -1,4 +1,4 @@
-import time
+import dotenv
 from typing import Tuple
 import bittensor
 from bittensor_wallet import Wallet
@@ -22,6 +22,8 @@ substrate = SubstrateInterface(url=NETWORK_URL)
 # Keypairs
 keypair_alice = Keypair.create_from_uri("//Alice")
 
+dotenv_file = dotenv.find_dotenv()
+dotenv.load_dotenv(dotenv_path=dotenv_file)
 
 def create_extrinsic(
     pallet: str, method: str, params: dict, keypair: Keypair = keypair_alice
@@ -96,7 +98,9 @@ def extract_net_id_from_events(events: list) -> int:
             event["module_id"] == "SubtensorModule"
             and event["event_id"] == "NetworkAdded"
         ):
-            return event["attributes"][0]
+            net_uid = event["attributes"][0]
+            dotenv.set_key(dotenv_path=dotenv_file, key_to_set="NETWORK_UID", value_to_set=str(net_uid))
+            return net_uid
     raise ValueError(f"Not found network creation in {events}")
 
 
