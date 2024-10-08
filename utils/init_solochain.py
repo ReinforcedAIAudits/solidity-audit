@@ -40,7 +40,6 @@ keypair_alice = Keypair.create_from_uri("//Alice")
 dotenv_file = dotenv.find_dotenv()
 dotenv.load_dotenv(dotenv_path=dotenv_file)
 
-
 def create_extrinsic(
     pallet: str, method: str, params: dict, keypair: Keypair = keypair_alice
 ):
