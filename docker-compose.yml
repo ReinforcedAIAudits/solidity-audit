@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  subtensor:
+    build:
+      context: .
+      dockerfile: .docker/Dockerfile
+    ports:
+      - "9944:9944"  # Порт для RPC
+      - "30333:30333"  # Порт для P2P
+    restart: unless-stopped
+  
+  miner_server:
+    environment:
+      - MINER_HOST=${MINER_HOST}
+      - MINER_PORT=${MINER_PORT}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "blackbox_example/miner_server.py"]
+    ports:
+      - "5000:5000"
+
+  validator_server:
+    environment:
+      - VALIDATOR_HOST=${VALIDATOR_HOST}
+      - VALIDATOR_PORT=${VALIDATOR_PORT}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "blackbox_example/validator_server.py"]
+    ports:
+      - "5001:5001"
+
+  miner:
+    depends_on:
+      - subtensor
+      - miner_server
+      - validator_server
+    environment:
+      - MINER_NAME=${MINER_NAME}
+      - MINER_HOTKEY=${MINER_HOTKEY}
+      - NETWORK_TYPE=${NETWORK_TYPE}
+      - CHAIN_ENDPOINT=${CHAIN_ENDPOINT}
+      - NETWORK_UID=${NETWORK_UID}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "neurons/miner.py", "--netid", NETWORK_UID, "wallet.name", MINER_NAME, "wallet.hotkey", MINER_HOTKEY, "--subtensor.network", NETWORK_TYPE, "--subtensor.chain_endpoint", CHAIN_ENDPOINT]
+
+  validator:
+    depends_on:
+      - subtensor
+      - miner_server
+      - validator_server
+      - miner
+    environment:
+      - VALIDATOR_NAME=${VALIDATOR_NAME}
+      - VALIDATOR_HOTKEY=${VALIDATOR_HOTKEY}
+      - NETWORK_TYPE=${NETWORK_TYPE}
+      - CHAIN_ENDPOINT=${CHAIN_ENDPOINT}
+      - NETWORK_UID=${NETWORK_UID}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "neurons/validator.py", "--netid", NETWORK_UID, "wallet.name", VALIDATOR_NAME, "wallet.hotkey", VALIDATOR_HOTKEY, "--subtensor.network", NETWORK_TYPE, "--subtensor.chain_endpoint", CHAIN_ENDPOINT]
