@@ -34,11 +34,11 @@ class VulnerabilityReport(BaseModel):
         serialization_alias="to",
         validation_alias=AliasChoices("to", "to_line"),
     )
-    # TODO: It needs to be an enum.
+    # TODO: It needs to be an enum?
     vulnerability_class: str = Field(
         ...,
         title="Vulnerability Class",
-        description="The category of the vulnerability.",
+        description="The category of the vulnerability. E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, Unchecked call, Unguarded function, et cetera.",
     )
     test_case: str = Field(
         ...,
