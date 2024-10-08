@@ -1,10 +1,12 @@
 import logging
 
+import os
 import random
 import time
 from typing import List
 from types import SimpleNamespace
 
+import dotenv
 from fastapi import Body, FastAPI, HTTPException
 
 from ai_audits.protocol import VulnerabilityReport
@@ -15,7 +17,7 @@ miners_verifications = {}
 execution_events = {}
 
 logger = logging.getLogger("AuditValidatorBlackbox")
-
+dotenv.load_dotenv()
 
 @app.get("/generate_contract")
 async def generate_contract():
@@ -84,4 +86,4 @@ if __name__ == "__main__":
     import uvicorn
 
     logging.basicConfig(level=logging.INFO)
-    uvicorn.run(app, port=5001)
+    uvicorn.run(app, port=os.getenv("VALIDATOR_PORT"))

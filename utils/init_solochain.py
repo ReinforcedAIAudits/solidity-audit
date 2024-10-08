@@ -1,3 +1,4 @@
+import time
 import dotenv
 from typing import Tuple
 import bittensor
@@ -13,11 +14,24 @@ ROOT_ID = 0
 SUBNET_TEMPO = 10
 EMISSION_TEMPO = 30
 NETWORK_TYPE = "local"
-NETWORK_URL = "ws://localhost:9946"
+NETWORK_URL = "ws://127.0.0.1:9946"
+RETRY_COUNT = 5
+RETRY_DELAY = 5 
 
+substrate = None
+subtensor = None
 # Initialize Subtensor and Substrate Interface
-subtensor = bittensor.subtensor(network=NETWORK_URL)
-substrate = SubstrateInterface(url=NETWORK_URL)
+for attempt in range(RETRY_COUNT):
+    try:
+        substrate = SubstrateInterface(url=NETWORK_URL)
+        subtensor = bittensor.subtensor(network=NETWORK_URL)
+        break
+    except Exception as ex:
+        print(f"[ERROR] Exception while connecting to chain {ex}")
+        time.sleep(RETRY_DELAY)
+
+if not substrate or subtensor:
+    raise ConnectionError("Cannot connect to chain!")
 
 # Keypairs
 keypair_alice = Keypair.create_from_uri("//Alice")

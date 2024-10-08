@@ -4,12 +4,22 @@ services:
   subtensor:
     build:
       context: .
-      dockerfile: .docker/Dockerfile
+      dockerfile: subtensor/Dockerfile
     ports:
-      - "9944:9944"  # Порт для RPC
-      - "30333:30333"  # Порт для P2P
+      - "9944:9944"
+      - "30333:30333"
+    logging:
+      driver: none
     restart: unless-stopped
-  
+
+  subtensor_setup:
+    depends_on:
+      - subtensor
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "utils/init_solochain.py"]
+
   miner_server:
     environment:
       - MINER_HOST=${MINER_HOST}
@@ -18,8 +28,6 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["python", "blackbox_example/miner_server.py"]
-    ports:
-      - "5000:5000"
 
   validator_server:
     environment:
@@ -29,12 +37,10 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["python", "blackbox_example/validator_server.py"]
-    ports:
-      - "5001:5001"
 
   miner:
     depends_on:
-      - subtensor
+      - subtensor_setup
       - miner_server
       - validator_server
     environment:
@@ -46,11 +52,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["python", "neurons/miner.py", "--netid", NETWORK_UID, "wallet.name", MINER_NAME, "wallet.hotkey", MINER_HOTKEY, "--subtensor.network", NETWORK_TYPE, "--subtensor.chain_endpoint", CHAIN_ENDPOINT]
+    command: ["python", "neurons/miner.py", "--netid",  "1", "wallet.name", MINER_NAME, "wallet.hotkey", MINER_HOTKEY, "--subtensor.network", NETWORK_TYPE, "--subtensor.chain_endpoint", CHAIN_ENDPOINT]
 
   validator:
     depends_on:
-      - subtensor
+      - subtensor_setup
       - miner_server
       - validator_server
       - miner

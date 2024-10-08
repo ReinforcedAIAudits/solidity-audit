@@ -1,5 +1,7 @@
 import logging
+import os
 import time
+import dotenv
 from fastapi import Body, FastAPI
 
 from ai_audits.protocol import VulnerabilityReport
@@ -7,6 +9,8 @@ from ai_audits.protocol import VulnerabilityReport
 app = FastAPI()
 
 logger = logging.getLogger("MinerBlackbox")
+
+dotenv.load_dotenv()
 
 
 @app.post("/submit")
@@ -39,4 +43,4 @@ if __name__ == "__main__":
     import uvicorn
 
     logging.basicConfig(level=logging.INFO)
-    uvicorn.run(app, port=5000)
+    uvicorn.run(app, port=os.getenv("MINER_PORT"))
