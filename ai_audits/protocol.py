@@ -1,9 +1,25 @@
 from typing import Optional
 import bittensor as bt
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import (
+    AliasChoices,
+    AliasGenerator,
+    BaseModel,
+    ConfigDict,
+    Field,
+)
+from pydantic.alias_generators import to_camel, to_snake
 
 
 class VulnerabilityReport(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=AliasGenerator(
+            validation_alias=lambda field_name: AliasChoices(
+                to_camel(field_name),
+                to_snake(field_name),
+            ),
+            serialization_alias=to_camel,
+        )
+    )
     from_line: int = Field(
         ...,
         title="From Line",
@@ -23,15 +39,11 @@ class VulnerabilityReport(BaseModel):
         ...,
         title="Vulnerability Class",
         description="The category of the vulnerability.",
-        serialization_alias="vulnerabilityClass",
-        validation_alias=AliasChoices("vulnerabilityClass", "vulnerability_class"),
     )
     test_case: str = Field(
         ...,
         title="Test Case",
         description="A code example that exploits the vulnerability.",
-        serialization_alias="testCase",
-        validation_alias=AliasChoices("testCase", "test_case"),
     )
     description: str = Field(
         ...,
@@ -42,15 +54,11 @@ class VulnerabilityReport(BaseModel):
         default_factory=list,
         title="Prior Art",
         description="Similar vulnerabilities encountered in wild before",
-        serialization_alias="priorArt",
-        validation_alias=AliasChoices("priorArt", "prior_art"),
     )
     fixed_lines: str = Field(
         ...,
         title="Fixed Lines",
         description="Fixed version of the original source.",
-        serialization_alias="fixedLines",
-        validation_alias=AliasChoices("fixedLines", "fixed_lines"),
     )
 
 
