@@ -2,17 +2,16 @@ version: '3.8'
 
 services:
   subtensor:
+    profiles:
+      - localnet
     build:
       context: .
-      dockerfile: subtensor/Dockerfile
-    ports:
-      - "9944:9944"
-      - "30333:30333"
-    logging:
-      driver: none
+      dockerfile: .docker/subtensor/Dockerfile
     restart: unless-stopped
 
   subtensor_setup:
+    profiles:
+      - localnet
     depends_on:
       - subtensor
     build:
@@ -40,7 +39,6 @@ services:
 
   miner:
     depends_on:
-      - subtensor_setup
       - miner_server
       - validator_server
     environment:
@@ -52,11 +50,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["python", "neurons/miner.py", "--netid",  "1", "wallet.name", MINER_NAME, "wallet.hotkey", MINER_HOTKEY, "--subtensor.network", NETWORK_TYPE, "--subtensor.chain_endpoint", CHAIN_ENDPOINT]
+    command: ["python", "neurons/miner.py", "--netuid",  "222", "--wallet.name", MINER_NAME, "--wallet.hotkey", MINER_HOTKEY, "--subtensor.network", NETWORK_TYPE]
 
   validator:
     depends_on:
-      - subtensor_setup
       - miner_server
       - validator_server
       - miner
@@ -69,4 +66,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["python", "neurons/validator.py", "--netid", NETWORK_UID, "wallet.name", VALIDATOR_NAME, "wallet.hotkey", VALIDATOR_HOTKEY, "--subtensor.network", NETWORK_TYPE, "--subtensor.chain_endpoint", CHAIN_ENDPOINT]
+    command: ["python", "neurons/validator.py", "--netuid", "222", "--wallet.name", VALIDATOR_NAME, "--wallet.hotkey", VALIDATOR_HOTKEY, "--subtensor.network", NETWORK_TYPE]
+networks:
+  chainnet:
+    driver: bridge
