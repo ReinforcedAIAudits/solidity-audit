@@ -21,7 +21,7 @@ services:
         - MNEMONIC_HOTKEY=${MINER_HOTKEY_MNEMONIC}
         - WALLET_NAME=MINER_NAME
       dockerfile: Dockerfile
-    command: python neurons/miner.py --netuid ${NETWORK_UID} --wallet.name ${MINER_NAME} --wallet.hotkey ${MINER_HOTKEY} --subtensor.network ${NETWORK_TYPE}
+    command: python neurons/miner.py --netuid ${NETWORK_UID} --wallet.name ${MINER_NAME} --wallet.hotkey ${MINER_HOTKEY} --subtensor.network ${NETWORK_TYPE} --logging.debug
 
   validator:
     depends_on:
@@ -33,4 +33,4 @@ services:
         - WALLET_NAME=VALIDATOR_NAME
       context: ..
       dockerfile: Dockerfile
-    command: python neurons/validator.py --netuid ${NETWORK_UID} --wallet.name ${VALIDATOR_NAME} --wallet.hotkey ${VALIDATOR_HOTKEY} --subtensor.network ${NETWORK_TYPE}
+    command: python neurons/validator.py --netuid ${NETWORK_UID} --wallet.name ${VALIDATOR_NAME} --wallet.hotkey ${VALIDATOR_HOTKEY} --subtensor.network ${NETWORK_TYPE} --logging.debug
