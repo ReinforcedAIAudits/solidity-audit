@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  subtensor:
+    build:
+      context: ..
+      dockerfile: .docker/subtensor/Dockerfile
+    restart: unless-stopped
+
+  subtensor_setup:
+    depends_on:
+      - subtensor
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["python", "utils/init_solochain.py"]
+
+  miner_server:
+    environment:
+      - MINER_HOST=${MINER_HOST}
+      - MINER_PORT=${MINER_PORT}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "blackbox_example/miner_server.py"]
+
+  validator_server:
+    environment:
+      - VALIDATOR_HOST=${VALIDATOR_HOST}
+      - VALIDATOR_PORT=${VALIDATOR_PORT}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "blackbox_example/validator_server.py"]
+
+  miner:
+    extends:
+      file: docker-compose.common.yml
+      service: miner
+    depends_on:
+      - miner_server
+    command: python neurons/miner.py --netuid ${NETWORK_UID} --wallet.name ${MINER_NAME} --wallet.hotkey ${MINER_HOTKEY} --subtensor.network local --subtensor.chain_endpoint ${CHAIN_ENDPOINT}
+    
+  validator:
+    extends:
+      file: docker-compose.common.yml
+      service: validator
+    command: python neurons/validator.py --netuid ${NETWORK_UID} --wallet.name ${VALIDATOR_NAME} --wallet.hotkey ${VALIDATOR_HOTKEY} --subtensor.network local --subtensor.chain_endpoint ${CHAIN_ENDPOINT}
+
+
+networks:
+  chainnet:
+    driver: bridge
