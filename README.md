@@ -1,10 +1,12 @@
 <div align="center">
 
+![Logo](./docs/images/logo.png)
+
 # **Solidity-Audit** <!-- omit in toc -->
 
 ## An Incentivized and Decentralized Subtensor Network <!-- omit in toc -->
-</div>
 
+</div>
 
 - [Machine Requirements](#machine-requirements)
   - [Validator](#validator-requirements)
@@ -18,11 +20,9 @@
 - [Running a Miner](#running-a-miner)
 - [Running a Validator](#running-a-validator)
 
-
 ## Introduction
 
 Subtensor nodes play a vital role in the Bittensor network, governing various aspects such as incentivization, governance, and network health. Solidity-Audit aims to provide a decentralized platform for validating Solidity smart contracts and identifying potential vulnerabilities. With the increasing reliance on blockchain technology and smart contracts, ensuring their security has become critical to prevent financial loss and exploitation. This subnet will utilize distributed machine learning models to analyze and evaluate Solidity contracts for potential weaknesses or flaws, contributing to the overall security and trustworthiness of decentralized applications (dApps).
-
 
 ## Machine requirements
 
@@ -86,7 +86,6 @@ This step fetches the subtensor codebase to your local machine.
 git clone https://github.com/opentensor/subtensor.git
 ```
 
-
 #### Setup Rust
 
 This step ensures that you have the nightly toolchain and the WebAssembly (wasm) compilation target. Note that this step will run the subtensor chain on your terminal directly, hence we advise that you run this as a background process using PM2 or other software.
@@ -94,7 +93,6 @@ This step ensures that you have the nightly toolchain and the WebAssembly (wasm)
 ```bash
 ./subtensor/scripts/init.sh
 ```
-
 
 #### Run subtensor
 
@@ -118,9 +116,9 @@ python utils/init_solochain.py
 
 ## Blackboxes
 
-To fully leverage the capabilities of the `SoldityAudit` subnetwork, it is essential to implement the logic for your blackboxes. 
+To fully leverage the capabilities of the `SoldityAudit` subnetwork, it is essential to implement the logic for your blackboxes.
 
-The first blackbox is required for the miner, enabling it to send data for processing, and subsequently receive, structure, and return that data to the validator within a synapse. 
+The first blackbox is required for the miner, enabling it to send data for processing, and subsequently receive, structure, and return that data to the validator within a synapse.
 
 The second blackbox is necessary for the validator, whose responsibilities include generating tasks and verifying the structural correctness of the miner's responses.
 
@@ -135,10 +133,6 @@ To run the miner blackbox example , you simply need to execute the command:
 ```bash
 python blackbox_example/miner_server.py
 ```
-
-### Validator blackbox
-
-To run the validator blackbox example , you simply need to execute the command:
 
 ```bash
 python blackbox_example/validator_server.py
@@ -180,4 +174,3 @@ python neurons/validator.py \
 ```
 
 > NOTE: if you run a validator in testnet do not forget to add the argument `--subtensor.network test` or `--subtensor.chain_endpoint ws://<LOCAL_SUBTENSOR_IP>:9946` (the local subtensor has to target the network testnet)
-

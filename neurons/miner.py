@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 import requests
 
 # Bittensor Miner Template:
-from blackbox_example.subnet_utils import create_session
+from model_servers.subnet_utils import create_session
 import template
 
 # import base miner class which takes care of most of the boilerplate
