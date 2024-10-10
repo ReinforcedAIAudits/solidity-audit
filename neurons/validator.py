@@ -34,9 +34,14 @@ from template.base.validator import BaseValidatorNeuron
 # Bittensor Validator Template:
 from template.utils.uids import get_random_uids
 from ai_audits.protocol import AuditsSynapse, VulnerabilityReport
-from ai_audits.contract_provider import TemplatePair
+from ai_audits.contract_provider import FileContractProvdier, TemplatePair
 from dotenv import load_dotenv
 import numpy as np
+
+CONTRACT_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "contract_templates"
+)
+PROVIDER = FileContractProvdier(CONTRACT_DIR)
 
 
 class Validator(BaseValidatorNeuron):
@@ -79,13 +84,9 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
-        task_from_service = (
-            create_session()
-            .get(f"{os.getenv('VALIDATOR_SERVER')}/generate_contract")
-            .json()
-        )
-        print(f"{task_from_service}")
-        pair = TemplatePair(**task_from_service)
+
+        pair = PROVIDER.get_random_pair()
+        bt.logging.info(f"task: {pair}")
 
         synapse = AuditsSynapse(contract_code=pair.contract)
         bt.logging.info(f"Axons: {self.metagraph.axons}")

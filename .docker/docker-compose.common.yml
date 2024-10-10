@@ -16,21 +16,25 @@ services:
       - miner_server_openai
     build:
       context: ..
-      args:
-        - MNEMONIC_COLDKEY=${MINER_COLDKEY_MNEMONIC}
-        - MNEMONIC_HOTKEY=${MINER_HOTKEY_MNEMONIC}
-        - WALLET_NAME=MINER_NAME
       dockerfile: Dockerfile
-    command: python neurons/miner.py --netuid ${NETWORK_UID} --wallet.name ${MINER_NAME} --wallet.hotkey ${MINER_HOTKEY} --subtensor.network ${NETWORK_TYPE} --logging.debug
+    environment:
+      MNEMONIC_COLDKEY: ${MINER_COLDKEY_MNEMONIC}
+      MNEMONIC_HOTKEY: ${MINER_HOTKEY_MNEMONIC}
+      WALLET_NAME: ${MINER_NAME}
+      NETWORK_UID: ${NETWORK_UID}
+      NETWORK_TYPE: ${NETWORK_TYPE}
+      WORKER_TYPE: 'miner'
 
   validator:
     depends_on:
       - miner
     build:
-      args:
-        - MNEMONIC_COLDKEY=${VALIDATOR_COLDKEY_MNEMONIC}
-        - MNEMONIC_HOTKEY=${VALIDATOR_HOTKEY_MNEMONIC}
-        - WALLET_NAME=VALIDATOR_NAME
       context: ..
       dockerfile: Dockerfile
-    command: python neurons/validator.py --netuid ${NETWORK_UID} --wallet.name ${VALIDATOR_NAME} --wallet.hotkey ${VALIDATOR_HOTKEY} --subtensor.network ${NETWORK_TYPE} --logging.debug
+    environment:
+      MNEMONIC_COLDKEY: ${VALIDATOR_COLDKEY_MNEMONIC}
+      MNEMONIC_HOTKEY: ${VALIDATOR_HOTKEY_MNEMONIC}
+      WALLET_NAME: ${VALIDATOR_NAME}
+      NETWORK_UID: ${NETWORK_UID}
+      NETWORK_TYPE: ${NETWORK_TYPE}
+      WORKER_TYPE: 'validator'
