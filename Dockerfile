@@ -8,8 +8,8 @@ WORKDIR /app
 
 
 COPY . /app
-
+RUN pip install bittensor-cli==8.0.0
+RUN pip install -r requirements.txt 
 RUN pip install -e .
-RUN pip install bittensor-cli
 
 RUN scripts/restore_or_create_wallets.sh MNEMONIC_COLDKEY MNEMONIC_HOTKEY WALLET_NAME

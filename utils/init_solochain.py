@@ -16,7 +16,7 @@ EMISSION_TEMPO = 30
 NETWORK_TYPE = "local"
 NETWORK_URL = "ws://127.0.0.1:9946"
 RETRY_COUNT = 5
-RETRY_DELAY = 5 
+RETRY_DELAY = 5
 
 substrate = None
 subtensor = None
@@ -30,7 +30,7 @@ for attempt in range(RETRY_COUNT):
         print(f"[ERROR] Exception while connecting to chain {ex}")
         time.sleep(RETRY_DELAY)
 
-if not substrate or subtensor:
+if not substrate or not subtensor:
     raise ConnectionError("Cannot connect to chain!")
 
 # Keypairs
@@ -38,6 +38,7 @@ keypair_alice = Keypair.create_from_uri("//Alice")
 
 dotenv_file = dotenv.find_dotenv()
 dotenv.load_dotenv(dotenv_path=dotenv_file)
+
 
 def create_extrinsic(
     pallet: str, method: str, params: dict, keypair: Keypair = keypair_alice
@@ -113,7 +114,11 @@ def extract_net_id_from_events(events: list) -> int:
             and event["event_id"] == "NetworkAdded"
         ):
             net_uid = event["attributes"][0]
-            dotenv.set_key(dotenv_path=dotenv_file, key_to_set="NETWORK_UID", value_to_set=str(net_uid))
+            dotenv.set_key(
+                dotenv_path=dotenv_file,
+                key_to_set="NETWORK_UID",
+                value_to_set=str(net_uid),
+            )
             return net_uid
     raise ValueError(f"Not found network creation in {events}")
 
