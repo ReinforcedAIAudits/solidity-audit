@@ -28,7 +28,7 @@ import bittensor as bt
 from fastapi.encoders import jsonable_encoder
 
 # import base validator class which takes care of most of the boilerplate
-from blackbox_example.subnet_utils import create_session
+from model_server.subnet_utils import create_session
 from template.base.validator import BaseValidatorNeuron
 
 # Bittensor Validator Template:
