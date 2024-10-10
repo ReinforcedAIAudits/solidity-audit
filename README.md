@@ -45,7 +45,7 @@ Alternatively, you can run each service separately (this will be discussed in th
 
 ## Creating Your Own Miner
 
-Creating your own miner in the current architecture is not necessary, but you can develop your own microservice for the audit model. To do this, you need to provide model responses based on the specified protocol. Audit does not support streaming, and the response must be delivered as a single JSON object. For each vulnerability found, a separate JSON object with a description is formed.
+Creating your own miner from scratch in the current architecture is not necessary, but you will want to develop your own microservice for the audit model to differentiate from other miners and create a better service. To do this, you need to provide model responses based on the specified protocol. Audit does not support streaming, and the response must be delivered as a single JSON object. For each vulnerability found, a separate JSON object with a description is formed.
 
 ## Audit Protocol
 
