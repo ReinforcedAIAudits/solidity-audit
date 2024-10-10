@@ -1,6 +1,7 @@
 <div align="center">
 
-![Logo](./docs/images/logo.png)
+![Logo](./docs/images/logo_black.png#gh-light-mode-only)
+![Logo](./docs/images/logo_white.png#gh-dark-mode-only)
 
 # **Solidity-Audit** <!-- omit in toc -->
 
