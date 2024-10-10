@@ -2,6 +2,8 @@
 
 ![Logo](./docs/images/logo.png)
 
+# **Solidity-Audit** <!-- omit in toc -->
+
 ## An Incentivized and Decentralized Subtensor Network <!-- omit in toc -->
 
 </div>
