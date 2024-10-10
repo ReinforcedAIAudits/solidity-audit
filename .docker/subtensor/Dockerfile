@@ -12,6 +12,6 @@ WORKDIR /subtensor
 
 RUN ./scripts/init.sh
 
-RUN cargo build -p node-subtensor --profile production --features pow-faucet
+RUN cargo build --workspace --profile=release --features "pow-faucet runtime-benchmarks fast-blocks" --manifest-path "/subtensor/Cargo.toml"
 
 CMD ["sh", "-c", "BUILD_BINARY=0 ./scripts/localnet.sh"]

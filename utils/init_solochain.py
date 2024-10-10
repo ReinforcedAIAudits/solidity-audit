@@ -1,3 +1,4 @@
+import os
 import time
 import dotenv
 from typing import Tuple
@@ -14,7 +15,7 @@ ROOT_ID = 0
 SUBNET_TEMPO = 10
 EMISSION_TEMPO = 30
 NETWORK_TYPE = "local"
-NETWORK_URL = "ws://127.0.0.1:9946"
+NETWORK_URL = os.getenv("CHAIN_ENDPOINT")
 RETRY_COUNT = 5
 RETRY_DELAY = 5
 

@@ -43,4 +43,4 @@ if __name__ == "__main__":
     import uvicorn
 
     logging.basicConfig(level=logging.INFO)
-    uvicorn.run(app, port=os.getenv("MINER_PORT"))
+    uvicorn.run(app, port=int(os.getenv("MINER_PORT")))

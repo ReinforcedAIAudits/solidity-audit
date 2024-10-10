@@ -14,7 +14,6 @@
   - [Install Subtensor](#install-local-subtensor)
 - [Blackboxes](#blackboxes)
   - [Miner blackbox](#miner-blackbox)
-  - [Validator blackbox](#validator-blackbox)
 - [Running a Miner](#running-a-miner)
 - [Running a Validator](#running-a-validator)
 
@@ -37,7 +36,7 @@ For miner, a CPU machine with the same requirements as a local Subtensor is nece
 
 ### Validator <a id="validator-requirements"></a>
 
-For validator, a CPU machine with the same requirements as a local Subtensor is necessary. It is important to note that a GPU is not required for this implementation, as the primary functionality is handled by a [separate service](https://github.com/ReinforcedAIAudits/solidity-audit/blob/main/blackbox_example/validator_server.py) that operates independently of validator.
+For validator, a CPU machine with the same requirements as a local Subtensor is necessary. 
 
 ## Installation
 
@@ -126,7 +125,7 @@ The second blackbox is necessary for the validator, whose responsibilities inclu
 
 However, for testing purposes, you can use the templates implemented in `blackbox_example/`.
 
-> **NOTE:** Remember to create your `.env` file, which should include the addresses of your blackboxes in the variables `MINER_SERVER` and `VALIDATOR_SERVER`. For testing purposes, you can use the command `cp .env-example .env`.
+> **NOTE:** Remember to create your `.env` file, which should include the addresses of your blackboxes in the variables `MINER_SERVER`. For testing purposes, you can use the command `cp .env-example .env`.
 
 ### Miner blackbox
 
@@ -134,14 +133,6 @@ To run the miner blackbox example , you simply need to execute the command:
 
 ```bash
 python blackbox_example/miner_server.py
-```
-
-### Validator blackbox
-
-To run the validator blackbox example , you simply need to execute the command:
-
-```bash
-python blackbox_example/validator_server.py
 ```
 
 ## Running a Miner

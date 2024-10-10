@@ -9,7 +9,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    command: python blackbox_example/miner_server_open_ai.py
+    command: python model_server/miner_server_open_ai.py
 
   miner:
     depends_on:
@@ -21,6 +21,7 @@ services:
       MNEMONIC_COLDKEY: ${MINER_COLDKEY_MNEMONIC}
       MNEMONIC_HOTKEY: ${MINER_HOTKEY_MNEMONIC}
       WALLET_NAME: ${MINER_NAME}
+      WALLET_HOTKEY: ${MINER_HOTKEY}
       NETWORK_UID: ${NETWORK_UID}
       NETWORK_TYPE: ${NETWORK_TYPE}
       WORKER_TYPE: 'miner'
@@ -35,6 +36,7 @@ services:
       MNEMONIC_COLDKEY: ${VALIDATOR_COLDKEY_MNEMONIC}
       MNEMONIC_HOTKEY: ${VALIDATOR_HOTKEY_MNEMONIC}
       WALLET_NAME: ${VALIDATOR_NAME}
+      WALLET_HOTKEY: ${VALIDATOR_HOTKEY}
       NETWORK_UID: ${NETWORK_UID}
       NETWORK_TYPE: ${NETWORK_TYPE}
       WORKER_TYPE: 'validator'
