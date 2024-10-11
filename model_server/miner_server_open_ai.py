@@ -66,4 +66,4 @@ async def submit(request: Request, response: Response):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, port=int(os.getenv("SERVER_PORT", "5000")))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("SERVER_PORT", "5000")))

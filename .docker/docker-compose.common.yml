@@ -25,6 +25,10 @@ services:
       NETWORK_UID: ${NETWORK_UID}
       NETWORK_TYPE: ${NETWORK_TYPE}
       WORKER_TYPE: 'miner'
+      EXTERNAL_IP: ${EXTERNAL_IP}
+      MINER_SERVER: 'http://miner_server_openai:5000'
+    ports:
+      - 8091:8091
 
   validator:
     depends_on:
