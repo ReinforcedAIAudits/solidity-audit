@@ -15,7 +15,7 @@ services:
     depends_on:
       - subtensor
     environment:
-      CHAIN_ENDPOINT: ws://subtensor
+      CHAIN_ENDPOINT: ws://subtensor:9946
     build:
       context: ..
       dockerfile: Dockerfile
@@ -39,9 +39,9 @@ services:
       WALLET_NAME: ${MINER_NAME}
       WALLET_HOTKEY: ${MINER_HOTKEY}
       NETWORK_UID: ${NETWORK_UID}
-      NETWORK_TYPE: ws://subtensor
+      NETWORK_TYPE: ws://subtensor:9946
       WORKER_TYPE: 'miner'
-      MINER_SERVER: http://miner_server
+      MINER_SERVER: http://miner_server:5000
     build:
       context: ..
       dockerfile: Dockerfile
@@ -53,7 +53,7 @@ services:
       WALLET_NAME: ${VALIDATOR_NAME}
       WALLET_HOTKEY: ${VALIDATOR_HOTKEY}
       NETWORK_UID: ${NETWORK_UID}
-      NETWORK_TYPE: ws://subtensor
+      NETWORK_TYPE: ws://subtensor:9946
       WORKER_TYPE: 'validator'
     depends_on:
       - miner
