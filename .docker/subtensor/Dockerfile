@@ -1,15 +1,16 @@
-FROM rust:1.72.0-alpine as builder
+FROM ubuntu:22.04 as builder
 
-RUN apk add --no-cache make clang curl openssl-dev llvm libudev-zero-dev protobuf-dev git bash
+RUN apt-get update && \
+    apt-get install -y --assume-yes make build-essential git clang curl libssl-dev llvm libudev-dev protobuf-compiler && \
+    rm -rf /var/lib/apt/lists/*
 
-# RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
-RUN git clone https://github.com/opentensor/subtensor.git /subtensor
+RUN git clone --branch v1.1.6 https://github.com/opentensor/subtensor.git /subtensor
 
 WORKDIR /subtensor
 
-# RUN ./scripts/init.sh
-RUN rustup target add x86_64-unknown-linux-musl 
+RUN ./scripts/init.sh
 
 RUN cargo build --workspace --profile=release --features "pow-faucet runtime-benchmarks fast-blocks" --manifest-path "/subtensor/Cargo.toml"
 
