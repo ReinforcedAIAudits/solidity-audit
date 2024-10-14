@@ -12,7 +12,6 @@ logger = logging.getLogger("MinerBlackbox")
 
 dotenv.load_dotenv()
 
-
 @app.post("/submit")
 async def contract_report(solidity: str = Body()):
     logger.info(f"Received solidity: {solidity}")
