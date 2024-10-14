@@ -6,6 +6,8 @@ RUN apt-get update && \
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 RUN git clone --branch v1.1.6 https://github.com/opentensor/subtensor.git /subtensor
 
 WORKDIR /subtensor
