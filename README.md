@@ -20,12 +20,14 @@
 - [Machine Requirements](#machine-requirements)
 - [Installation (local)](#install-local)
   - [Install SolidityAudit](#install-solidityaudit)
-  - [Install Subtensor](#install-local-subtensor)
+  - [Running a Miner](#running-a-miner-local)
+  - [Running a Validator](#running-a-validator-local)
 - [Installation (Docker)](#install-docker)
+  - [Running a Miner](#running-a-miner-docker)
+  - [Running a Validator](#running-a-validator-docker)
 - [Model servers](#model-servers)
-  - [OpenAI server](#openai-model-server)
-- [Running a Miner](#running-a-miner)
-- [Running a Validator](#running-a-validator)
+- [Local development](#local-development)
+
 
 ## Introduction
 
@@ -109,6 +111,8 @@ Additionally, for testing purposes, there is a dummy microservice template for t
 In terms of Operation System, you have to follow the requirements
 
 - Ubuntu (>= 22.04)
+- Python 3.11
+- Docker and compose plugin (If you prefer docker installation)
 - Others - please share with us to update our docs.
 
 For miner and validator, a CPU machine with the same requirements as a local Subtensor is necessary. For more detailed information, please visit the [Subtensor GitHub](https://github.com/opentensor/subtensor).
@@ -122,7 +126,7 @@ It is important to note that a GPU is not required for this implementation, as t
 To install the subnet, you need to make some simple instructions:
 
 ```bash
-python3.11 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
@@ -130,7 +134,138 @@ pip install -e .
 
 This commands will create virtual python environment and install required dependencies.
 
-### Install Local Subtensor
+### Running a Miner <a id="running-a-miner-local"></a>
+
+> **IMPORTANT:** Before running a miner with localnet, be sure you have a local subtensor up and running. Please see the [Subtensor guide](#install-local-subtensor) for more details.
+
+#### OpenAI server <a id="openai-model-server"></a>
+
+To run the miner server powered by OpenAI, you simply need to execute the command:
+
+```bash
+python model_servers/miner_server_open_ai.py
+```
+
+Remember, that OpenAI miner server requires additional environment variable `OPENAI_API_KEY` with your API key, received from OpenAI.
+
+To run a miner, navigate to the `solidity-audit` directory, run this command:
+
+```
+python neurons/miner.py \
+ --netuid <SUBNET_UID> \
+ --wallet.name <YOUR_MINER_WALLET_NAME>
+ --wallet.hotkey <YOUR_HOTKEY_NAME> \
+  --subtensor.network <NETWORK_TYPE> \
+  --subtensor.chain_endpoint <CHAIN_ENDPOINT> \
+ --logging.debug 
+
+```
+
+### For mainnet 
+
+TBD
+
+### For testnet
+
+`NET_UID` must be `222`, `NETWORK_TYPE` must be `test` AND `CHAIN_ENDPOINT` must be `wss://test.finney.opentensor.ai:443/`
+
+### For localnet
+`NETWORK_TYPE` must be `local` and `CHAIN_ENDPOINT` must be `ws://127.0.0.1:9946`
+
+> IMPORTANT: Do not run more than one miner per machine. Running multiple miners will result in the loss of incentive and emissions on all miners.
+
+### Running a Validator <a id="running-a-validator-local"></a>
+
+> **IMPORTANT:** Before running a validator in localnet, be sure you have a local subtensor up and running. Please see the [Subtensor guide](#install-local-subtensor) for more details.
+
+Similar to running a miner in the above section, navigate to the `solidity-audit` directory and run the following:
+
+```
+python neurons/validator.py \
+  --netuid <NET_UID> \
+  --wallet.name <YOUR_VALIDATOR_WALLET_NAME> \
+  --wallet.hotkey <YOUR_HOTKEY_NAME> \
+  --subtensor.network <NETWORK_TYPE> \
+  --subtensor.chain_endpoint <CHAIN_ENDPOINT> \
+  --logging.debug
+```
+
+### For mainnet 
+
+TBD
+
+### For testnet
+
+`NET_UID` must be `222`, `NETWORK_TYPE` must be `test` AND `CHAIN_ENDPOINT` must be `wss://test.finney.opentensor.ai:443/`
+
+### For localnet
+`NETWORK_TYPE` must be `local` and `CHAIN_ENDPOINT` must be `ws://127.0.0.1:9946`
+
+> NOTE: if you run a validator in testnet do not forget to add the argument `--subtensor.network test` or `--subtensor.chain_endpoint ws://<LOCAL_SUBTENSOR_IP>:9946` (the local subtensor has to target the network testnet)
+
+## Installation (docker) <a id="install-docker"></a>
+
+The project is adapted for installation in Docker, so this option may be preferable for deployment.
+
+### Running a Miner <a id="running-a-miner-docker"></a>
+
+```bash
+docker compose up -d miner
+```
+
+To make this work you need to set environment variables:
+* **OPENAI_API_KEY** - OpenAI API key to make audit
+* **MINER_COLDKEY_MNEMONIC** - seed phrase of miner cold key
+* **MINER_HOTKEY_MNEMONIC** - seed phrase of miner hot key
+* **MINER_NAME** - miner wallet name
+* **MINER_HOTKEY** - miner wallet hot key
+* **NETWORK_UID** - UID of Solidity Audit network (222 for testnet)
+* **NETWORK_TYPE** - network type (`test` for testnet)
+* **EXTERNAL_IP** - external ip of machine where miner would running
+
+### Running a Validator <a id="running-a-validator-docker"></a>
+
+```bash
+docker compose up -d validator
+```
+
+To make this work you need to set environment variables:
+* **VALIDATOR_COLDKEY_MNEMONIC** - seed phrase of validator cold key
+* **VALIDATOR_HOTKEY_MNEMONIC** - seed phrase of validator hot key
+* **VALIDATOR_NAME** - validator wallet name
+* **VALIDATOR_HOTKEY** - validator wallet hot key
+* **NETWORK_UID** - UID of Solidity Audit network (222 for testnet)
+* **NETWORK_TYPE** - network type (`test` for testnet)
+
+## Model servers <a id="model-servers"></a>
+
+To fully leverage the capabilities of the `SoldityAudit` subnetwork, it is essential to implement the logic for your model servers.
+
+Model servers is required for the miner, enabling it to send data for processing, and subsequently receive, structure, and return that data to the validator within a synapse.
+
+However, for testing purposes, you can use the template implemented in `model_servers/miner_server_dummy.py`.
+
+> **NOTE:** Remember to create your `.env` file, which should include the addresses of your miner server in the variable `MINER_SERVER`. For testing purposes, you can use the command `cp .env-example .env`.
+
+
+## Local development
+
+### Install local subtensor
+
+<details>
+<summary>Using docker compose (Recommended)</summary>
+
+To install a local subtensor in docker just run `.localnet/docker-compose.yml`
+
+```bash
+cd .localnet
+docker compose up -d
+```
+</details>
+
+
+<details>
+<summary>From scratch</summary>
 
 To install a local subtensor, begin by installing the required dependencies for running a Substrate node.
 
@@ -179,74 +314,15 @@ cargo build -p node-subtensor --profile production --features pow-faucet
 ./scripts/localnet.sh
 ```
 
-#### Initialize network
+</details>
+
+### Initialize network
 
 Execute this command to create wallets, register your subnetwork, set weights, and perform other essential tasks. This is a crucial step for the proper functioning of the node:
 
 ```bash
-python utils/init_solochain.py
+python .localnet/init_solochain.py
 ```
 
 > **NOTE:**
 > In this script, you can modify the names of the wallets being created, add passwords to them, and adjust the values for root and subnet weights.
-
-## Installation (docker) <a id="install-docker"></a>
-
-TBD
-
-## Model servers <a id="model-servers"></a>
-
-To fully leverage the capabilities of the `SoldityAudit` subnetwork, it is essential to implement the logic for your model servers.
-
-Model servers is required for the miner, enabling it to send data for processing, and subsequently receive, structure, and return that data to the validator within a synapse.
-
-However, for testing purposes, you can use the template implemented in `model_servers/miner_server_dummy.py`.
-
-> **NOTE:** Remember to create your `.env` file, which should include the addresses of your miner server in the variable `MINER_SERVER`. For testing purposes, you can use the command `cp .env-example .env`.
-
-### OpenAI server <a id="openai-model-server"></a>
-
-To run the miner powered by OpenAO , you simply need to execute the command:
-
-```bash
-python model_servers/miner_server_open_ai.py
-```
-
-Remember, that OpenAI miner server requires additional environment variable `OPENAI_API_KEY` with your API key, received from from OpenAI.
-
-## Running a Miner
-
-> **IMPORTANT:** Before running a miner, be sure you have a local subtensor up and running. Please see the [Subtensor guide](#install-local-subtensor) for more details.
-
-To run a miner, navigate to the `solidity-audit` directory, run this command:
-
-```
-python neurons/miner.py \
- --netuid <SUBNET_UID> \
- --wallet.name <YOUR_MINER_WALLET_NAME>
- --wallet.hotkey <YOUR_HOTKEY_NAME> \
- --subtensor.network local \
- --subtensor.chain_endpoint ws://127.0.0.1:9946 \
- --logging.debug 
-
-```
-
-> IMPORTANT: Do not run more than one miner per machine. Running multiple miners will result in the loss of incentive and emissions on all miners.
-
-## Running a Validator
-
-> **IMPORTANT:** Before running a validator, be sure you have a local subtensor up and running. Please see the [Subtensor guide](#install-local-subtensor) for more details.
-
-Similar to running a miner in the above section, navigate to the `solidity-audit` directory and run the following:
-
-```
-python neurons/validator.py \
-  --netuid <NET_UID> \
-  --wallet.name <YOUR_VALIDATOR_WALLET_NAME> \
-  --wallet.hotkey <YOUR_HOTKEY_NAME> \
-  --subtensor.network local \
-  --subtensor.chain_endpoint ws://127.0.0.1:9946 \
-  --logging.debug
-```
-
-> NOTE: if you run a validator in testnet do not forget to add the argument `--subtensor.network test` or `--subtensor.chain_endpoint ws://<LOCAL_SUBTENSOR_IP>:9946` (the local subtensor has to target the network testnet)

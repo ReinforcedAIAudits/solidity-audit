@@ -1,21 +1,19 @@
-version: '3.8'
-
 services:
-
   miner_server_openai:
-    environment:
-      MINER_PORT: ${MINER_PORT}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
+    container_name: miner_server_openai
     command: python model_server/miner_server_open_ai.py
+    environment:
+      SERVER_PORT: 5000
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
 
   miner:
     depends_on:
       - miner_server_openai
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
     environment:
       MNEMONIC_COLDKEY: ${MINER_COLDKEY_MNEMONIC}
@@ -31,10 +29,8 @@ services:
       - 8091:8091
 
   validator:
-    depends_on:
-      - miner
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
     environment:
       MNEMONIC_COLDKEY: ${VALIDATOR_COLDKEY_MNEMONIC}
