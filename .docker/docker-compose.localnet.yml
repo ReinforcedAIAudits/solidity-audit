@@ -2,16 +2,16 @@ version: '3.8'
 
 services:
   subtensor:
-    networks:
-      - chainnet
     build:
       context: ..
       dockerfile: .docker/subtensor/Dockerfile
+    ports:
+      - 9946:9946
+    expose:
+      - 9946
     restart: unless-stopped
 
   subtensor_setup:
-    networks:
-      - chainnet
     depends_on:
       - subtensor
     environment:
@@ -28,7 +28,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    command: [ "python", "model_servers/miner_server_open_ai.py" ]
+    command: [ "python", "model_servers/miner_server_dummy.py" ]
 
   miner:
     depends_on:
@@ -39,7 +39,7 @@ services:
       WALLET_NAME: ${MINER_NAME}
       WALLET_HOTKEY: ${MINER_HOTKEY}
       NETWORK_UID: ${NETWORK_UID}
-      NETWORK_TYPE: ws://subtensor:9946
+      CHAIN_ENDPOINT: ws://subtensor:9946
       WORKER_TYPE: 'miner'
       MINER_SERVER: http://miner_server:5000
     build:
@@ -53,13 +53,10 @@ services:
       WALLET_NAME: ${VALIDATOR_NAME}
       WALLET_HOTKEY: ${VALIDATOR_HOTKEY}
       NETWORK_UID: ${NETWORK_UID}
-      NETWORK_TYPE: ws://subtensor:9946
+      CHAIN_ENDPOINT: ws://subtensor:9946
       WORKER_TYPE: 'validator'
     depends_on:
       - miner
     build:
       context: ..
       dockerfile: Dockerfile
-
-networks:
-  chainnet:

@@ -32,13 +32,14 @@ for attempt in range(RETRY_COUNT):
         time.sleep(RETRY_DELAY)
 
 if not substrate or not subtensor:
-    raise ConnectionError("Cannot connect to chain!")
+    raise ConnectionError(f"Cannot connect to chain with URL: {NETWORK_URL}!")
 
 # Keypairs
 keypair_alice = Keypair.create_from_uri("//Alice")
 
 dotenv_file = dotenv.find_dotenv()
 dotenv.load_dotenv(dotenv_path=dotenv_file)
+
 
 def create_extrinsic(
     pallet: str, method: str, params: dict, keypair: Keypair = keypair_alice

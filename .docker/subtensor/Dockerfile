@@ -16,11 +16,11 @@ RUN ./scripts/init.sh
 
 RUN cargo build --workspace --profile=release --features "pow-faucet runtime-benchmarks fast-blocks" --manifest-path "/subtensor/Cargo.toml"
 
-FROM scratch
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
 COPY --from=builder /subtensor/target/release/node-subtensor /app/target/release/node-subtensor
-COPY --from=builder /subtensor/scripts/localnet.sh /app/scripts/localnet.sh
-
-CMD ["BUILD_BINARY=0 ./scripts/localnet"]
+COPY ./scripts/docker_localnet.sh /app/scripts/localnet.sh
+ENV BUILD_BINARY=0
+CMD ["./scripts/localnet.sh"]
