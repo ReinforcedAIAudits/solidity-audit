@@ -19,7 +19,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    command: ["python", "utils/init_solochain.py"]
+    command: [ "python", "utils/init_solochain.py" ]
 
   miner_server:
     environment:
@@ -28,7 +28,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    command: ["python", "model_server/miner_server.py"]
+    command: [ "python", "model_servers/miner_server_open_ai.py" ]
 
   miner:
     depends_on:
