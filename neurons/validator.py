@@ -1,7 +1,6 @@
 # The MIT License (MIT)
 # Copyright © 2023 Yuma Rao
-# TODO(developer): Set your name
-# Copyright © 2023 <your name>
+# Copyright © 2024 ReinforcedAI
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
@@ -19,24 +18,20 @@
 
 
 import os
-import random
 import time
-from typing import Counter, List
+from typing import List
 
 # Bittensor
 import bittensor as bt
-from fastapi.encoders import jsonable_encoder
 
-# import base validator class which takes care of most of the boilerplate
-from model_servers.subnet_utils import create_session
 from template.base.validator import BaseValidatorNeuron
 
 # Bittensor Validator Template:
 from template.utils.uids import get_random_uids
 from ai_audits.protocol import AuditsSynapse, VulnerabilityReport
-from ai_audits.contract_provider import FileContractProvdier, TemplatePair
+from ai_audits.contract_provider import FileContractProvdier
 from dotenv import load_dotenv
-import numpy as np
+
 
 CONTRACT_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "contract_templates"
@@ -45,20 +40,13 @@ PROVIDER = FileContractProvdier(CONTRACT_DIR)
 
 
 class Validator(BaseValidatorNeuron):
-    """
-    Your validator neuron class. You should use this class to define your validator's behavior. In particular, you should replace the forward function with your own logic.
-
-    This class inherits from the BaseValidatorNeuron class, which in turn inherits from BaseNeuron. The BaseNeuron class takes care of routine tasks such as setting up wallet, subtensor, metagraph, logging directory, parsing config, etc. You can override any of the methods in BaseNeuron if you need to customize the behavior.
-
-    This class provides reasonable default behavior for a validator such as keeping a moving average of the scores of the miners and using them to set weights at the end of each epoch. Additionally, the scores are reset for new hotkeys at the end of each epoch.
-    """
+    WEIGHT_TIME = 0.1
+    WEIGHT_SCORE = 0.9
 
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
         bt.logging.info("load_state()")
         self.load_state()
-
-        # TODO(developer): Anything specific to your use case you can do here
 
     async def forward(self):
         """
@@ -91,6 +79,8 @@ class Validator(BaseValidatorNeuron):
         synapse = AuditsSynapse(contract_code=pair.contract)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
+        self.dendrite.external_ip = "127.0.0.1"
+
         responses = self.dendrite.query(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
             synapse=synapse,
@@ -108,37 +98,58 @@ class Validator(BaseValidatorNeuron):
     def validate_responses(
         self,
         responses: List[AuditsSynapse],
-        reference_report: List[VulnerabilityReport] = [],
+        reference_report: List[VulnerabilityReport] = None,
     ) -> List[float]:
+        if reference_report is None:
+            reference_report = []
+        axon_info = self.axon.info()
+        times = [
+            x.dendrite.process_time
+            for x in responses
+            if x.dendrite.process_time is not None and x.axon.hotkey != axon_info.hotkey
+        ]
+        bt.logging.debug(f"axons response times: {times}")
+
+        min_time = min(times) if times else 0.0
+
+        bt.logging.debug(f"minimal response time: {min_time}")
         return [
-            self.validate_reports_by_reference(synapse.response, reference_report)
+            (self.validate_reports_by_reference(synapse.response, reference_report))
+            * self.WEIGHT_SCORE
+            + (
+                (min_time / synapse.dendrite.process_time)
+                if synapse.dendrite.process_time
+                and synapse.axon.hotkey != axon_info.hotkey
+                else 0
+            )
+            * self.WEIGHT_TIME
             for synapse in responses
         ]
 
+    @classmethod
     def validate_reports_by_reference(
-        self,
+        cls,
         report: List[VulnerabilityReport] | None,
         reference_report: List[VulnerabilityReport],
     ) -> float:
         if report is None or not reference_report:
             return 0.0
 
-        finded_vulns = [vuln.vulnerability_class for vuln in report]
-        reference_vulns = [vuln.vulnerability_class for vuln in reference_report]
-        finded_count = Counter(finded_vulns)
-        reference_count = Counter(reference_vulns)
-
-        intersection = [
-            vuln
-            for vuln in finded_vulns
-            for _ in range(min(finded_count[vuln], reference_count[vuln]))
+        found_vulnerabilities = [vuln.vulnerability_class for vuln in report]
+        reference_vulnerabilities = [
+            vuln.vulnerability_class for vuln in reference_report
         ]
+        diff = {
+            x: abs(reference_vulnerabilities.count(x) - found_vulnerabilities.count(x))
+            for x in set(reference_vulnerabilities)
+        }
+        return 1 - (sum(diff.values()) / len(reference_vulnerabilities))
 
-        return len(intersection) / len(reference_vulns)
-
-    # TODO: This function is currently unused, but may be useful in the future. Consider re-evaluating its necessity before removing.
+    # TODO: This function is currently unused, but may be useful in the future.
+    #  Consider re-evaluating its necessity before removing.
+    @classmethod
     def validate_report(
-        self, report: VulnerabilityReport, reference_report: VulnerabilityReport
+        cls, report: VulnerabilityReport, reference_report: VulnerabilityReport
     ) -> float:
         if report.vulnerability_class == reference_report.vulnerability_class:
             return 1.0
@@ -146,7 +157,6 @@ class Validator(BaseValidatorNeuron):
             return 0.0
 
 
-# The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
     load_dotenv()
     with Validator() as validator:

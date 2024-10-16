@@ -1,0 +1,57 @@
+services:
+  miner_server_openai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: miner_server_openai
+    command: python model_servers/miner_server_open_ai.py
+    environment:
+      SERVER_PORT: 5000
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    networks:
+      - solidity-audit
+
+  miner:
+    depends_on:
+      - miner_server_openai
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: miner
+    environment:
+      MNEMONIC_COLDKEY: ${MINER_COLDKEY_MNEMONIC}
+      MNEMONIC_HOTKEY: ${MINER_HOTKEY_MNEMONIC}
+      WALLET_NAME: ${MINER_NAME}
+      WALLET_HOTKEY: ${MINER_HOTKEY}
+      NETWORK_UID: ${NETWORK_UID}
+      NETWORK_TYPE: ${NETWORK_TYPE}
+      CHAIN_ENDPOINT: ${CHAIN_ENDPOINT}
+      WORKER_TYPE: 'miner'
+      EXTERNAL_IP: ${EXTERNAL_IP}
+      MINER_SERVER: 'http://miner_server_openai:5000'
+    ports:
+      - 8091:8091
+    networks:
+      - solidity-audit
+
+  validator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: validator
+    environment:
+      MNEMONIC_COLDKEY: ${VALIDATOR_COLDKEY_MNEMONIC}
+      MNEMONIC_HOTKEY: ${VALIDATOR_HOTKEY_MNEMONIC}
+      WALLET_NAME: ${VALIDATOR_NAME}
+      WALLET_HOTKEY: ${VALIDATOR_HOTKEY}
+      NETWORK_UID: ${NETWORK_UID}
+      NETWORK_TYPE: ${NETWORK_TYPE}
+      CHAIN_ENDPOINT: ${CHAIN_ENDPOINT}
+      WORKER_TYPE: 'validator'
+    networks:
+      - solidity-audit
+
+networks:
+  solidity-audit:
+
+
