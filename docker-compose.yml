@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: miner_server_openai
-    command: python model_server/miner_server_open_ai.py
+    command: python model_servers/miner_server_open_ai.py
     environment:
       SERVER_PORT: 5000
       OPENAI_API_KEY: ${OPENAI_API_KEY}
