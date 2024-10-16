@@ -217,10 +217,9 @@ To make this work you need to set environment variables:
 * **OPENAI_API_KEY** - OpenAI API key to make audit
 * **MINER_COLDKEY_MNEMONIC** - seed phrase of miner cold key
 * **MINER_HOTKEY_MNEMONIC** - seed phrase of miner hot key
-* **MINER_NAME** - miner wallet name
-* **MINER_HOTKEY** - miner wallet hot key
 * **NETWORK_UID** - UID of Solidity Audit network (222 for testnet)
 * **NETWORK_TYPE** - network type (`test` for testnet)
+* **CHAIN_ENDPOINT** - network endpoint (`wss://test.finney.opentensor.ai:443/` for testnet)
 * **EXTERNAL_IP** - external ip of machine where miner would running
 
 ### Running a Validator <a id="running-a-validator-docker"></a>
@@ -232,10 +231,9 @@ docker compose up -d validator
 To make this work you need to set environment variables:
 * **VALIDATOR_COLDKEY_MNEMONIC** - seed phrase of validator cold key
 * **VALIDATOR_HOTKEY_MNEMONIC** - seed phrase of validator hot key
-* **VALIDATOR_NAME** - validator wallet name
-* **VALIDATOR_HOTKEY** - validator wallet hot key
 * **NETWORK_UID** - UID of Solidity Audit network (222 for testnet)
 * **NETWORK_TYPE** - network type (`test` for testnet)
+* **CHAIN_ENDPOINT** - network endpoint (`wss://test.finney.opentensor.ai:443/` for testnet)
 
 ## Model servers <a id="model-servers"></a>
 
