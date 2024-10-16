@@ -40,6 +40,9 @@ PROVIDER = FileContractProvdier(CONTRACT_DIR)
 
 
 class Validator(BaseValidatorNeuron):
+    WEIGHT_TIME = 0.1
+    WEIGHT_SCORE = 0.9
+
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
         bt.logging.info("load_state()")
@@ -76,6 +79,8 @@ class Validator(BaseValidatorNeuron):
         synapse = AuditsSynapse(contract_code=pair.contract)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
+        self.dendrite.external_ip = "127.0.0.1"
+
         responses = self.dendrite.query(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
             synapse=synapse,
@@ -97,23 +102,32 @@ class Validator(BaseValidatorNeuron):
     ) -> List[float]:
         if reference_report is None:
             reference_report = []
-        times = [x.dendrite.process_time for x in responses]
-        min_time = min(times)
+        times = [
+            x.dendrite.process_time
+            for x in responses
+            if x.dendrite.process_time is not None
+        ]
+        min_time = min(times) if times else 0.0
         return [
-            (self.validate_reports_by_reference(synapse.response, reference_report)) * 0.9 +
-            (min_time / synapse.dendrite.process_time) * 0.1
+            (self.validate_reports_by_reference(synapse.response, reference_report))
+            * self.WEIGHT_SCORE
+            + (min_time / (synapse.dendrite.process_time or 1.0)) * self.WEIGHT_TIME
             for synapse in responses
         ]
 
     @classmethod
     def validate_reports_by_reference(
-        cls, report: List[VulnerabilityReport] | None, reference_report: List[VulnerabilityReport]
+        cls,
+        report: List[VulnerabilityReport] | None,
+        reference_report: List[VulnerabilityReport],
     ) -> float:
         if report is None or not reference_report:
             return 0.0
 
         found_vulnerabilities = [vuln.vulnerability_class for vuln in report]
-        reference_vulnerabilities = [vuln.vulnerability_class for vuln in reference_report]
+        reference_vulnerabilities = [
+            vuln.vulnerability_class for vuln in reference_report
+        ]
         diff = {
             x: abs(reference_vulnerabilities.count(x) - found_vulnerabilities.count(x))
             for x in set(reference_vulnerabilities)

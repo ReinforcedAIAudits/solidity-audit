@@ -8,6 +8,8 @@ services:
     environment:
       SERVER_PORT: 5000
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+    networks:
+      - solidity-audit
 
   miner:
     depends_on:
@@ -22,11 +24,14 @@ services:
       WALLET_HOTKEY: ${MINER_HOTKEY}
       NETWORK_UID: ${NETWORK_UID}
       NETWORK_TYPE: ${NETWORK_TYPE}
+      CHAIN_ENDPOINT: ${CHAIN_ENDPOINT}
       WORKER_TYPE: 'miner'
       EXTERNAL_IP: ${EXTERNAL_IP}
       MINER_SERVER: 'http://miner_server_openai:5000'
     ports:
       - 8091:8091
+    networks:
+      - solidity-audit
 
   validator:
     build:
@@ -39,4 +44,12 @@ services:
       WALLET_HOTKEY: ${VALIDATOR_HOTKEY}
       NETWORK_UID: ${NETWORK_UID}
       NETWORK_TYPE: ${NETWORK_TYPE}
+      CHAIN_ENDPOINT: ${CHAIN_ENDPOINT}
       WORKER_TYPE: 'validator'
+    networks:
+      - solidity-audit
+
+networks:
+  solidity-audit:
+
+
