@@ -102,18 +102,24 @@ class Validator(BaseValidatorNeuron):
     ) -> List[float]:
         if reference_report is None:
             reference_report = []
+        axon_info = self.axon.info()
         times = [
             x.dendrite.process_time
             for x in responses
-            if x.dendrite.process_time is not None
+            if x.dendrite.process_time is not None and x.axon.hotkey != axon_info.hotkey
         ]
+        bt.logging.debug(f"axons response times: {times}")
+
         min_time = min(times) if times else 0.0
+
+        bt.logging.debug(f"minimal response time: {min_time}")
         return [
             (self.validate_reports_by_reference(synapse.response, reference_report))
             * self.WEIGHT_SCORE
             + (
                 (min_time / synapse.dendrite.process_time)
                 if synapse.dendrite.process_time
+                and synapse.axon.hotkey != axon_info.hotkey
                 else 0
             )
             * self.WEIGHT_TIME

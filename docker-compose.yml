@@ -17,6 +17,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: miner
     environment:
       MNEMONIC_COLDKEY: ${MINER_COLDKEY_MNEMONIC}
       MNEMONIC_HOTKEY: ${MINER_HOTKEY_MNEMONIC}
@@ -37,6 +38,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: validator
     environment:
       MNEMONIC_COLDKEY: ${VALIDATOR_COLDKEY_MNEMONIC}
       MNEMONIC_HOTKEY: ${VALIDATOR_HOTKEY_MNEMONIC}
