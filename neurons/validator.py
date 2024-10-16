@@ -111,7 +111,12 @@ class Validator(BaseValidatorNeuron):
         return [
             (self.validate_reports_by_reference(synapse.response, reference_report))
             * self.WEIGHT_SCORE
-            + (min_time / (synapse.dendrite.process_time or 1.0)) * self.WEIGHT_TIME
+            + (
+                (min_time / synapse.dendrite.process_time)
+                if synapse.dendrite.process_time
+                else 0
+            )
+            * self.WEIGHT_TIME
             for synapse in responses
         ]
 
