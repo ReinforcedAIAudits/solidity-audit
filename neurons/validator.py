@@ -79,7 +79,7 @@ class Validator(BaseValidatorNeuron):
         synapse = AuditsSynapse(contract_code=pair.contract)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
-        # self.dendrite.external_ip = "127.0.0.1"
+        self.dendrite.external_ip = "127.0.0.1"
 
         responses = self.dendrite.query(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
