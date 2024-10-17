@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: miner_server_openai
     container_name: miner_server_openai
     command: python model_servers/miner_server_open_ai.py
     environment:
@@ -17,6 +18,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: miner
     container_name: miner
     environment:
       MNEMONIC_COLDKEY: ${MINER_COLDKEY_MNEMONIC}
@@ -38,6 +40,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: validator
     container_name: validator
     environment:
       MNEMONIC_COLDKEY: ${VALIDATOR_COLDKEY_MNEMONIC}

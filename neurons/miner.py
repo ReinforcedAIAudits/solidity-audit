@@ -28,8 +28,12 @@ from ai_audits.protocol import AuditsSynapse, VulnerabilityReport
 
 
 class Miner(BaseMinerNeuron):
+    REQUEST_PERIOD = 20 * 60
+    _last_call_from_dendrite: dict[str, float]
+
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
+        self._last_call_from_dendrite = {}
 
     async def forward(self, synapse: AuditsSynapse) -> AuditsSynapse:
         """
@@ -78,6 +82,21 @@ class Miner(BaseMinerNeuron):
                 f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
+
+        current_time = time.time()
+
+        if synapse.dendrite.hotkey in self._last_call_from_dendrite:
+            time_since_last_request = (
+                current_time - self._last_call_from_dendrite[synapse.dendrite.hotkey]
+            )
+
+            if time_since_last_request < self.REQUEST_PERIOD:
+                return (
+                    True,
+                    f"Request too soon. Remaining {int(self.REQUEST_PERIOD - time_since_last_request)} seconds. Dendrite hotkey: {synapse.dendrite.hotkey}",
+                )
+
+        self._last_call_from_dendrite[synapse.dendrite.hotkey] = current_time
 
         if self.config.blacklist.force_validator_permit:
             # If the config is set to force validator permit, then we should only allow requests from validators.

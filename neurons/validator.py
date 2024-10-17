@@ -113,18 +113,29 @@ class Validator(BaseValidatorNeuron):
         min_time = min(times) if times else 0.0
 
         bt.logging.debug(f"minimal response time: {min_time}")
-        return [
-            (self.validate_reports_by_reference(synapse.response, reference_report))
-            * self.WEIGHT_SCORE
-            + (
-                (min_time / synapse.dendrite.process_time)
-                if synapse.dendrite.process_time
-                and synapse.axon.hotkey != axon_info.hotkey
-                else 0
+
+        scores: list[float] = []
+
+        for synapse in responses:
+            bt.logging.debug(
+                f"synapse: axon hotkey: {synapse.axon.hotkey} | is success: {synapse.is_success} |  is blacklisted: {synapse.is_blacklist} | message: {synapse.axon.status_message}"
             )
-            * self.WEIGHT_TIME
-            for synapse in responses
-        ]
+            scores_by_report = (
+                self.validate_reports_by_reference(synapse.response, reference_report)
+                * self.WEIGHT_SCORE
+            )
+            scores_by_time = (
+                (
+                    (min_time / synapse.dendrite.process_time)
+                    if synapse.dendrite.process_time
+                    and synapse.axon.hotkey != axon_info.hotkey
+                    else 0
+                )
+                * (scores_by_report / self.WEIGHT_SCORE)
+                * self.WEIGHT_TIME
+            )
+            scores.append(scores_by_report + scores_by_time)
+        return scores
 
     @classmethod
     def validate_reports_by_reference(
