@@ -93,7 +93,7 @@ class Miner(BaseMinerNeuron):
             if time_since_last_request < self.REQUEST_PERIOD:
                 return (
                     True,
-                    f"Request too soon. Remaining {int(self.REQUEST_PERIOD - time_since_last_request)} seconds. Dendrite hotkey: {synapse.dendrite.hotkey}",
+                    f"Request submitted too soon. {int(self.REQUEST_PERIOD - time_since_last_request)} second(s) left until the next request is allowed. Dendrite's associated hotkey: {synapse.dendrite.hotkey}",
                 )
 
         self._last_call_from_dendrite[synapse.dendrite.hotkey] = current_time
