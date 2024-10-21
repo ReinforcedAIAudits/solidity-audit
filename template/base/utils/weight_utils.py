@@ -173,7 +173,7 @@ def process_weights_for_netuid(
     if non_zero_weights.size == 0 or metagraph.n < min_allowed_weights:
         bittensor.logging.warning("No non-zero weights returning all ones.")
         final_weights = np.ones(metagraph.n) / metagraph.n
-        bittensor.logging.debug("final_weights", final_weights)
+        bittensor.logging.debug("final_weights", final_weights.all())
         return np.arange(len(final_weights)), final_weights
 
     elif non_zero_weights.size < min_allowed_weights:

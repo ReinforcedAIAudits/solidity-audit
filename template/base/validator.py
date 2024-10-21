@@ -259,8 +259,8 @@ class BaseValidatorNeuron(BaseNeuron):
             subtensor=self.subtensor,
             metagraph=self.metagraph,
         )
-        bt.logging.debug("processed_weights", processed_weights)
-        bt.logging.debug("processed_weight_uids", processed_weight_uids)
+        bt.logging.debug("processed_weights", processed_weights.all())
+        bt.logging.debug("processed_weight_uids", processed_weight_uids.all())
 
         # Convert to uint16 weights and uids.
         (
@@ -341,7 +341,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Handle edge case: If either rewards or uids_array is empty.
         if rewards.size == 0 or uids_array.size == 0:
-            bt.logging.info(f"rewards: {rewards}, uids_array: {uids_array}")
+            bt.logging.info(f"rewards: {rewards}, uids_array: {uids_array.all()}")
             bt.logging.warning(
                 "Either rewards or uids_array is empty. No updates will be performed."
             )
@@ -358,13 +358,13 @@ class BaseValidatorNeuron(BaseNeuron):
         # shape: [ metagraph.n ]
         scattered_rewards: np.ndarray = np.zeros_like(self.scores)
         scattered_rewards[uids_array] = rewards
-        bt.logging.debug(f"Scattered rewards: {rewards}")
+        bt.logging.debug(f"Scattered rewards: {rewards.all()}")
 
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
         self.scores: np.ndarray = alpha * scattered_rewards + (1 - alpha) * self.scores
-        bt.logging.debug(f"Updated moving avg scores: {self.scores}")
+        bt.logging.debug(f"Updated moving avg scores: {self.scores.all()}")
 
     def save_state(self):
         """Saves the state of the validator to a file."""
