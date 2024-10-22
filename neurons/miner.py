@@ -34,6 +34,7 @@ class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
         self._last_call_from_dendrite = {}
+        self.dendrite_whitelist = ["5CSpjTrkDdJcCLVNpJe4WMiWVyE2nB1wx5A4m2uMTXUVgRXn"]
 
     async def forward(self, synapse: AuditsSynapse) -> AuditsSynapse:
         """
@@ -66,11 +67,12 @@ class Miner(BaseMinerNeuron):
         """
         Determines whether an incoming request should be blacklisted and thus ignored.
         """
-
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
 
+        if synapse.dendrite.hotkey in self.dendrite_whitelist:
+            return False, f"Hotkey {synapse.dendrite.hotkey} is whitelisted"
         # TODO(developer): Define how miners should blacklist requests.
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         if (
@@ -119,6 +121,9 @@ class Miner(BaseMinerNeuron):
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return 0.0
+
+        if synapse.dendrite.hotkey in self.dendrite_whitelist:
+            return self.metagraph.S.max() + 1.0
 
         # TODO(developer): Define how miners should prioritize requests.
         caller_uid = self.metagraph.hotkeys.index(
