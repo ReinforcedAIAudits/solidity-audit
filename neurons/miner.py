@@ -30,10 +30,34 @@ from ai_audits.protocol import AuditsSynapse, VulnerabilityReport
 class Miner(BaseMinerNeuron):
     REQUEST_PERIOD = 20 * 60
     _last_call_from_dendrite: dict[str, float]
+    _dendrite_whitelist: list[str]
 
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
         self._last_call_from_dendrite = {}
+        self._dendrite_whitelist = [
+            key.strip()
+            for key in os.getenv("DENDRITE_WHITELIST", "").split(",")
+            if key.strip()
+        ]
+        try:
+            keys_response = create_session().get("https://audit.reinforced.app/keys")
+            if keys_response.status_code == 200:
+                keys_list = keys_response.json()
+                if isinstance(keys_list, list) and all(
+                    isinstance(key, str) for key in keys_list
+                ):
+                    self._dendrite_whitelist = list(
+                        set(self._dendrite_whitelist) | set(keys_list)
+                    )
+                else:
+                    bt.logging.error(f"key list has invalid format: {keys_list}")
+            else:
+                bt.logging.info(
+                    f"Something went wrong with the key service. Status code: {keys_response.status_code}"
+                )
+        except Exception as e:
+            bt.logging.error(f"An error occurred while connection to key service: {e}")
 
     async def forward(self, synapse: AuditsSynapse) -> AuditsSynapse:
         """
@@ -66,11 +90,12 @@ class Miner(BaseMinerNeuron):
         """
         Determines whether an incoming request should be blacklisted and thus ignored.
         """
-
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
 
+        if synapse.dendrite.hotkey in self._dendrite_whitelist:
+            return False, f"Hotkey {synapse.dendrite.hotkey} is whitelisted"
         # TODO(developer): Define how miners should blacklist requests.
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         if (
@@ -119,6 +144,9 @@ class Miner(BaseMinerNeuron):
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return 0.0
+
+        if synapse.dendrite.hotkey in self._dendrite_whitelist:
+            return self.metagraph.S.max() + 1.0
 
         # TODO(developer): Define how miners should prioritize requests.
         caller_uid = self.metagraph.hotkeys.index(
