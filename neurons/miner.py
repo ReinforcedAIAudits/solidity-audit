@@ -40,21 +40,24 @@ class Miner(BaseMinerNeuron):
             for key in os.getenv("DENDRITE_WHITELIST", "").split(",")
             if key.strip()
         ]
-        keys_response = create_session().get("https://audit.reinforced.app/keys")
-        if keys_response.status_code == 200:
-            keys_list = keys_response.json()
-            if isinstance(keys_list, list) and all(
-                isinstance(key, str) for key in keys_list
-            ):
-                self._dendrite_whitelist = list(
-                    set(self._dendrite_whitelist) | set(keys_list)
-                )
+        try:
+            keys_response = create_session().get("https://audit.reinforced.app/keys")
+            if keys_response.status_code == 200:
+                keys_list = keys_response.json()
+                if isinstance(keys_list, list) and all(
+                    isinstance(key, str) for key in keys_list
+                ):
+                    self._dendrite_whitelist = list(
+                        set(self._dendrite_whitelist) | set(keys_list)
+                    )
+                else:
+                    bt.logging.error(f"key list has invalid format: {keys_list}")
             else:
-                bt.logging.error(f"key list has invalid format: {keys_list}")
-        else:
-            bt.logging.info(
-                f"Failed to connect to the key service: {keys_response.status_code}"
-            )
+                bt.logging.info(
+                    f"Something went wrong with the key service. Status code: {keys_response.status_code}"
+                )
+        except Exception as e:
+            bt.logging.error(f"An error occurred while connection to key service: {e}")
 
     async def forward(self, synapse: AuditsSynapse) -> AuditsSynapse:
         """
