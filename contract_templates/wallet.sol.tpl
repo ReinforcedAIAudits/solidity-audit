@@ -1,21 +1,20 @@
+contract Wallet_<|timestamp|> {
+    mapping (address => uint) <|random:userBalance|balance|userTokens|tokens|data|store|funds|a|b|c|>;
 
-contract Wallet_<|timsestamp|> {
-    mapping (address => uint) userBalance;
-   
     function getBalance(address u) constant returns(uint){
-        return userBalance[u];
+        return <|random:userBalance|balance|userTokens|tokens|data|store|funds|a|b|c|>[u];
     }
 
     function addToBalance() payable{
-        userBalance[msg.sender] += msg.value;
-    }   
+        <|random:userBalance|balance|userTokens|tokens|data|store|funds|a|b|c|>[msg.sender] += msg.value;
+    }
 
     function withdrawBalance(){
-        // send userBalance[msg.sender] ethers to msg.sender
+        // send <|random:userBalance|balance|userTokens|tokens|data|store|funds|a|b|c|>[msg.sender] ethers to msg.sender
         // if mgs.sender is a contract, it will call its fallback function
-        if( ! (msg.sender.call.value(userBalance[msg.sender])() ) ){
+        if( ! (msg.sender.call.value(<|random:userBalance|balance|userTokens|tokens|data|store|funds|a|b|c|>[msg.sender])() ) ){
             throw;
         }
-        userBalance[msg.sender] = 0;
+        <|random:userBalance|balance|userTokens|tokens|data|store|funds|a|b|c|>[msg.sender] = 0;
     }   
 }

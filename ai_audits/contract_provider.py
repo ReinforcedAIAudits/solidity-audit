@@ -1,10 +1,16 @@
 import json
 import os
 import random
+import re
 import time
+import typing
 
 from pydantic import AliasChoices, BaseModel, Field
+
 from .protocol import VulnerabilityReport
+
+
+__all__ = ['FilePair', 'TemplatePair', 'FileContractProvider', 'ValidatorTemplate', 'ValidatorTemplateError']
 
 
 class FilePair:
@@ -28,6 +34,54 @@ class FilePair:
         return f"{self.base_path}.json"
 
 
+class ValidatorTemplateError(Exception):
+    pass
+
+
+class ValidatorTemplate(object):
+    REPLACEMENT_RE = re.compile(r'<\|([^<>]+)\|>')
+
+    def __init__(self):
+        self.replacement_methods = {}
+        self.register_replacement_method('timestamp', lambda x: f'{int(time.time())}')
+        self.register_replacement_method('random', lambda x: random.choice(x))
+
+    def register_replacement_method(self, method_name: str, method_handler: typing.Callable[[list[str]], str]):
+        self.replacement_methods[method_name] = method_handler
+
+    def find_replacements(self, text: str) -> list[dict]:
+        replacements = []
+        for match in set(self.REPLACEMENT_RE.findall(text)):
+            replacement = {'arguments': [], 'pattern': f'<|{match}|>'}
+            if ':' in match:
+                method, arguments = match.split(':')
+                replacement['arguments'] = arguments.split('|')
+            else:
+                method = match
+            if '|' in method:
+                raise ValidatorTemplateError(f'Invalid character "|" inside template variable {method}')
+            if method not in self.replacement_methods:
+                raise ValidatorTemplateError(f'Unknown template variable method: {method}')
+            replacement['method'] = method
+            replacement['replacement'] = self.replacement_methods[method](replacement['arguments'])
+            replacements.append(replacement)
+
+        return replacements
+
+    @classmethod
+    def apply_replacements(cls, text: str, replacements: list[dict]) -> str:
+        for r in replacements:
+            text = text.replace(r['pattern'], r['replacement'])
+        return text
+
+    def find_and_apply_replacements(self, text: str) -> str:
+        replacements = self.find_replacements(text)
+        return self.apply_replacements(text, replacements)
+
+
+VALIDATOR_TEMPLATE_SINGLETON = ValidatorTemplate()
+
+
 class TemplatePair(BaseModel):
     contract: str = Field(...)
     vulnerability_report: list[VulnerabilityReport] = Field(
@@ -37,10 +91,10 @@ class TemplatePair(BaseModel):
     )
 
     def normalize(self):
-        self.contract = self.contract.replace("<|timsestamp|>", f"{int(time.time())}")
+        self.contract = VALIDATOR_TEMPLATE_SINGLETON.find_and_apply_replacements(self.contract)
 
 
-class FileContractProvdier:
+class FileContractProvider:
     _path: str
     _pairs: list[FilePair]
 

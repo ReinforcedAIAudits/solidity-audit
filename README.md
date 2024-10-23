@@ -82,6 +82,7 @@ The `{contract_name}.sol.tpl` file contains the contract code to be checked (it 
 ### List of Variables
 
 - `<|timestamp|>` – will be replaced with the current UNIX timestamp when generating the contract from the template.
+- `<|random:value1|value2|value3|>` - will be replaced by one of the listed values. The value is chosen once for the entire document context, making the variable convenient for generating random method and property names.
 
 - Additional variables can be defined in the future.
 

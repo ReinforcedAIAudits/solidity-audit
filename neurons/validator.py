@@ -29,14 +29,14 @@ from template.base.validator import BaseValidatorNeuron
 # Bittensor Validator Template:
 from template.utils.uids import get_random_uids
 from ai_audits.protocol import AuditsSynapse, VulnerabilityReport
-from ai_audits.contract_provider import FileContractProvdier
+from ai_audits.contract_provider import FileContractProvider
 from dotenv import load_dotenv
 
 
 CONTRACT_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "contract_templates"
 )
-PROVIDER = FileContractProvdier(CONTRACT_DIR)
+PROVIDER = FileContractProvider(CONTRACT_DIR)
 
 
 class Validator(BaseValidatorNeuron):
@@ -146,9 +146,9 @@ class Validator(BaseValidatorNeuron):
         if report is None or not reference_report:
             return 0.0
 
-        found_vulnerabilities = [vuln.vulnerability_class for vuln in report]
+        found_vulnerabilities = [vuln.vulnerability_class.lower() for vuln in report]
         reference_vulnerabilities = [
-            vuln.vulnerability_class for vuln in reference_report
+            vuln.vulnerability_class.lower() for vuln in reference_report
         ]
         diff = {
             x: abs(reference_vulnerabilities.count(x) - found_vulnerabilities.count(x))
