@@ -28,7 +28,7 @@ from template.base.validator import BaseValidatorNeuron
 
 # Bittensor Validator Template:
 from template.utils.uids import get_random_uids
-from ai_audits.protocol import AuditsSynapse, VulnerabilityReport
+from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ReferenceReport
 from ai_audits.contract_provider import FileContractProvider
 from dotenv import load_dotenv
 
@@ -89,7 +89,7 @@ class Validator(BaseValidatorNeuron):
         )
         bt.logging.info(f"Received responses: {responses}")
 
-        rewards = self.validate_responses(responses, pair.vulnerability_report)
+        rewards = self.validate_responses(responses, pair.reference_report)
 
         bt.logging.info(f"Scored responses: {rewards}")
 
@@ -98,7 +98,7 @@ class Validator(BaseValidatorNeuron):
     def validate_responses(
         self,
         responses: List[AuditsSynapse],
-        reference_report: List[VulnerabilityReport] = None,
+        reference_report: List[ReferenceReport] = None,
     ) -> List[float]:
         if reference_report is None:
             reference_report = []
@@ -141,28 +141,50 @@ class Validator(BaseValidatorNeuron):
     def validate_reports_by_reference(
         cls,
         report: List[VulnerabilityReport] | None,
-        reference_report: List[VulnerabilityReport],
+        reference_report: List[ReferenceReport],
     ) -> float:
         if report is None or not reference_report:
             return 0.0
 
-        found_vulnerabilities = [vuln.vulnerability_class.lower() for vuln in report]
-        reference_vulnerabilities = [
-            vuln.vulnerability_class.lower() for vuln in reference_report
-        ]
-        diff = {
-            x: abs(reference_vulnerabilities.count(x) - found_vulnerabilities.count(x))
-            for x in set(reference_vulnerabilities)
-        }
-        return 1 - (sum(diff.values()) / len(reference_vulnerabilities))
+        reference_count = len(reference_report)
+        max_vuln = {}
+
+        for ref in reference_report:
+            for vuln in ref.vulnerability_class:
+                max_vuln[vuln] = max_vuln.get(vuln, 0) + 1
+        report_vuln = {}
+
+        for rep in report:
+            vuln_class = rep.vulnerability_class.lower()
+            if vuln_class not in max_vuln:
+                # Unknown vulnerability for template, unscored
+                continue
+            report_vuln[vuln_class] = report_vuln.get(vuln_class, 0) + 1
+            if report_vuln[vuln_class] > max_vuln[vuln_class]:
+                # Found extra vulnerability, unknown by template, unscored
+                report_vuln[vuln_class] = max_vuln[vuln_class]
+
+        report_count = sum(report_vuln.values())
+
+        # # The number of detected vulnerabilities must match the template. Otherwise, reduce scores
+        # if report_count > reference_count:
+        #     report_count = reference_count - abs(report_count - reference_count)
+        # if report_count < 0:
+        #     report_count = 0
+
+        # Currently, we forgive the miner for identifying additional vulnerabilities
+        # due to the imperfection of the templates
+        if report_count > reference_count:
+            report_count = reference_count
+        return report_count / reference_count
 
     # TODO: This function is currently unused, but may be useful in the future.
     #  Consider re-evaluating its necessity before removing.
     @classmethod
     def validate_report(
-        cls, report: VulnerabilityReport, reference_report: VulnerabilityReport
+        cls, report: VulnerabilityReport, reference_report: ReferenceReport
     ) -> float:
-        if report.vulnerability_class == reference_report.vulnerability_class:
+        if report.vulnerability_class.lower() in reference_report.vulnerability_class:
             return 1.0
         else:
             return 0.0

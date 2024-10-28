@@ -10,6 +10,9 @@ from pydantic import (
 from pydantic.alias_generators import to_camel, to_snake
 
 
+__all__ = ['VulnerabilityReport', 'ReferenceReport', 'AuditsSynapse']
+
+
 class VulnerabilityReport(BaseModel):
     model_config = ConfigDict(
         alias_generator=AliasGenerator(
@@ -38,7 +41,7 @@ class VulnerabilityReport(BaseModel):
     vulnerability_class: str = Field(
         ...,
         title="Vulnerability Class",
-        description="The category of the vulnerability. E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, Unchecked call, Unguarded function, et cetera.",
+        description="The category of the vulnerability. E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, Unchecked call, Gas grief, Unguarded function, et cetera.",
     )
     test_case: str = Field(
         ...,
@@ -59,6 +62,14 @@ class VulnerabilityReport(BaseModel):
         ...,
         title="Fixed Lines",
         description="Fixed version of the original source.",
+    )
+
+
+class ReferenceReport(VulnerabilityReport):
+    vulnerability_class: list[str] = Field(
+        default_factory=list,
+        title="Vulnerability Class",
+        description="The category of the vulnerability. E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, Unchecked call, Gas grief, Unguarded function, et cetera.",
     )
 
 

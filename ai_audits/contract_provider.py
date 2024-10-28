@@ -7,7 +7,7 @@ import typing
 
 from pydantic import AliasChoices, BaseModel, Field
 
-from .protocol import VulnerabilityReport
+from .protocol import ReferenceReport
 
 
 __all__ = ['FilePair', 'TemplatePair', 'FileContractProvider', 'ValidatorTemplate', 'ValidatorTemplateError']
@@ -84,7 +84,7 @@ VALIDATOR_TEMPLATE_SINGLETON = ValidatorTemplate()
 
 class TemplatePair(BaseModel):
     contract: str = Field(...)
-    vulnerability_report: list[VulnerabilityReport] = Field(
+    reference_report: list[ReferenceReport] = Field(
         ...,
         serialization_alias="vulnerabilityReport",
         validation_alias=AliasChoices("vulnerability_report", "vulnerabilityReport"),
@@ -124,7 +124,7 @@ class FileContractProvider:
 
         template = TemplatePair(
             contract=contract,
-            vulnerability_report=[VulnerabilityReport(**data) for data in json_list],
+            vulnerability_report=[ReferenceReport(**data) for data in json_list],
         )
         template.normalize()
 

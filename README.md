@@ -244,7 +244,7 @@ To fully leverage the capabilities of the `SoldityAudit` subnetwork, it is essen
 
 Model servers is required for the miner, enabling it to send data for processing, and subsequently receive, structure, and return that data to the validator within a synapse.
 
-However, for testing purposes, you can use the template implemented in `model_servers/miner_server_dummy.py`.
+However, for testing purposes, you can use the template implemented in `model_servers/miner_server_dummy.py`. You can also use the example with a local LLM from the [sa-model-server-example](https://github.com/ReinforcedAIAudits/sa-model-server-example) repository.
 
 > **NOTE:** Remember to create your `.env` file, which should include the addresses of your miner server in the variable `MINER_SERVER`. For testing purposes, you can use the command `cp .env-example .env`.
 
