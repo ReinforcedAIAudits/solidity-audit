@@ -9,6 +9,7 @@ services:
     environment:
       SERVER_PORT: 5000
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+    restart: unless-stopped
     networks:
       - solidity-audit
 
@@ -33,6 +34,7 @@ services:
       MINER_SERVER: 'http://miner_server_openai:5000'
     ports:
       - 8091:8091
+    restart: unless-stopped
     networks:
       - solidity-audit
 
@@ -51,6 +53,7 @@ services:
       NETWORK_TYPE: ${NETWORK_TYPE}
       CHAIN_ENDPOINT: ${CHAIN_ENDPOINT}
       WORKER_TYPE: 'validator'
+    restart: unless-stopped
     networks:
       - solidity-audit
 
