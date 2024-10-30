@@ -10,7 +10,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel, to_snake
 
 
-__all__ = ['VulnerabilityReport', 'ReferenceReport', 'AuditsSynapse']
+__all__ = ["VulnerabilityReport", "ReferenceReport", "AuditsSynapse"]
 
 
 class VulnerabilityReport(BaseModel):
@@ -43,8 +43,8 @@ class VulnerabilityReport(BaseModel):
         title="Vulnerability Class",
         description="The category of the vulnerability. E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, Unchecked call, Gas grief, Unguarded function, et cetera.",
     )
-    test_case: str = Field(
-        ...,
+    test_case: Optional[str] = Field(
+        None,
         title="Test Case",
         description="A code example that exploits the vulnerability.",
     )
