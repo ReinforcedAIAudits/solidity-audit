@@ -40,6 +40,10 @@ class Miner(ReinforcedMinerNeuron):
             for key in os.getenv("DENDRITE_WHITELIST", "").split(",")
             if key.strip()
         ]
+        self.load_website_keys()
+        self.set_identity()
+
+    def load_website_keys(self):
         try:
             keys_response = create_session().get("https://audit.reinforced.app/keys")
             if keys_response.status_code == 200:
@@ -58,8 +62,6 @@ class Miner(ReinforcedMinerNeuron):
                 )
         except Exception as e:
             bt.logging.error(f"An error occurred while connection to key service: {e}")
-
-        self.set_identity()
 
     async def forward(self, synapse: AuditsSynapse) -> AuditsSynapse:
         """

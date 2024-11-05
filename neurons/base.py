@@ -4,7 +4,9 @@ from websocket import WebSocketConnectionClosedException
 from template.base.miner import BaseMinerNeuron
 from template.base.validator import BaseValidatorNeuron
 from substrateinterface import SubstrateInterface, Keypair
-from substrateinterface.exceptions import SubstrateRequestException
+
+
+__all__ = ['IdentityException', 'ReinforcedMinerNeuron', 'ReinforcedValidatorNeuron']
 
 
 class IdentityException(Exception):
@@ -14,12 +16,14 @@ class IdentityException(Exception):
 def set_coldkey_identity(
     substrate: SubstrateInterface, coldkey: Keypair, name: str, description: str
 ):
+    name = name.encode('utf-8')
+    description = description.encode('utf-8')
     state = substrate.query(
         module="SubtensorModule",
         storage_function="Identities",
         params=[coldkey.public_key],
     )
-    if state.value["description"] == description:
+    if state.value["description"] == description and state.value["name"] == name:
         return
     call = substrate.compose_call(
         call_module="SubtensorModule",
@@ -42,25 +46,30 @@ def set_coldkey_identity(
         )
 
 
-class ReinforcedMinerNeuron(BaseMinerNeuron):
-    def set_identity(self):
-        description = os.getenv("COLDKEY_DESCRIPTION")
-        if not description:
-            return
-        try:
-            set_coldkey_identity(
-                self.subtensor.substrate,
-                self.wallet.coldkey,
-                name=self.neuron_type,
-                description=description,
-            )
+def set_identity_mixin(self: BaseMinerNeuron | BaseValidatorNeuron):
+    description = os.getenv("COLDKEY_DESCRIPTION")
+    if not description:
+        return
+    try:
+        set_coldkey_identity(
+            self.subtensor.substrate,
+            self.wallet.coldkey,
+            name=self.neuron_type,
+            description=description,
+        )
 
-        except (
+    except (
             WebSocketConnectionClosedException,
             BrokenPipeError,
-        ):
-            self.subtensor.substrate.connect_websocket()
+    ):
+        self.subtensor.substrate.connect_websocket()
+
+
+class ReinforcedMinerNeuron(BaseMinerNeuron):
+    def set_identity(self):
+        set_identity_mixin(self)
 
 
 class ReinforcedValidatorNeuron(BaseValidatorNeuron):
-    pass
+    def set_identity(self):
+        set_identity_mixin(self)

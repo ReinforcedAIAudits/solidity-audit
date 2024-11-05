@@ -1,8 +1,11 @@
 import os
+
 from fastapi import FastAPI, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from openai import AsyncOpenAI
+
 from ai_audits.protocol import VulnerabilityReport
+from model_servers.subnet_utils import preprocess_text, ROLES
 
 
 # OpenAI wants response top-level entity to be an object.
@@ -14,15 +17,8 @@ client = AsyncOpenAI()
 app = FastAPI()
 
 
-def preprocess_text(text: str):
-    """
-    For OpenAI we want LLM to provide correct line numbers, as it is bad at counting - we provide line numbers ourself.
-
-    Good implementation of this function should also process whitespace, remove empty lines, format comments, etc.
-    """
-    lines = text.splitlines()
-    numbered_lines = [f"Line {i + 1}: {line}" for i, line in enumerate(lines)]
-    return "\n".join(numbered_lines)
+PROMPT = ("You're a smart contract auditor. "
+          "Given contract source code with explicitly specified line numbers you need to provide your audit report.")
 
 
 async def generate_audit(source: str):
@@ -30,19 +26,21 @@ async def generate_audit(source: str):
     Here goes the magic.
     Reference implementation simply feeds all the data to LLM and hopes something good comes out.
 
-    Good implementation should have good preprocessing, response augmentation for LLM to provide good prior art descriptions, it may call external linters to provide some initial guidance to LLM, etc.
-    It also needs to verify the output, as LLM might hallucinate and produce invalid line ranges and other sorts of undesired output.
+    Good implementation should have good preprocessing, response augmentation for LLM to provide good prior art
+    descriptions, it may call external linters to provide some initial guidance to LLM, etc.
+    It also needs to verify the output, as LLM might hallucinate and produce invalid line ranges
+    and other sorts of undesired output.
     """
     preprocessed = preprocess_text(source)
     completion = await client.beta.chat.completions.parse(
         model="gpt-4o-mini-2024-07-18",
         messages=[
             {
-                "role": "system",
-                "content": "You're a smart contract auditor. Given contract source code with explicitly specified line numbers you need to provide your audit report.",
+                "role": ROLES.SYSTEM,
+                "content": PROMPT,
             },
             # Output format guidance is provided automatically by OpenAI SDK.
-            {"role": "user", "content": preprocessed},
+            {"role": ROLES.USER, "content": preprocessed},
         ],
         response_format=AuditResponse,
     )
@@ -57,7 +55,7 @@ async def generate_audit(source: str):
 async def submit(request: Request, response: Response):
     source = (await request.body()).decode("utf-8")
     diagnostics = await generate_audit(source)
-    if diagnostics == None:
+    if diagnostics is None:
         response.status_code = 503
         return "LLM is unavailable"
     return diagnostics
