@@ -23,11 +23,11 @@ import bittensor as bt
 from dotenv import load_dotenv
 
 from model_servers.subnet_utils import create_session
-from template.base.miner import BaseMinerNeuron
+from neurons.base import ReinforcedMinerNeuron
 from ai_audits.protocol import AuditsSynapse, VulnerabilityReport
 
 
-class Miner(BaseMinerNeuron):
+class Miner(ReinforcedMinerNeuron):
     REQUEST_PERIOD = 20 * 60
     _last_call_from_dendrite: dict[str, float]
     _dendrite_whitelist: list[str]
@@ -58,6 +58,8 @@ class Miner(BaseMinerNeuron):
                 )
         except Exception as e:
             bt.logging.error(f"An error occurred while connection to key service: {e}")
+
+        self.set_identity()
 
     async def forward(self, synapse: AuditsSynapse) -> AuditsSynapse:
         """
