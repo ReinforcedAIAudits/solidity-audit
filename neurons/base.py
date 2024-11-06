@@ -6,7 +6,7 @@ from template.base.validator import BaseValidatorNeuron
 from substrateinterface import SubstrateInterface, Keypair
 
 
-__all__ = ['IdentityException', 'ReinforcedMinerNeuron', 'ReinforcedValidatorNeuron']
+__all__ = ["IdentityException", "ReinforcedMinerNeuron", "ReinforcedValidatorNeuron"]
 
 
 class IdentityException(Exception):
@@ -16,14 +16,16 @@ class IdentityException(Exception):
 def set_coldkey_identity(
     substrate: SubstrateInterface, coldkey: Keypair, name: str, description: str
 ):
-    name = name.encode('utf-8')
-    description = description.encode('utf-8')
     state = substrate.query(
         module="SubtensorModule",
         storage_function="Identities",
         params=[coldkey.public_key],
     )
-    if state.value["description"] == description and state.value["name"] == name:
+    if (
+        state.value is not None
+        and state.value["description"] == description
+        and state.value["name"] == name
+    ):
         return
     call = substrate.compose_call(
         call_module="SubtensorModule",
@@ -59,8 +61,8 @@ def set_identity_mixin(self: BaseMinerNeuron | BaseValidatorNeuron):
         )
 
     except (
-            WebSocketConnectionClosedException,
-            BrokenPipeError,
+        WebSocketConnectionClosedException,
+        BrokenPipeError,
     ):
         self.subtensor.substrate.connect_websocket()
 

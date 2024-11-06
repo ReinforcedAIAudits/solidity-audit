@@ -30,8 +30,6 @@ services:
       - solidity-audit
 
   miner:
-    depends_on:
-      - miner_server_corcel
     build:
       context: .
       dockerfile: Dockerfile
@@ -49,6 +47,7 @@ services:
       EXTERNAL_IP: ${EXTERNAL_IP}
       MINER_SERVER: 'http://miner_server_corcel:5000'
       BT_AXON_PORT: 8091
+      COLDKEY_DESCRIPTION: ''
     ports:
       - 8091:8091
     restart: unless-stopped
@@ -71,6 +70,7 @@ services:
       CHAIN_ENDPOINT: ${CHAIN_ENDPOINT}
       WORKER_TYPE: 'validator'
       BT_AXON_PORT: 8100
+      COLDKEY_DESCRIPTION: ''
     restart: unless-stopped
     networks:
       - solidity-audit
