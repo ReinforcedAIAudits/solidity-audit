@@ -28,14 +28,14 @@ class VulnerabilityReport(BaseModel):
         title="From Line",
         description="The starting line number of the vulnerability in the source code. The line numbers start from one.",
         serialization_alias="from",
-        validation_alias=AliasChoices("from", "from_line"),
+        validation_alias=AliasChoices("from", "from_line", "fromLine"),
     )
     to_line: int = Field(
         ...,
         title="To Line",
         description="The ending line number of the vulnerability in the source code (inclusive).",
         serialization_alias="to",
-        validation_alias=AliasChoices("to", "to_line"),
+        validation_alias=AliasChoices("to", "to_line", "toLine"),
     )
     # TODO: It needs to be an enum?
     vulnerability_class: str = Field(
