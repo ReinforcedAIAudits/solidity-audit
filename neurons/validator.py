@@ -21,16 +21,14 @@ import os
 import time
 from typing import List
 
-# Bittensor
 import bittensor as bt
+from dotenv import load_dotenv
 
-from template.base.validator import BaseValidatorNeuron
 
-# Bittensor Validator Template:
 from template.utils.uids import get_random_uids
 from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ReferenceReport
 from ai_audits.contract_provider import FileContractProvider
-from dotenv import load_dotenv
+from neurons.base import ReinforcedValidatorNeuron
 
 
 CONTRACT_DIR = os.path.join(
@@ -39,7 +37,7 @@ CONTRACT_DIR = os.path.join(
 PROVIDER = FileContractProvider(CONTRACT_DIR)
 
 
-class Validator(BaseValidatorNeuron):
+class Validator(ReinforcedValidatorNeuron):
     WEIGHT_TIME = 0.1
     WEIGHT_SCORE = 0.9
 
@@ -47,6 +45,7 @@ class Validator(BaseValidatorNeuron):
         super(Validator, self).__init__(config=config)
         bt.logging.info("load_state()")
         self.load_state()
+        self.set_identity()
 
     async def forward(self):
         """

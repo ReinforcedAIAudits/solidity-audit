@@ -23,11 +23,11 @@ import bittensor as bt
 from dotenv import load_dotenv
 
 from model_servers.subnet_utils import create_session
-from template.base.miner import BaseMinerNeuron
+from neurons.base import ReinforcedMinerNeuron
 from ai_audits.protocol import AuditsSynapse, VulnerabilityReport
 
 
-class Miner(BaseMinerNeuron):
+class Miner(ReinforcedMinerNeuron):
     REQUEST_PERIOD = 20 * 60
     _last_call_from_dendrite: dict[str, float]
     _dendrite_whitelist: list[str]
@@ -40,6 +40,10 @@ class Miner(BaseMinerNeuron):
             for key in os.getenv("DENDRITE_WHITELIST", "").split(",")
             if key.strip()
         ]
+        self.load_website_keys()
+        self.set_identity()
+
+    def load_website_keys(self):
         try:
             keys_response = create_session().get("https://audit.reinforced.app/keys")
             if keys_response.status_code == 200:

@@ -11,10 +11,10 @@ from substrateinterface import SubstrateInterface, Keypair
 from websocket import WebSocketConnectionClosedException
 
 
-__all__ = ['SoloChainHelper']
+__all__ = ["SoloChainHelper"]
 
 
-PARENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+PARENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
 class SoloChainHelper(object):
@@ -31,7 +31,11 @@ class SoloChainHelper(object):
     def __init__(self, network_url=None):
         self.substrate = None
         self.subtensor = None
-        self.network_url = os.getenv("CHAIN_ENDPOINT", "ws://127.0.0.1:9946") if network_url is None else network_url
+        self.network_url = (
+            os.getenv("CHAIN_ENDPOINT", "ws://127.0.0.1:9946")
+            if network_url is None
+            else network_url
+        )
         self.keypair_alice = Keypair.create_from_uri("//Alice")
 
     def connect(self):
@@ -50,13 +54,20 @@ class SoloChainHelper(object):
     def require_connect(func):
         def wrapped(self, *args, **kwargs):
             if not self.substrate or not self.subtensor:
-                raise ConnectionError(f"Cannot connect to chain with URL: {self.network_url}!")
+                raise ConnectionError(
+                    f"Cannot connect to chain with URL: {self.network_url}!"
+                )
             return func(self, *args, **kwargs)
+
         return wrapped
 
     @require_connect
     def create_extrinsic(
-        self, pallet: str, method: str, params: dict, keypair: typing.Optional[Keypair] = None
+        self,
+        pallet: str,
+        method: str,
+        params: dict,
+        keypair: typing.Optional[Keypair] = None,
     ):
         keypair = self.keypair_alice if keypair is None else keypair
         return self.substrate.create_signed_extrinsic(
@@ -153,7 +164,9 @@ class SoloChainHelper(object):
         return keypair, wallet
 
     @require_connect
-    def transfer_funds_if_needed(self, wallet: bittensor.wallet, alice_wallet: bittensor.wallet):
+    def transfer_funds_if_needed(
+        self, wallet: bittensor.wallet, alice_wallet: bittensor.wallet
+    ):
         if self.subtensor.get_balance(wallet.coldkey.ss58_address).tao < 10000.0:
             self.submit_extrinsic(
                 "Balances",
@@ -186,12 +199,14 @@ class SoloChainHelper(object):
             owner_wallet.coldkey,
         )
 
-        net_uid = self.extract_net_id_from_events(register_network_receipt.triggered_events)
+        net_uid = self.extract_net_id_from_events(
+            register_network_receipt.triggered_events
+        )
 
         self.submit_extrinsic(
             "SubtensorModule",
             "root_register",
-            {"hotkey": validator_wallet.hotkey.ss58_address},
+            {"hotkey": owner_wallet.hotkey.ss58_address},
             owner_wallet.coldkey,
         )
 
@@ -203,7 +218,7 @@ class SoloChainHelper(object):
                     "netuid": net_uid,
                     "hotkey": wallet.hotkey.ss58_address,
                 },
-                owner_wallet.coldkey,
+                wallet.coldkey,
             )
 
         # Set various limits and tempos
@@ -223,8 +238,12 @@ class SoloChainHelper(object):
             {"netuid": net_uid, "target_registrations_per_interval": 1000},
         )
         self.submit_sudo_extrinsic("sudo_set_tx_rate_limit", {"tx_rate_limit": 0})
-        self.submit_sudo_extrinsic("sudo_set_tempo", {"netuid": net_uid, "tempo": self.SUBNET_TEMPO})
-        self.submit_sudo_extrinsic("sudo_set_tempo", {"netuid": self.ROOT_ID, "tempo": self.SUBNET_TEMPO})
+        self.submit_sudo_extrinsic(
+            "sudo_set_tempo", {"netuid": net_uid, "tempo": self.SUBNET_TEMPO}
+        )
+        self.submit_sudo_extrinsic(
+            "sudo_set_tempo", {"netuid": self.ROOT_ID, "tempo": self.SUBNET_TEMPO}
+        )
         self.submit_sudo_extrinsic(
             "sudo_set_hotkey_emission_tempo", {"emission_tempo": self.EMISSION_TEMPO}
         )
@@ -253,16 +272,16 @@ class SoloChainHelper(object):
                 "weights": [65, 65],
                 "netuid": 0,
                 "version_key": 0,
-                "hotkey": validator_wallet.hotkey.ss58_address,
+                "hotkey": owner_wallet.hotkey.ss58_address,
             },
             owner_wallet.coldkey,
         )
 
 
 if __name__ == "__main__":
-    DOT_ENV_PATH = os.path.join(PARENT_DIR, '.env')
+    DOT_ENV_PATH = os.path.join(PARENT_DIR, ".env")
     if not os.path.exists(DOT_ENV_PATH):
-        shutil.copy(os.path.join(PARENT_DIR, '.env-example'), DOT_ENV_PATH)
+        shutil.copy(os.path.join(PARENT_DIR, ".env-example"), DOT_ENV_PATH)
     dotenv_file = dotenv.find_dotenv()
     dotenv.load_dotenv(dotenv_path=dotenv_file)
     SoloChainHelper().connect().init_solo_chain()

@@ -13,9 +13,23 @@ services:
     networks:
       - solidity-audit
 
+  miner_server_corcel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: miner_server_corcel
+    container_name: miner_server_corcel
+    command: python model_servers/miner_server_corcel.py
+    environment:
+      SERVER_PORT: 5000
+      CORCEL_API_KEY: ${CORCEL_API_KEY}
+      CORCEL_MODEL: 'llama-3-1-70b'
+      MAX_TRIES: 3
+    restart: unless-stopped
+    networks:
+      - solidity-audit
+
   miner:
-    depends_on:
-      - miner_server_openai
     build:
       context: .
       dockerfile: Dockerfile
@@ -31,7 +45,9 @@ services:
       CHAIN_ENDPOINT: ${CHAIN_ENDPOINT}
       WORKER_TYPE: 'miner'
       EXTERNAL_IP: ${EXTERNAL_IP}
-      MINER_SERVER: 'http://miner_server_openai:5000'
+      MINER_SERVER: 'http://miner_server_corcel:5000'
+      BT_AXON_PORT: 8091
+      COLDKEY_DESCRIPTION: ''
     ports:
       - 8091:8091
     restart: unless-stopped
@@ -53,6 +69,8 @@ services:
       NETWORK_TYPE: ${NETWORK_TYPE}
       CHAIN_ENDPOINT: ${CHAIN_ENDPOINT}
       WORKER_TYPE: 'validator'
+      BT_AXON_PORT: 8100
+      COLDKEY_DESCRIPTION: ''
     restart: unless-stopped
     networks:
       - solidity-audit
