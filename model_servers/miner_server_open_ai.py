@@ -17,8 +17,19 @@ client = AsyncOpenAI()
 app = FastAPI()
 
 
-PROMPT = ("You're a smart contract auditor. "
-          "Given contract source code with explicitly specified line numbers you need to provide your audit report.")
+PROMPT = """
+You're a smart contract auditor. 
+Given contract source code with explicitly specified line numbers, you need to provide your audit report. 
+
+If the source code is invalid or cannot be meaningfully analyzed:
+- Generate a single vulnerability report entry with the following details:
+  - from_line: 1 (start of the code)
+  - to_line: the total number of lines in the code
+  - vulnerability_class: "Invalid Code"
+  - description: A message stating that the entire code is considered invalid for audit processing.
+
+Otherwise, analyze and report any specific vulnerabilities with their line ranges, descriptions, and fixes.
+"""
 
 
 async def generate_audit(source: str):

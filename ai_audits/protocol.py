@@ -41,7 +41,7 @@ class VulnerabilityReport(BaseModel):
     vulnerability_class: str = Field(
         ...,
         title="Vulnerability Class",
-        description="The category of the vulnerability. E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, Unchecked call, Gas grief, Unguarded function, et cetera.",
+        description="The category of the vulnerability. E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, Unchecked call, Gas grief, Unguarded function, Invalid Code, et cetera.",
     )
     test_case: Optional[str] = Field(
         None,
@@ -58,8 +58,8 @@ class VulnerabilityReport(BaseModel):
         title="Prior Art",
         description="Similar vulnerabilities encountered in wild before",
     )
-    fixed_lines: str = Field(
-        ...,
+    fixed_lines: Optional[str] = Field(
+        None,
         title="Fixed Lines",
         description="Fixed version of the original source.",
     )

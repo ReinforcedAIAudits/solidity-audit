@@ -1,0 +1,1 @@
+<|random:Wie macht man Speckpfannkuchen?|How to bake bacon pancakes?|¿Cómo hacer panqueques de tocino?|Comment faire des pancakes au bacon ?|ベーコンパンケーキの作り方は？|Как приготовить блинчики с беконом?|วิธีทำแพนเค้กเบคอน?|如何做培根煎饼？|>
