@@ -7,22 +7,24 @@ To work with bittensor-wallet, Python 3.11 is required.
 The simplest way to install it is by using [pyenv](https://github.com/pyenv/pyenv) and [pyenv-virtualenv](https://github.com/pyenv/pyenv-virtualenv). Note about install dependencies of pyenv: [Suggested build environment](https://github.com/pyenv/pyenv/wiki#suggested-build-environment)
 
 ```shell
-$ curl https://pyenv.run | bash
-$ echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
-$ echo '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
-$ echo 'eval "$(pyenv init -)"' >> ~/.bashrc
-$ . ~/.bashrc
-$ pyenv install 3.11
-$ pyenv virtualenv 3.11 btcli
-$ pyenv activate btcli
+curl https://pyenv.run | bash
+echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
+echo '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
+echo 'eval "$(pyenv init -)"' >> ~/.bashrc
+. ~/.bashrc
+pyenv install 3.11
+pyenv virtualenv 3.11 btcli
+pyenv activate btcli
 ```
 
 Install the CLI client:
+
 ```
 pip install bittensor-cli
 ```
 
 Generate a cold and hot keypairs:
+
 ```shell
 btcli w create --wallet.name <WALLET_NAME> --wallet.hotkey default --no-use-password
 ```
@@ -30,6 +32,7 @@ btcli w create --wallet.name <WALLET_NAME> --wallet.hotkey default --no-use-pass
 Select the number of mnemonic words (21) and be sure to save the mnemonic phrase for key recovery.
 
 You will get result like this:
+
 ```
 IMPORTANT: Store this mnemonic in a secure (preferable offline place), as anyone who has possession of this mnemonic can use it to regenerate the key and access your tokens.
 
@@ -44,13 +47,11 @@ You can use the mnemonic to recreate the key with `btcli` in case it gets lost.
 
 Store your seed phrases in a secure location, as they will be needed later when launching the miner or validator.
 
-
 ## Step 0.1: Transfering tokens to your cold key
 
 You need to obtain testnet tokens to be able to launch the miner or validator. Only the coldkey needs a balance (the hotkey can remain without tokens).
 
 Testnet have no any faucet, so, if you don't have sufficient faucet tokens, ask the [Bittensor Discord community](https://discord.com/channels/799672011265015819/830068283314929684) for faucet tokens.
-
 
 You can obtain wallet addresses as follows:
 
@@ -63,6 +64,7 @@ btcli w list
 To operate, miners need a balance of 1 TAO, while validators require 11 TAO.
 
 Register your wallet with the subnet:
+
 ```shell
 btcli subnet register --netuid 222 --wallet.name <WALLET_NAME> --wallet.hotkey default --subtensor.network test
 ```
@@ -84,7 +86,6 @@ btcli stake add --amount 10 --wallet.name <WALLET_NAME> --wallet.hotkey default 
 ```
 
 That's it—the validator is now also ready for operation. Note that staking can also be applied to miners.
-
 
 ## Step 3: Running the miner
 
@@ -118,11 +119,11 @@ Cons:
 Pros:
 
 - Does not require a paid subscription (only a machine with a modern CPU or GPU is needed to run)
+
 Cons:
 
 - Low audit quality
 - Slow performance on CPU
-
 
 ### Choosing a Model Server
 
@@ -136,7 +137,7 @@ Additionally, the chosen server must be launched separately:
 docker compose up -d miner_server_corcel
 ```
 
-or 
+or
 
 ```bash
 docker compose up -d miner_server_openai
@@ -149,12 +150,12 @@ docker compose up -d miner
 ```
 
 To make this work you need to set environment variables:
-* **MINER_COLDKEY_MNEMONIC** - seed phrase of miner cold key (from Step 0)
-* **MINER_HOTKEY_MNEMONIC** - seed phrase of miner hot key (from Step 0)
-* **NETWORK_UID** - Set to `222` (Solidity Audit network)
-* **NETWORK_TYPE** - Set to `test`
-* **CHAIN_ENDPOINT** - Set to `wss://test.finney.opentensor.ai:443/`
-* **EXTERNAL_IP** - external ip of machine where miner would running
+- **MINER_COLDKEY_MNEMONIC** - seed phrase of miner cold key (from Step 0)
+- **MINER_HOTKEY_MNEMONIC** - seed phrase of miner hot key (from Step 0)
+- **NETWORK_UID** - Set to `222` (Solidity Audit network)
+- **NETWORK_TYPE** - Set to `test`
+- **CHAIN_ENDPOINT** - Set to `wss://test.finney.opentensor.ai:443/`
+- **EXTERNAL_IP** - external ip of machine where miner would running
 
 If you want to name your miner for [Auditor website](https://audit.reinforced.app/) you need to edit `docker-compose.yml` and set **COLDKEY_DESCRIPTION** to wished miner name.
 
@@ -169,8 +170,8 @@ docker compose up -d validator
 ```
 
 To make this work you need to set environment variables:
-* **VALIDATOR_COLDKEY_MNEMONIC** - seed phrase of validator cold key (From Step 0)
-* **VALIDATOR_HOTKEY_MNEMONIC** - seed phrase of validator hot key (From step 0)
-* **NETWORK_UID** - Set to 222 (Solidity Audit network)
-* **NETWORK_TYPE** - Set to `test`
-* **CHAIN_ENDPOINT** - Set to `wss://test.finney.opentensor.ai:443/`
+- **VALIDATOR_COLDKEY_MNEMONIC** - seed phrase of validator cold key (From Step 0)
+- **VALIDATOR_HOTKEY_MNEMONIC** - seed phrase of validator hot key (From step 0)
+- **NETWORK_UID** - Set to 222 (Solidity Audit network)
+- **NETWORK_TYPE** - Set to `test`
+- **CHAIN_ENDPOINT** - Set to `wss://test.finney.opentensor.ai:443/`
