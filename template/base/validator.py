@@ -19,7 +19,6 @@
 
 
 import copy
-import time
 import numpy as np
 import asyncio
 import argparse
@@ -36,8 +35,6 @@ from template.base.utils.weight_utils import (
 )  # TODO: Replace when bittensor switches to numpy
 from template.mock import MockDendrite
 from template.utils.config import add_validator_args
-
-CYCLE_TIME = 3600
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -144,7 +141,6 @@ class BaseValidatorNeuron(BaseNeuron):
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-                start_time = time.time()
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
                 # Run multiple forwards concurrently.
@@ -158,10 +154,6 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.sync()
 
                 self.step += 1
-                end_time = time.time()
-                elapsed_time = end_time - start_time
-                if elapsed_time < CYCLE_TIME:
-                    time.sleep(CYCLE_TIME - elapsed_time)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:

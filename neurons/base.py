@@ -1,9 +1,14 @@
 import os
+import random
+from typing import List
 
+import numpy as np
 from websocket import WebSocketConnectionClosedException
 from template.base.miner import BaseMinerNeuron
 from template.base.validator import BaseValidatorNeuron
 from substrateinterface import SubstrateInterface, Keypair
+
+from template.utils.uids import check_uid_availability
 
 
 __all__ = ["IdentityException", "ReinforcedMinerNeuron", "ReinforcedValidatorNeuron"]
@@ -66,6 +71,32 @@ def set_identity_mixin(self: BaseMinerNeuron | BaseValidatorNeuron):
     ):
         self.subtensor.substrate.connect_websocket()
 
+def get_random_uids(self, k: int, exclude: List[int] = None) -> np.ndarray:
+    """Returns k available random uids from the metagraph.
+    Args:
+        k (int): Number of uids to return.
+        exclude (List[int]): List of uids to exclude from the random sampling.
+    Returns:
+        uids (np.ndarray): Randomly sampled available uids.
+    Notes:
+        If `k` is larger than the number of available `uids`, set `k` to the number of available `uids`.
+    """
+    exclude = set(exclude) if exclude else set()
+    
+    candidate_uids = [
+        uid
+        for uid in range(self.metagraph.n.item())
+        if check_uid_availability(
+            self.metagraph, uid, self.config.neuron.vpermit_tao_limit
+        )
+        and uid not in exclude
+    ]
+
+    k = min(k, len(candidate_uids))
+
+    uids = np.array(random.sample(candidate_uids, k))
+
+    return uids
 
 class ReinforcedMinerNeuron(BaseMinerNeuron):
     def set_identity(self):
