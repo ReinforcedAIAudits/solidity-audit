@@ -18,6 +18,7 @@
 
 
 import os
+import pickle
 import time
 from typing import List
 
@@ -187,6 +188,32 @@ class Validator(ReinforcedValidatorNeuron):
             return 1.0
         else:
             return 0.0
+        
+    def save_state(self):
+        """Saves the state of the validator to a file."""
+        bt.logging.info("Saving validator state.")
+
+        # Save the state of the validator to file.
+        state = {
+            "step": self.step,
+            "scores": self.scores,
+            "hotkeys": self.hotkeys,
+        }
+
+        with open(self.config.neuron.full_path + "/state.pkl", "wb") as f:
+            pickle.dump(state, f)
+
+
+    def load_state(self):
+        """Loads the state of the validator from a file."""
+        bt.logging.info("Loading validator state.")
+
+        with open(self.config.neuron.full_path + "/state.pkl", "rb") as f:
+            state = pickle.load(f)
+
+        self.step = state["step"]
+        self.scores = state["scores"]
+        self.hotkeys = state["hotkeys"]
 
 
 if __name__ == "__main__":

@@ -25,10 +25,9 @@ import asyncio
 import argparse
 import threading
 import bittensor as bt
-import pickle
+
 from typing import List, Union
 from traceback import print_exception
-
 
 from template.base.neuron import BaseNeuron
 from template.base.utils.weight_utils import (
@@ -371,22 +370,19 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.info("Saving validator state.")
 
         # Save the state of the validator to file.
-        state = {
-            "step": self.step,
-            "scores": self.scores,
-            "hotkeys": self.hotkeys,
-        }
-
-        with open(self.config.neuron.full_path + "/state.pkl", "wb") as f:
-            pickle.dump(state, f)
+        np.savez(
+            self.config.neuron.full_path + "/state.npz",
+            step=self.step,
+            scores=self.scores,
+            hotkeys=self.hotkeys,
+        )
 
     def load_state(self):
         """Loads the state of the validator from a file."""
         bt.logging.info("Loading validator state.")
 
-        with open(self.config.neuron.full_path + "/state.pkl", "rb") as f:
-            state = pickle.load(f)
-
+        # Load the state of the validator from file.
+        state = np.load(self.config.neuron.full_path + "/state.npz")
         self.step = state["step"]
         self.scores = state["scores"]
         self.hotkeys = state["hotkeys"]

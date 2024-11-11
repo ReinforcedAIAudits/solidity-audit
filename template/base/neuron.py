@@ -161,10 +161,9 @@ class BaseNeuron(ABC):
         ) > self.config.neuron.epoch_length and self.neuron_type != "MinerNeuron"  # don't set weights if you're a miner
 
     def save_state(self):
-        pass
-        # bt.logging.warning(
-        #     "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or other useful data."
-        # )
+        bt.logging.warning(
+            "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or other useful data."
+        )
 
     def load_state(self):
         bt.logging.warning(
