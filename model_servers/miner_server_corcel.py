@@ -106,6 +106,8 @@ def try_prepare_result(result) -> list[dict] | None:
             cleared["priorArt"] = item["priorArt"]
         if "fixedLines" in item and isinstance(item["fixedLines"], str):
             cleared["fixedLines"] = item["fixedLines"]
+        if "testCase" in item and isinstance(item["testCase"], str):
+            cleared["testCase"] = item["testCase"]
         for k in INT_KEYS:
             if isinstance(cleared[k], int) or (
                 isinstance(item[k], str) and item[k].isdigit()
@@ -137,4 +139,4 @@ async def submit(request: Request):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host='0.0.0.0', port=int(os.getenv('SERVER_PORT', '5000')))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("SERVER_PORT", "5000")))
