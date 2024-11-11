@@ -71,7 +71,7 @@ def set_identity_mixin(self: BaseMinerNeuron | BaseValidatorNeuron):
     ):
         self.subtensor.substrate.connect_websocket()
 
-def get_random_uids(self, k: int, exclude: List[int] = None) -> np.ndarray:
+def get_random_uids(self, k: int, exclude: List[int] = None) -> list:
     """Returns k available random uids from the metagraph.
     Args:
         k (int): Number of uids to return.
@@ -94,7 +94,7 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> np.ndarray:
 
     k = min(k, len(candidate_uids))
 
-    uids = np.array(random.sample(candidate_uids, k))
+    uids = random.sample(candidate_uids, k)
 
     return uids
 
