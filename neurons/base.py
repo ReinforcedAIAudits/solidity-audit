@@ -2,7 +2,6 @@ import os
 import random
 from typing import List
 
-import numpy as np
 from websocket import WebSocketConnectionClosedException
 from template.base.miner import BaseMinerNeuron
 from template.base.validator import BaseValidatorNeuron
