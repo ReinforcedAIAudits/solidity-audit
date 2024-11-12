@@ -18,6 +18,7 @@
 
 
 import os
+import pickle
 import time
 from typing import List
 
@@ -25,16 +26,16 @@ import bittensor as bt
 from dotenv import load_dotenv
 
 
-from template.utils.uids import get_random_uids
 from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ReferenceReport
 from ai_audits.contract_provider import FileContractProvider
-from neurons.base import ReinforcedValidatorNeuron
+from neurons.base import ReinforcedValidatorNeuron, get_random_uids
 
 
 CONTRACT_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "contract_templates"
 )
 PROVIDER = FileContractProvider(CONTRACT_DIR)
+CYCLE_TIME = 3600
 
 
 class Validator(ReinforcedValidatorNeuron):
@@ -42,10 +43,12 @@ class Validator(ReinforcedValidatorNeuron):
     WEIGHT_SCORE = 0.9
 
     def __init__(self, config=None):
-        super(Validator, self).__init__(config=config)
+        super().__init__(config=config)
         bt.logging.info("load_state()")
         self.load_state()
         self.set_identity()
+        self._step = 0
+        self._start_time = time.time()
 
     async def forward(self):
         """
@@ -78,7 +81,8 @@ class Validator(ReinforcedValidatorNeuron):
         synapse = AuditsSynapse(contract_code=pair.contract)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
-        self.dendrite.external_ip = "127.0.0.1"
+        if os.getenv("RUN_LOCAL", "0") != "1":
+            self.dendrite.external_ip = "127.0.0.1"
 
         responses = self.dendrite.query(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
@@ -187,6 +191,46 @@ class Validator(ReinforcedValidatorNeuron):
             return 1.0
         else:
             return 0.0
+        
+    def save_state(self):
+        """Saves the state of the validator to a file."""
+        bt.logging.info("Saving validator state.")
+
+        # Save the state of the validator to file.
+        state = {
+            "step": self.step,
+            "scores": self.scores,
+            "hotkeys": self.hotkeys,
+        }
+
+        with open(self.config.neuron.full_path + "/state.pkl", "wb") as f:
+            pickle.dump(state, f)
+
+
+    def load_state(self):
+        """Loads the state of the validator from a file."""
+        bt.logging.info("Loading validator state.")
+
+        with open(self.config.neuron.full_path + "/state.pkl", "rb") as f:
+            state = pickle.load(f)
+
+        self.step = state["step"]
+        self.scores = state["scores"]
+        self.hotkeys = state["hotkeys"]
+
+    @property
+    def step(self):
+        return self._step
+
+    @step.setter
+    def step(self, value):
+        if value > 0:
+            end_time = time.time()
+            elapsed_time = end_time - self._start_time
+            if elapsed_time < CYCLE_TIME:
+                time.sleep(CYCLE_TIME - elapsed_time)
+        self._step = value
+        self._start_time = time.time()
 
 
 if __name__ == "__main__":

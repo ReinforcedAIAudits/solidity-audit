@@ -19,16 +19,14 @@
 
 
 import copy
-import time
 import numpy as np
 import asyncio
 import argparse
 import threading
 import bittensor as bt
-import pickle
+
 from typing import List, Union
 from traceback import print_exception
-
 
 from template.base.neuron import BaseNeuron
 from template.base.utils.weight_utils import (
@@ -37,8 +35,6 @@ from template.base.utils.weight_utils import (
 )  # TODO: Replace when bittensor switches to numpy
 from template.mock import MockDendrite
 from template.utils.config import add_validator_args
-
-CYCLE_TIME = 3600
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -145,7 +141,6 @@ class BaseValidatorNeuron(BaseNeuron):
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-                start_time = time.time()
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
                 # Run multiple forwards concurrently.
@@ -159,10 +154,6 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.sync()
 
                 self.step += 1
-                end_time = time.time()
-                elapsed_time = end_time - start_time
-                if elapsed_time < CYCLE_TIME:
-                    time.sleep(CYCLE_TIME - elapsed_time)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -371,22 +362,19 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.info("Saving validator state.")
 
         # Save the state of the validator to file.
-        state = {
-            "step": self.step,
-            "scores": self.scores,
-            "hotkeys": self.hotkeys,
-        }
-
-        with open(self.config.neuron.full_path + "/state.pkl", "wb") as f:
-            pickle.dump(state, f)
+        np.savez(
+            self.config.neuron.full_path + "/state.npz",
+            step=self.step,
+            scores=self.scores,
+            hotkeys=self.hotkeys,
+        )
 
     def load_state(self):
         """Loads the state of the validator from a file."""
         bt.logging.info("Loading validator state.")
 
-        with open(self.config.neuron.full_path + "/state.pkl", "rb") as f:
-            state = pickle.load(f)
-
+        # Load the state of the validator from file.
+        state = np.load(self.config.neuron.full_path + "/state.npz")
         self.step = state["step"]
         self.scores = state["scores"]
         self.hotkeys = state["hotkeys"]
