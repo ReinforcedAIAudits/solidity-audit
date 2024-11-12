@@ -35,7 +35,6 @@ CONTRACT_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "contract_templates"
 )
 PROVIDER = FileContractProvider(CONTRACT_DIR)
-CYCLE_TIME = 3600
 
 
 class Validator(ReinforcedValidatorNeuron):
@@ -43,12 +42,11 @@ class Validator(ReinforcedValidatorNeuron):
     WEIGHT_SCORE = 0.9
 
     def __init__(self, config=None):
+        self._step = 0
         super().__init__(config=config)
         bt.logging.info("load_state()")
         self.load_state()
         self.set_identity()
-        self._step = 0
-        self._start_time = time.time()
 
     async def forward(self):
         """
@@ -225,13 +223,19 @@ class Validator(ReinforcedValidatorNeuron):
     @step.setter
     def step(self, value):
         if value > 0:
-            end_time = time.time()
-            elapsed_time = end_time - self._start_time
-            if elapsed_time < CYCLE_TIME:
-                time.sleep(CYCLE_TIME - elapsed_time)
-        self._step = value
-        self._start_time = time.time()
+            current_minute = int(time.strftime('%M'))
+            validator_time = int(os.getenv("VALIDATOR_TIME"))
 
+            if validator_time < 0 or validator_time > 59:
+                raise ValueError("VALIDATOR_TIME has incorrect value!")
+
+            if current_minute == validator_time:
+                wait_time = 3600
+            else:
+                wait_time = (validator_time - current_minute) % 60
+            time.sleep(wait_time * 60)
+
+        self._step = value
 
 if __name__ == "__main__":
     load_dotenv()
