@@ -104,12 +104,15 @@ class BaseValidatorNeuron(BaseNeuron):
                 pass
 
         except Exception as e:
-            bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
+            bt.logging.error(
+                f"Failed to create Axon initialize with exception: {e}"
+            )
             pass
 
     async def concurrent_forward(self):
         coroutines = [
-            self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)
+            self.forward()
+            for _ in range(self.config.neuron.num_concurrent_forwards)
         ]
         await asyncio.gather(*coroutines)
 
@@ -164,7 +167,9 @@ class BaseValidatorNeuron(BaseNeuron):
         # In case of unforeseen errors, the validator will log the error and continue operations.
         except Exception as err:
             bt.logging.error(f"Error during validation: {str(err)}")
-            bt.logging.debug(str(print_exception(type(err), err, err.__traceback__)))
+            bt.logging.debug(
+                str(print_exception(type(err), err, err.__traceback__))
+            )
 
     def run_in_background_thread(self):
         """
@@ -237,7 +242,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # Compute raw_weights safely
         raw_weights = self.scores / norm
 
-        bt.logging.debug("raw_weights", raw_weights.all())
+        bt.logging.debug("raw_weights", raw_weights)
         bt.logging.debug("raw_weight_uids", str(self.metagraph.uids.tolist()))
         # Process the raw weights to final_weights via subtensor limitations.
         (
@@ -250,8 +255,8 @@ class BaseValidatorNeuron(BaseNeuron):
             subtensor=self.subtensor,
             metagraph=self.metagraph,
         )
-        bt.logging.debug("processed_weights", processed_weights.all())
-        bt.logging.debug("processed_weight_uids", processed_weight_uids.all())
+        bt.logging.debug("processed_weights", processed_weights)
+        bt.logging.debug("processed_weight_uids", processed_weight_uids)
 
         # Convert to uint16 weights and uids.
         (
@@ -332,7 +337,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Handle edge case: If either rewards or uids_array is empty.
         if rewards.size == 0 or uids_array.size == 0:
-            bt.logging.info(f"rewards: {rewards}, uids_array: {uids_array.all()}")
+            bt.logging.info(f"rewards: {rewards}, uids_array: {uids_array}")
             bt.logging.warning(
                 "Either rewards or uids_array is empty. No updates will be performed."
             )
@@ -349,13 +354,15 @@ class BaseValidatorNeuron(BaseNeuron):
         # shape: [ metagraph.n ]
         scattered_rewards: np.ndarray = np.zeros_like(self.scores)
         scattered_rewards[uids_array] = rewards
-        bt.logging.debug(f"Scattered rewards: {rewards.all()}")
+        bt.logging.debug(f"Scattered rewards: {rewards}")
 
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: np.ndarray = alpha * scattered_rewards + (1 - alpha) * self.scores
-        bt.logging.debug(f"Updated moving avg scores: {self.scores.all()}")
+        self.scores: np.ndarray = (
+            alpha * scattered_rewards + (1 - alpha) * self.scores
+        )
+        bt.logging.debug(f"Updated moving avg scores: {self.scores}")
 
     def save_state(self):
         """Saves the state of the validator to a file."""
