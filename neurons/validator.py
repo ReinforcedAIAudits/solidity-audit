@@ -35,6 +35,7 @@ CONTRACT_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "contract_templates"
 )
 PROVIDER = FileContractProvider(CONTRACT_DIR)
+CYCLE_TIME = 3600
 
 
 class Validator(ReinforcedValidatorNeuron):
@@ -43,6 +44,7 @@ class Validator(ReinforcedValidatorNeuron):
 
     def __init__(self, config=None):
         self._step = 0
+        self._start_time = time.time()
         super().__init__(config=config)
         bt.logging.info("load_state()")
         self.load_state()
@@ -189,7 +191,7 @@ class Validator(ReinforcedValidatorNeuron):
             return 1.0
         else:
             return 0.0
-        
+
     def save_state(self):
         """Saves the state of the validator to a file."""
         bt.logging.info("Saving validator state.")
@@ -203,7 +205,6 @@ class Validator(ReinforcedValidatorNeuron):
 
         with open(self.config.neuron.full_path + "/state.pkl", "wb") as f:
             pickle.dump(state, f)
-
 
     def load_state(self):
         """Loads the state of the validator from a file."""
@@ -223,19 +224,25 @@ class Validator(ReinforcedValidatorNeuron):
     @step.setter
     def step(self, value):
         if value > 0:
-            current_minute = int(time.strftime('%M'))
-            validator_time = int(os.getenv("VALIDATOR_TIME"))
+            if os.getenv("VALIDATOR_TIME", None):
+                validator_time = int(os.getenv("VALIDATOR_TIME"))
+                current_minute = int(time.strftime("%M"))
+                if not 0 <= validator_time <= 59:
+                    raise ValueError("VALIDATOR_TIME has incorrect value!")
 
-            if validator_time < 0 or validator_time > 59:
-                raise ValueError("VALIDATOR_TIME has incorrect value!")
-
-            if current_minute == validator_time:
-                wait_time = 3600
+                if current_minute == validator_time:
+                    wait_time = 3600
+                else:
+                    wait_time = (validator_time - current_minute) % 60
+                time.sleep(wait_time * 60)
             else:
-                wait_time = (validator_time - current_minute) % 60
-            time.sleep(wait_time * 60)
+                elapsed_time = time.time() - self._start_time
+                if elapsed_time < CYCLE_TIME:
+                    time.sleep(CYCLE_TIME - elapsed_time)
+                self._start_time = time.time()
 
         self._step = value
+
 
 if __name__ == "__main__":
     load_dotenv()
