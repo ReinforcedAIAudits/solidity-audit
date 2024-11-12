@@ -45,6 +45,12 @@ class Validator(ReinforcedValidatorNeuron):
     def __init__(self, config=None):
         self._step = 0
         self._start_time = time.time()
+        self._validator_time_min = (
+            int(os.getenv("VALIDATOR_TIME"))
+            if 0 <= int(os.getenv("VALIDATOR_TIME", -1)) <= 59
+            else None
+        )
+
         super().__init__(config=config)
         bt.logging.info("load_state()")
         self.load_state()
@@ -224,17 +230,13 @@ class Validator(ReinforcedValidatorNeuron):
     @step.setter
     def step(self, value):
         if value > 0:
-            if os.getenv("VALIDATOR_TIME", None):
-                validator_time = int(os.getenv("VALIDATOR_TIME"))
+            if self._validator_time_min:
                 current_minute = int(time.strftime("%M"))
-                if not 0 <= validator_time <= 59:
-                    raise ValueError("VALIDATOR_TIME has incorrect value!")
-
-                if current_minute == validator_time:
-                    wait_time = 3600
+                if current_minute == self._validator_time_min:
+                    wait_time_sec = 60
                 else:
-                    wait_time = (validator_time - current_minute) % 60
-                time.sleep(wait_time * 60)
+                    wait_time_sec = (self._validator_time_min - current_minute) % 60
+                time.sleep(wait_time_sec * 60)
             else:
                 elapsed_time = time.time() - self._start_time
                 if elapsed_time < CYCLE_TIME:
