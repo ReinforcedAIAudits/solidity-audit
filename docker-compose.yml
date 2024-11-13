@@ -71,6 +71,7 @@ services:
       WORKER_TYPE: 'validator'
       BT_AXON_PORT: 8100
       COLDKEY_DESCRIPTION: ''
+      VALIDATOR_TIME: ${VALIDATOR_TIME}
     restart: unless-stopped
     networks:
       - solidity-audit

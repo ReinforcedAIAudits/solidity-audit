@@ -43,12 +43,18 @@ class Validator(ReinforcedValidatorNeuron):
     WEIGHT_SCORE = 0.9
 
     def __init__(self, config=None):
+        self._step = 0
+        self._start_time = time.time()
+        self._validator_time_min = (
+            int(os.getenv("VALIDATOR_TIME"))
+            if 0 <= int(os.getenv("VALIDATOR_TIME", -1)) <= 59
+            else None
+        )
+
         super().__init__(config=config)
         bt.logging.info("load_state()")
         self.load_state()
         self.set_identity()
-        self._step = 0
-        self._start_time = time.time()
 
     async def forward(self):
         """
@@ -191,7 +197,7 @@ class Validator(ReinforcedValidatorNeuron):
             return 1.0
         else:
             return 0.0
-        
+
     def save_state(self):
         """Saves the state of the validator to a file."""
         bt.logging.info("Saving validator state.")
@@ -205,7 +211,6 @@ class Validator(ReinforcedValidatorNeuron):
 
         with open(self.config.neuron.full_path + "/state.pkl", "wb") as f:
             pickle.dump(state, f)
-
 
     def load_state(self):
         """Loads the state of the validator from a file."""
@@ -225,12 +230,20 @@ class Validator(ReinforcedValidatorNeuron):
     @step.setter
     def step(self, value):
         if value > 0:
-            end_time = time.time()
-            elapsed_time = end_time - self._start_time
-            if elapsed_time < CYCLE_TIME:
-                time.sleep(CYCLE_TIME - elapsed_time)
+            if self._validator_time_min:
+                current_minute = int(time.strftime("%M"))
+                if current_minute == self._validator_time_min:
+                    wait_time_min = 60
+                else:
+                    wait_time_min = (self._validator_time_min - current_minute) % 60
+                time.sleep(wait_time_min * 60)
+            else:
+                elapsed_time = time.time() - self._start_time
+                if elapsed_time < CYCLE_TIME:
+                    time.sleep(CYCLE_TIME - elapsed_time)
+                self._start_time = time.time()
+
         self._step = value
-        self._start_time = time.time()
 
 
 if __name__ == "__main__":

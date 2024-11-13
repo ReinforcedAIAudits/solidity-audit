@@ -175,3 +175,4 @@ To make this work you need to set environment variables:
 - **NETWORK_UID** - Set to 222 (Solidity Audit network)
 - **NETWORK_TYPE** - Set to `test`
 - **CHAIN_ENDPOINT** - Set to `wss://test.finney.opentensor.ai:443/`
+- **VALIDATOR_TIME** - value from 0 to 59, indicates executable validator minute in hour
