@@ -150,7 +150,7 @@ def process_weights_for_netuid(
     tuple[Any, ndarray],
 ]:
     bittensor.logging.debug("process_weights_for_netuid()")
-    bittensor.logging.debug("weights", weights)
+    bittensor.logging.debug("weights", weights.all())
     bittensor.logging.debug("netuid", netuid)
     bittensor.logging.debug("subtensor", subtensor)
     bittensor.logging.debug("metagraph", metagraph)
@@ -180,7 +180,7 @@ def process_weights_for_netuid(
     if non_zero_weights.size == 0 or metagraph.n < min_allowed_weights:
         bittensor.logging.warning("No non-zero weights returning all ones.")
         final_weights = np.ones(metagraph.n) / metagraph.n
-        bittensor.logging.debug("final_weights", final_weights)
+        bittensor.logging.debug("final_weights", final_weights.all())
         return np.arange(len(final_weights)), final_weights
 
     elif non_zero_weights.size < min_allowed_weights:
@@ -197,8 +197,7 @@ def process_weights_for_netuid(
         )
         return np.arange(len(normalized_weights)), normalized_weights
 
-    bittensor.logging.debug("non_zero_weights", non_zero_weights)
-
+    bittensor.logging.debug("non_zero_weights", non_zero_weights.all())
     # Compute the exclude quantile and find the weights in the lowest quantile
     max_exclude = max(0, len(non_zero_weights) - min_allowed_weights) / len(
         non_zero_weights
@@ -214,13 +213,13 @@ def process_weights_for_netuid(
         lowest_quantile <= non_zero_weights
     ]
     non_zero_weights = non_zero_weights[lowest_quantile <= non_zero_weights]
-    bittensor.logging.debug("non_zero_weight_uids", non_zero_weight_uids)
-    bittensor.logging.debug("non_zero_weights", non_zero_weights)
+    bittensor.logging.debug("non_zero_weight_uids", non_zero_weight_uids.all())
+    bittensor.logging.debug("non_zero_weights", non_zero_weights.all())
 
     # Normalize weights and return.
     normalized_weights = normalize_max_weight(
         x=non_zero_weights, limit=max_weight_limit
     )
-    bittensor.logging.debug("final_weights", normalized_weights)
+    bittensor.logging.debug("final_weights", normalized_weights.all())
 
     return non_zero_weight_uids, normalized_weights

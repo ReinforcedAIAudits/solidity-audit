@@ -75,14 +75,16 @@ class Validator(ReinforcedValidatorNeuron):
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
 
-        pair = PROVIDER.get_random_pair()
+        if os.getenv("RUN_LOCAL", "0") == "1":
+            pair = PROVIDER.get_reentrancy()
+        else:
+            pair = PROVIDER.get_random_pair()
+            self.dendrite.external_ip = "127.0.0.1"
+
         bt.logging.info(f"task: {pair}")
 
         synapse = AuditsSynapse(contract_code=pair.contract)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
-
-        if os.getenv("RUN_LOCAL", "0") != "1":
-            self.dendrite.external_ip = "127.0.0.1"
 
         responses = self.dendrite.query(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
@@ -191,7 +193,7 @@ class Validator(ReinforcedValidatorNeuron):
             return 1.0
         else:
             return 0.0
-        
+
     def save_state(self):
         """Saves the state of the validator to a file."""
         bt.logging.info("Saving validator state.")
@@ -205,7 +207,6 @@ class Validator(ReinforcedValidatorNeuron):
 
         with open(self.config.neuron.full_path + "/state.pkl", "wb") as f:
             pickle.dump(state, f)
-
 
     def load_state(self):
         """Loads the state of the validator from a file."""
