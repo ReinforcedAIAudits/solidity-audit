@@ -233,10 +233,10 @@ class Validator(ReinforcedValidatorNeuron):
             if self._validator_time_min:
                 current_minute = int(time.strftime("%M"))
                 if current_minute == self._validator_time_min:
-                    wait_time_sec = 60
+                    wait_time_min = 60
                 else:
-                    wait_time_sec = (self._validator_time_min - current_minute) % 60
-                time.sleep(wait_time_sec * 60)
+                    wait_time_min = (self._validator_time_min - current_minute) % 60
+                time.sleep(wait_time_min * 60)
             else:
                 elapsed_time = time.time() - self._start_time
                 if elapsed_time < CYCLE_TIME:
