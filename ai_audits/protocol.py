@@ -1,4 +1,5 @@
-from typing import Optional
+from enum import Enum
+from typing import Optional, Union
 import bittensor as bt
 from pydantic import (
     AliasChoices,
@@ -6,11 +7,50 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    constr,
+    field_validator,
 )
 from pydantic.alias_generators import to_camel, to_snake
 
 
 __all__ = ["VulnerabilityReport", "ReferenceReport", "AuditsSynapse"]
+
+
+class KnownsVulnerability(str, Enum):
+    KNOWN_COMPILER_BUGS = "Known compiler bugs"
+    REENTRANCY = "Reentrancy"
+    GAS_GRIEFING = "Gas griefing"
+    ORACLE_MANIPULATION = "Oracle manipulation"
+    BAD_RANDOMNESS = "Bad randomness"
+    UNEXPECTED_PRIVILEGE_GRANTS = "Unexpected privilege grants"
+    FORCED_RECEPTION = "Forced reception"
+    INTEGER_OVERFLOW_UNDERFLOW = "Integer overflow/underflow"
+    RACE_CONDITION = "Race condition"
+    UNGUARDED_FUNCTION = "Unguarded function"
+    INEFFICIENT_STORAGE_KEY = "Inefficient storage key"
+    FRONT_RUNNING_POTENTIAL = "Front-running potential"
+    MINER_MANIPULATION = "Miner manipulation"
+    STORAGE_COLLISION = "Storage collision"
+    SIGNATURE_REPLAY = "Signature replay"
+    UNSAFE_OPERATION = "Unsafe operation"
+
+
+class OtherVulnerability(BaseModel):
+    description: constr(strip_whitespace=True, min_length=1)
+
+    def __str__(self):
+        return f"Other({self.description})"
+
+
+class VulnerabilityClass(BaseModel):
+    type: Union[KnownsVulnerability, OtherVulnerability]
+
+    @field_validator("type", mode="before")
+    def validate_type(cls, v):
+        if isinstance(v, str) and v not in KnownsVulnerability._value2member_map_:
+            # Treat as OtherVulnerability if it's a custom string
+            return OtherVulnerability(description=v)
+        return v
 
 
 class VulnerabilityReport(BaseModel):
@@ -38,7 +78,7 @@ class VulnerabilityReport(BaseModel):
         validation_alias=AliasChoices("to", "to_line", "toLine"),
     )
     # TODO: It needs to be an enum?
-    vulnerability_class: str = Field(
+    vulnerability_class: VulnerabilityClass = Field(
         ...,
         title="Vulnerability Class",
         description="The category of the vulnerability. E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, Unchecked call, Gas grief, Unguarded function, Invalid Code, et cetera.",
@@ -63,6 +103,14 @@ class VulnerabilityReport(BaseModel):
         title="Fixed Lines",
         description="Fixed version of the original source.",
     )
+
+    @field_validator("vulnerability_class", mode="before")
+    def validate_vulnerability_class(cls, v):
+        if isinstance(v, str):
+            if v not in KnownsVulnerability._value2member_map_:
+                return VulnerabilityClass(type=OtherVulnerability(description=v))
+            return VulnerabilityClass(type=KnownsVulnerability(v))
+        return v
 
 
 class ReferenceReport(VulnerabilityReport):
