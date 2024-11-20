@@ -26,16 +26,12 @@ import bittensor as bt
 from dotenv import load_dotenv
 
 
-from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ReferenceReport
-from ai_audits.contract_provider import FileContractProvider
+from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ValidatorTask
+from ai_audits.subnet_utils import create_session, is_synonyms
 from neurons.base import ReinforcedValidatorNeuron, get_random_uids
 
 
-CONTRACT_DIR = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "contract_templates"
-)
-PROVIDER = FileContractProvider(CONTRACT_DIR)
-CYCLE_TIME = 3600
+CYCLE_TIME = int(os.getenv("VALIDATOR_SEND_REQUESTS_EVERY_X_SECS", "3600"))
 
 
 class Validator(ReinforcedValidatorNeuron):
@@ -55,6 +51,23 @@ class Validator(ReinforcedValidatorNeuron):
         bt.logging.info("load_state()")
         self.load_state()
         self.set_identity()
+
+    @classmethod
+    def get_audit_task(cls, vulnerability_type: str | None = None) -> ValidatorTask:
+        result = create_session().post(
+            f"{os.getenv('MODEL_SERVER')}/task",
+            *([] if vulnerability_type is None else [vulnerability_type]),
+            headers={"Content-Type": "text/plain"},
+        )
+
+        if result.status_code != 200:
+            bt.logging.info(f"Not successful AI response. Description: {result.text}")
+            raise ValueError("Unable to receive task from MODEL_SERVER!")
+
+        json = result.json()
+        bt.logging.info(f"Response from model server: {json}")
+        task = ValidatorTask(**json)
+        return task
 
     async def forward(self):
         """
@@ -81,10 +94,10 @@ class Validator(ReinforcedValidatorNeuron):
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
 
-        pair = PROVIDER.get_random_pair()
-        bt.logging.info(f"task: {pair}")
+        task = self.get_audit_task()
+        bt.logging.info(f"task: {task}")
 
-        synapse = AuditsSynapse(contract_code=pair.contract)
+        synapse = AuditsSynapse(contract_code=task.contract_code)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
         if os.getenv("RUN_LOCAL", "0") != "1":
@@ -98,7 +111,7 @@ class Validator(ReinforcedValidatorNeuron):
         )
         bt.logging.info(f"Received responses: {responses}")
 
-        rewards = self.validate_responses(responses, pair.reference_report)
+        rewards = self.validate_responses(responses, task)
 
         bt.logging.info(f"Scored responses: {rewards}")
 
@@ -107,10 +120,8 @@ class Validator(ReinforcedValidatorNeuron):
     def validate_responses(
         self,
         responses: List[AuditsSynapse],
-        reference_report: List[ReferenceReport] = None,
+        task: ValidatorTask = None,
     ) -> List[float]:
-        if reference_report is None:
-            reference_report = []
         axon_info = self.axon.info()
         times = [
             x.dendrite.process_time
@@ -127,10 +138,11 @@ class Validator(ReinforcedValidatorNeuron):
 
         for synapse in responses:
             bt.logging.debug(
-                f"synapse: axon hotkey: {synapse.axon.hotkey} | is success: {synapse.is_success} |  is blacklisted: {synapse.is_blacklist} | message: {synapse.axon.status_message}"
+                f"synapse: axon hotkey: {synapse.axon.hotkey} | is success: {synapse.is_success} | "
+                f"is blacklisted: {synapse.is_blacklist} | message: {synapse.axon.status_message}"
             )
             scores_by_report = (
-                self.validate_reports_by_reference(synapse.response, reference_report)
+                self.validate_reports_by_reference(synapse.response, task)
                 * self.WEIGHT_SCORE
             )
             scores_by_time = (
@@ -150,50 +162,29 @@ class Validator(ReinforcedValidatorNeuron):
     def validate_reports_by_reference(
         cls,
         report: List[VulnerabilityReport] | None,
-        reference_report: List[ReferenceReport],
+        task: ValidatorTask,
     ) -> float:
-        if report is None or not reference_report:
+        if report is None or not task:
             return 0.0
 
-        reference_count = len(reference_report)
-        max_vuln = {}
-
-        for ref in reference_report:
-            for vuln in ref.vulnerability_class:
-                max_vuln[vuln] = max_vuln.get(vuln, 0) + 1
-        report_vuln = {}
-
-        for rep in report:
-            vuln_class = rep.vulnerability_class.lower()
-            if vuln_class not in max_vuln:
-                # Unknown vulnerability for template, unscored
-                continue
-            report_vuln[vuln_class] = report_vuln.get(vuln_class, 0) + 1
-            if report_vuln[vuln_class] > max_vuln[vuln_class]:
-                # Found extra vulnerability, unknown by template, unscored
-                report_vuln[vuln_class] = max_vuln[vuln_class]
-
-        report_count = sum(report_vuln.values())
-
+        vulnerabilities_found = [x.vulnerability_class for x in report]
+        score = 1.0 if any(is_synonyms(task.vulnerability_class, vuln) for vuln in vulnerabilities_found) else 0.0
         # # The number of detected vulnerabilities must match the template. Otherwise, reduce scores
-        # if report_count > reference_count:
-        #     report_count = reference_count - abs(report_count - reference_count)
-        # if report_count < 0:
-        #     report_count = 0
+        # if len(vulnerabilities_found) > 1:
+        #     score = score / len(vulnerabilities_found)
 
         # Currently, we forgive the miner for identifying additional vulnerabilities
-        # due to the imperfection of the templates
-        if report_count > reference_count:
-            report_count = reference_count
-        return report_count / reference_count
+        # due to the imperfection of LLM generation
+
+        return score
 
     # TODO: This function is currently unused, but may be useful in the future.
     #  Consider re-evaluating its necessity before removing.
     @classmethod
     def validate_report(
-        cls, report: VulnerabilityReport, reference_report: ReferenceReport
+        cls, report: VulnerabilityReport, task: ValidatorTask
     ) -> float:
-        if report.vulnerability_class.lower() in reference_report.vulnerability_class:
+        if is_synonyms(task.vulnerability_class, report.vulnerability_class):
             return 1.0
         else:
             return 0.0

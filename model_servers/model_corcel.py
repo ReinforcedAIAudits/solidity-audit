@@ -3,7 +3,7 @@ import os
 
 from fastapi import FastAPI, Request, HTTPException
 
-from model_servers.subnet_utils import create_session, preprocess_text, ROLES
+from ai_audits.subnet_utils import create_session, preprocess_text, ROLES
 
 
 app = FastAPI()

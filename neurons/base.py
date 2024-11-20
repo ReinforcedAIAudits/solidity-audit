@@ -97,6 +97,7 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> list:
 
     return uids
 
+
 class ReinforcedMinerNeuron(BaseMinerNeuron):
     def set_identity(self):
         set_identity_mixin(self)

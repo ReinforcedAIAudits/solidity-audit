@@ -13,10 +13,10 @@ from pydantic import (
 from pydantic.alias_generators import to_camel, to_snake
 
 
-__all__ = ["VulnerabilityReport", "ReferenceReport", "AuditsSynapse"]
+__all__ = ["VulnerabilityReport", "AuditsSynapse", "ValidatorTask", "KnownVulnerability"]
 
 
-class KnownsVulnerability(str, Enum):
+class KnownVulnerability(str, Enum):
     KNOWN_COMPILER_BUGS = "Known compiler bugs"
     REENTRANCY = "Reentrancy"
     GAS_GRIEFING = "Gas griefing"
@@ -36,24 +36,24 @@ class KnownsVulnerability(str, Enum):
 
 
 class OtherVulnerability(BaseModel):
-    description: constr(strip_whitespace=True, min_length=1)
+    description: constr(strip_whitespace=True)
 
     def __str__(self):
         return f"Other({self.description})"
 
 
 class VulnerabilityClass(BaseModel):
-    type: Union[KnownsVulnerability, OtherVulnerability]
+    type: Union[KnownVulnerability, OtherVulnerability]
 
     @field_validator("type", mode="before")
     def validate_type(cls, v):
-        if isinstance(v, str) and v not in KnownsVulnerability._value2member_map_:
+        if isinstance(v, str) and v not in KnownVulnerability._value2member_map_:
             # Treat as OtherVulnerability if it's a custom string
             return OtherVulnerability(description=v)
         return v
 
 
-class VulnerabilityReport(BaseModel):
+class AuditBase(BaseModel):
     model_config = ConfigDict(
         alias_generator=AliasGenerator(
             validation_alias=lambda field_name: AliasChoices(
@@ -77,12 +77,24 @@ class VulnerabilityReport(BaseModel):
         serialization_alias="to",
         validation_alias=AliasChoices("to", "to_line", "toLine"),
     )
-    # TODO: It needs to be an enum?
-    vulnerability_class: VulnerabilityClass = Field(
+    vulnerability_class: str = Field(
         ...,
         title="Vulnerability Class",
-        description="The category of the vulnerability. E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, Unchecked call, Gas grief, Unguarded function, Invalid Code, et cetera.",
+        description="The category of the vulnerability. "
+                    "E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, "
+                    "Unchecked call, Gas griefing, Unguarded function, Invalid Code, et cetera.",
     )
+
+    # @field_validator("vulnerability_class", mode="before")
+    # def validate_vulnerability_class(cls, v):
+    #     if isinstance(v, str):
+    #         if v not in KnownVulnerability._value2member_map_:
+    #             return VulnerabilityClass(type=OtherVulnerability(description=v))
+    #         return VulnerabilityClass(type=KnownVulnerability(v))
+    #     return v
+
+
+class VulnerabilityReport(AuditBase):
     test_case: Optional[str] = Field(
         None,
         title="Test Case",
@@ -104,21 +116,9 @@ class VulnerabilityReport(BaseModel):
         description="Fixed version of the original source.",
     )
 
-    @field_validator("vulnerability_class", mode="before")
-    def validate_vulnerability_class(cls, v):
-        if isinstance(v, str):
-            if v not in KnownsVulnerability._value2member_map_:
-                return VulnerabilityClass(type=OtherVulnerability(description=v))
-            return VulnerabilityClass(type=KnownsVulnerability(v))
-        return v
 
-
-class ReferenceReport(VulnerabilityReport):
-    vulnerability_class: list[str] = Field(
-        default_factory=list,
-        title="Vulnerability Class",
-        description="The category of the vulnerability. E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, Unchecked call, Gas grief, Unguarded function, et cetera.",
-    )
+class ValidatorTask(AuditBase):
+    contract_code: str = Field(..., title="Contract code", description="Code of vulnerable contract")
 
 
 class AuditsSynapse(bt.Synapse):

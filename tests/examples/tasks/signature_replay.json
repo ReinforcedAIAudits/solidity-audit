@@ -1,0 +1,6 @@
+{
+  "from": 22,
+  "to": 22,
+  "vulnerabilityClass": "Signature replay",
+  "contractCode": "pragma solidity ^0.8.0;\n\ncontract UniqueSignature {\n    mapping(address => mapping(uint256 => bool)) public usedSignatures;\n    mapping(address => uint256) public nonces;\n\n    event ActionExecuted(address indexed user, uint256 indexed nonce);\n\n    function executeAction(uint256 nonce, bytes memory signature) public {\n        require(!usedSignatures[msg.sender][nonce], \"Signature already used\");\n        bytes32 message = keccak256(abi.encodePacked(msg.sender, nonce));\n        require(recoverSigner(message, signature) == msg.sender, \"Invalid signature\");\n\n        usedSignatures[msg.sender][nonce] = true;\n        nonces[msg.sender]++;\n\n        emit ActionExecuted(msg.sender, nonce);\n    }\n\n    function recoverSigner(bytes32 message, bytes memory signature) internal pure returns (address) {\n        (bytes32 r, bytes32 s, uint8 v) = splitSignature(signature);\n        return ecrecover(message, v, r, s);\n    }\n\n    function splitSignature(bytes memory sig) internal pure returns (bytes32 r, bytes32 s, uint8 v) {\n        require(sig.length == 65, \"Invalid signature length\");\n        assembly {\n            r := mload(add(sig, 32))\n            s := mload(add(sig, 64))\n            v := byte(0, mload(add(sig, 96)))\n        }\n    }\n}"
+}
