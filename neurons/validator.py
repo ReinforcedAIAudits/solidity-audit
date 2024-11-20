@@ -75,10 +75,11 @@ class Validator(ReinforcedValidatorNeuron):
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
 
-        if os.getenv("RUN_LOCAL", "0") == "1":
+        pair = PROVIDER.get_random_pair()
+        if os.getenv("RUN_DUMMY", "").lower() == "true":
             pair = PROVIDER.get_reentrancy()
-        else:
-            pair = PROVIDER.get_random_pair()
+
+        if os.getenv("RUN_LOCAL", "").lower() != "true":
             self.dendrite.external_ip = "127.0.0.1"
 
         bt.logging.info(f"task: {pair}")
