@@ -82,13 +82,16 @@ class Validator(ReinforcedValidatorNeuron):
         bt.logging.info(f"Self UID: {self.uid}")
 
         pair = PROVIDER.get_random_pair()
+        if os.getenv("RUN_DUMMY", "").lower() == "true":
+            pair = PROVIDER.get_reentrancy()
+
+        if os.getenv("RUN_LOCAL", "").lower() != "true":
+            self.dendrite.external_ip = "127.0.0.1"
+
         bt.logging.info(f"task: {pair}")
 
         synapse = AuditsSynapse(contract_code=pair.contract)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
-
-        if os.getenv("RUN_LOCAL", "0") != "1":
-            self.dendrite.external_ip = "127.0.0.1"
 
         responses = self.dendrite.query(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],

@@ -134,3 +134,6 @@ class FileContractProvider:
         random_pair = random.choice(self._pairs)
 
         return self.read_files(random_pair)
+    
+    def get_reentrancy(self) -> TemplatePair:
+        return self.read_files(next(pair for pair in self._pairs if 'wallet' in pair.base_path))

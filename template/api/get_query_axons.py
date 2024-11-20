@@ -84,7 +84,9 @@ async def get_query_api_nodes(dendrite, metagraph, n=0.1, timeout=3):
         for uid in metagraph.uids
         if metagraph.validator_trust[uid] > 0
     ]
-    top_uids = np.where(metagraph.S > np.quantile(metagraph.S, 1 - n))[0].tolist()
+    top_uids = np.where(metagraph.S > np.quantile(metagraph.S, 1 - n))[
+        0
+    ].tolist()
     init_query_uids = set(top_uids).intersection(set(vtrust_uids))
     query_uids, _ = await ping_uids(
         dendrite, metagraph, list(init_query_uids), timeout=timeout
