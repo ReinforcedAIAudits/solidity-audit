@@ -32,7 +32,7 @@ class SoloChainHelper(object):
         self.substrate = None
         self.subtensor = None
         self.network_url = (
-            os.getenv("CHAIN_ENDPOINT", "ws://127.0.0.1:9946")
+            os.getenv("CHAIN_ENDPOINT", "ws://127.0.0.1:9944")
             if network_url is None
             else network_url
         )

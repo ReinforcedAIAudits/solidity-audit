@@ -4,8 +4,8 @@ services:
       context: ..
       dockerfile: .localnet/Dockerfile
       args:
-        BRANCH: v1.1.6
+        BRANCH: v1.1.8
     container_name: subtensor_localnet
     ports:
-      - 9946:9946
+      - 9944:9944
     restart: unless-stopped

@@ -153,7 +153,7 @@ TBD
 `NET_UID` must be `222`, `NETWORK_TYPE` must be `test` AND `CHAIN_ENDPOINT` must be `wss://test.finney.opentensor.ai:443/`
 
 ### For localnet
-`NETWORK_TYPE` must be `local` and `CHAIN_ENDPOINT` must be `ws://127.0.0.1:9946`
+`NETWORK_TYPE` must be `local` and `CHAIN_ENDPOINT` must be `ws://127.0.0.1:9944`
 
 > IMPORTANT: Do not run more than one miner per machine. Running multiple miners will result in the loss of incentive and emissions on all miners.
 
@@ -182,9 +182,9 @@ TBD
 `NET_UID` must be `222`, `NETWORK_TYPE` must be `test` AND `CHAIN_ENDPOINT` must be `wss://test.finney.opentensor.ai:443/`
 
 ### For localnet
-`NETWORK_TYPE` must be `local` and `CHAIN_ENDPOINT` must be `ws://127.0.0.1:9946`
+`NETWORK_TYPE` must be `local` and `CHAIN_ENDPOINT` must be `ws://127.0.0.1:9944`
 
-> NOTE: if you run a validator in testnet do not forget to add the argument `--subtensor.network test` or `--subtensor.chain_endpoint ws://<LOCAL_SUBTENSOR_IP>:9946` (the local subtensor has to target the network testnet)
+> NOTE: if you run a validator in testnet do not forget to add the argument `--subtensor.network test` or `--subtensor.chain_endpoint ws://<LOCAL_SUBTENSOR_IP>:9944` (the local subtensor has to target the network testnet)
 
 ## Installation (docker) <a id="install-docker"></a>
 
