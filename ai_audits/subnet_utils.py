@@ -1,7 +1,8 @@
 import requests
+import solcx
 
 
-__all__ = ['create_session', 'preprocess_text', 'ROLES', 'is_synonyms']
+__all__ = ['create_session', 'preprocess_text', 'ROLES', 'is_synonyms', 'SolcSingleton']
 
 
 class ROLES(object):
@@ -12,13 +13,17 @@ class ROLES(object):
 
 class SynonymsSingleton(object):
     SYNONYMS = (
-        ('Missing Check on Signature Recovery', 'Signature replay'),
+        ('Missing Check on Signature Recovery', 'Signature replay', 'Authorization Issue'),
         ('Gas griefing', 'Gas grief', 'unchecked call'),
         (
             'Unguarded function', 'Missed access check', '(un?)intentional backdoor',
-            'Unprotected function', 'Unexpected privilege grants'
+            'Unprotected function', 'Unexpected privilege grants', 'Unsecured Function'
         ),
-        ('Invalid code', 'Invalid')
+        ('Invalid code', 'Invalid'),
+        ('Forced reception', 'Forced Ether Reception'),
+        ('Arithmetic Overflow', 'Integer overflow', 'Integer overflow/underflow'),
+        ('Bad randomness', 'Predictable Random Number', 'Predictable Randomness'),
+        ('Arithmetic Reentrancy', 'Reentrancy')
     )
 
     def __init__(self):
@@ -68,3 +73,18 @@ def is_synonyms(expected_result: str, answer: str) -> bool:
     if answer == expected_result:
         return True
     return answer in synonyms_instance.synonyms.get(expected_result, set())
+
+
+class SolcSingleton(object):
+    def __init__(self):
+        self.all_versions = solcx.get_installable_solc_versions()
+
+    def install_solc(self):
+        installed_versions = solcx.get_installed_solc_versions()
+        to_install = [x for x in self.all_versions if x not in installed_versions]
+        for version in to_install:
+            solcx.install_solc(version)
+
+    def compile(self, code: str):
+        suggested_version = solcx.install.select_pragma_version(code, self.all_versions)
+        return solcx.compile_source(code, solc_version=suggested_version, output_values=['abi', 'bin', 'metadata'])

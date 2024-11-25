@@ -100,8 +100,8 @@ class VulnerabilityReport(AuditBase):
         title="Test Case",
         description="A code example that exploits the vulnerability.",
     )
-    description: str = Field(
-        ...,
+    description: Optional[str] = Field(
+        None,
         title="Description",
         description="Human-readable vulnerability description, in markdown",
     )

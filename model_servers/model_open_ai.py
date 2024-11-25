@@ -6,13 +6,15 @@ from pydantic import BaseModel
 from openai import AsyncOpenAI
 
 from ai_audits.protocol import VulnerabilityReport, ValidatorTask, KnownVulnerability
-from ai_audits.subnet_utils import preprocess_text, ROLES
+from ai_audits.subnet_utils import preprocess_text, ROLES, SolcSingleton
 
 
 # OpenAI wants response top-level entity to be an object.
 class AuditResponse(BaseModel):
     result: list[VulnerabilityReport]
 
+
+solc = SolcSingleton()
 
 client = AsyncOpenAI()
 app = FastAPI()
@@ -97,7 +99,7 @@ async def generate_audit(source: str):
         return None
 
 
-async def generate_task(requested_vulnerability: str | None = None):
+async def generate_task(requested_vulnerability: str | None = None) -> ValidatorTask:
     possible_vulnerabilities = random.sample(
         VULNERABILITIES_TO_GENERATE, min(3, len(VULNERABILITIES_TO_GENERATE))
     ) if requested_vulnerability is None else [requested_vulnerability]
@@ -137,13 +139,28 @@ async def get_task(request: Request):
     requested_vulnerability = (await request.body()).decode("utf-8")
     if requested_vulnerability not in VULNERABILITIES_TO_GENERATE:
         requested_vulnerability = None
-    validator_template = await generate_task(requested_vulnerability)
-    if validator_template is None:
+    tries = int(os.getenv("MAX_TRIES", "3"))
+    is_valid, validator_template = False, None
+    while tries > 0:
+        tries -= 1
+        validator_template = await generate_task(requested_vulnerability)
+        if validator_template is None:
+            continue
+        try:
+            solc.compile(validator_template.contract_code)
+        except:
+            continue
+        if validator_template is not None:
+            is_valid = True
+            break
+    if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
     return validator_template
 
 
 if __name__ == "__main__":
     import uvicorn
+
+    solc.install_solc()
 
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("SERVER_PORT", "5000")))

@@ -3,7 +3,7 @@ import unittest
 from ai_audits.protocol import VulnerabilityReport, ValidatorTask
 from neurons.validator import Validator
 
-DEFAULT_FIELDS = {'from': 1, 'to': 1, 'testCase': '', 'description': '', 'fixedLines': ''}
+DEFAULT_FIELDS = {'from': 1, 'to': 1}
 DEFAULT_TASK_FIELDS = {'from': 1, 'to': 1, 'contractCode': ''}
 
 
