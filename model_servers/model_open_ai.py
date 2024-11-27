@@ -24,17 +24,19 @@ GPT_MODEL = "gpt-4o-mini-2024-07-18"
 
 
 PROMPT = """
-You're a smart contract auditor. 
-Given contract source code with explicitly specified line numbers, you need to provide your audit report. 
+You are a Solidity smart contract auditor. 
+Given the source code of a contract with explicitly specified line numbers in comments, your task is to provide an audit report.
 
-If the source code is invalid or cannot be meaningfully analyzed:
-- Generate a single vulnerability report entry with the following details:
-  - from_line: 1 (start of the code)
-  - to_line: the total number of lines in the code
-  - vulnerability_class: "Invalid Code"
-  - description: A message stating that the entire code is considered invalid for audit processing.
-
-Otherwise, analyze and report any specific vulnerabilities with their line ranges, descriptions, and fixes.
+- If the source code is not valid Solidity code (only if it cannot be compiled), generate a single vulnerability report entry with the following details:
+ - from_line: 1 (start of the code)
+ - to_line: the total number of lines in the code
+ - vulnerability_class: "Invalid Code"
+ - description: A message indicating that the entire code is considered invalid for audit processing.
+- If the source code is valid, analyze and report specific vulnerabilities, providing:
+ - The line range (from_line and to_line) of each vulnerability.
+ - A brief description of the vulnerability.
+ - Suggestions for fixes.
+- If no vulnerabilities are found in the source code, generate an audit report without any entries.
 """.strip()
 
 PROMPT_VALIDATOR = """
@@ -52,20 +54,20 @@ Ensure that the contract code is valid and can be successfully compiled.
 VULNERABILITIES_TO_GENERATE = [
     # KnownVulnerability.KNOWN_COMPILER_BUGS.value,  # ambiguous, skip this
     KnownVulnerability.REENTRANCY.value,  # works
-    KnownVulnerability.GAS_GRIEFING.value,  # works
+    KnownVulnerability.GAS_GRIEFING.value,  # works good, but llama 70b don't mind about it
     # KnownVulnerability.ORACLE_MANIPULATION.value,  # doesn't works
     KnownVulnerability.BAD_RANDOMNESS.value,  # works
     # KnownVulnerability.UNEXPECTED_PRIVILEGE_GRANTS.value,  # doesn't works
     KnownVulnerability.FORCED_RECEPTION.value,  # partially works
     # KnownVulnerability.INTEGER_OVERFLOW_UNDERFLOW.value,  # doesn't works
-    KnownVulnerability.RACE_CONDITION.value,  # partially works
+    # KnownVulnerability.RACE_CONDITION.value,  # partially works
     KnownVulnerability.UNGUARDED_FUNCTION.value,  # works
     # KnownVulnerability.INEFFICIENT_STORAGE_KEY.value,  # doesn't works
     # KnownVulnerability.FRONT_RUNNING_POTENTIAL.value,  # doesn't works
     # KnownVulnerability.MINER_MANIPULATION.value,  # doesn't works
     # KnownVulnerability.STORAGE_COLLISION.value,  # doesn't works
     KnownVulnerability.SIGNATURE_REPLAY.value,  # works
-    KnownVulnerability.UNSAFE_OPERATION.value,  # works
+    # KnownVulnerability.UNSAFE_OPERATION.value,  # partially works
 ]
 
 

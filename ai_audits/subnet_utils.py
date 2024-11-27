@@ -13,17 +13,26 @@ class ROLES(object):
 
 class SynonymsSingleton(object):
     SYNONYMS = (
-        ('Missing Check on Signature Recovery', 'Signature replay', 'Authorization Issue'),
-        ('Gas griefing', 'Gas grief', 'unchecked call'),
+        (
+            'Missing Check on Signature Recovery', 'Signature replay', 'Authorization Issue',
+            'Invalid Signature Handling', 'Invalid Signature Length', 'Replay Attack', 'Signature Malleability',
+            'Signature Length Validation', 'Authorization Bypass', 'ECDSA Signature Malleability',
+            'Unsecured Use of Keccak256', 'Vulnerability in Signature Management', 'Invalid Signature Recovery',
+            'Incorrect Signature Verification'
+        ),
+        ('Gas griefing', 'Gas grief', 'unchecked call', 'Gas Limit DoS', 'Denial of Service'),
         (
             'Unguarded function', 'Missed access check', '(un?)intentional backdoor',
             'Unprotected function', 'Unexpected privilege grants', 'Unsecured Function'
         ),
         ('Invalid code', 'Invalid'),
-        ('Forced reception', 'Forced Ether Reception'),
+        ('Forced reception', 'Forced Ether Reception', 'Forced ETH Reception'),
         ('Arithmetic Overflow', 'Integer overflow', 'Integer overflow/underflow'),
-        ('Bad randomness', 'Predictable Random Number', 'Predictable Randomness'),
-        ('Arithmetic Reentrancy', 'Reentrancy')
+        (
+            'Bad randomness', 'Predictable Random Number', 'Predictable Randomness', 'Timestamp Dependence',
+            'Weak Randomness', 'Unsecured Randomness', 'Unsecured Random Number Generation'
+        ),
+        ('Arithmetic Reentrancy', 'Reentrancy', 'Vulnerable to Reentrancy')
     )
 
     def __init__(self):
@@ -63,7 +72,7 @@ def preprocess_text(text: str):
     Good implementation of this function should also process whitespace, remove empty lines, format comments, etc.
     """
     lines = text.splitlines()
-    numbered_lines = [f"Line {i + 1}: {line}" for i, line in enumerate(lines)]
+    numbered_lines = [f"/* Line {i + 1}: */ {line}" for i, line in enumerate(lines)]
     return "\n".join(numbered_lines)
 
 
