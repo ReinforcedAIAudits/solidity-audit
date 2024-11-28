@@ -17,6 +17,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 
+import asyncio
 import os
 import pickle
 import time
@@ -30,7 +31,7 @@ from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ValidatorTask
 from ai_audits.subnet_utils import create_session, is_synonyms
 from neurons.base import ReinforcedValidatorNeuron, get_random_uids
 
-
+load_dotenv()
 CYCLE_TIME = int(os.getenv("VALIDATOR_SEND_REQUESTS_EVERY_X_SECS", "3600"))
 
 
@@ -43,7 +44,8 @@ class Validator(ReinforcedValidatorNeuron):
         self._start_time = time.time()
         self._validator_time_min = (
             int(os.getenv("VALIDATOR_TIME"))
-            if 0 <= int(os.getenv("VALIDATOR_TIME", -1)) <= 59
+            if os.getenv("VALIDATOR_TIME")
+            and 0 <= int(os.getenv("VALIDATOR_TIME")) <= 59
             else None
         )
 
@@ -94,8 +96,29 @@ class Validator(ReinforcedValidatorNeuron):
         bt.logging.info(f"Selected UIDs: {miner_uids}")
         bt.logging.info(f"Self UID: {self.uid}")
 
-        task = self.get_audit_task()
-        bt.logging.info(f"task: {task}")
+        max_retries_to_get_tasks = 10
+        retry_delay = 10
+
+        for attempt in range(max_retries_to_get_tasks):
+            try:
+                task = self.get_audit_task()
+                bt.logging.info(f"task: {task}")
+                break
+            except ValueError as e:
+                bt.logging.warning(
+                    f"Attempt {attempt + 1}/{max_retries_to_get_tasks} failed: {str(e)}"
+                )
+                if attempt < max_retries_to_get_tasks - 1:
+                    bt.logging.info(
+                        f"Waiting {retry_delay} seconds before next attempt..."
+                    )
+                    await asyncio.sleep(retry_delay)
+                else:
+                    bt.logging.error("Max retries reached. Unable to get audit task.")
+                    return
+
+        if os.getenv("RUN_LOCAL", "").lower() != "true":
+            self.dendrite.external_ip = "127.0.0.1"
 
         synapse = AuditsSynapse(contract_code=task.contract_code)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
@@ -165,7 +188,14 @@ class Validator(ReinforcedValidatorNeuron):
             return 0.0
 
         vulnerabilities_found = [x.vulnerability_class for x in report]
-        score = 1.0 if any(is_synonyms(task.vulnerability_class, vuln) for vuln in vulnerabilities_found) else 0.0
+        score = (
+            1.0
+            if any(
+                is_synonyms(task.vulnerability_class, vuln)
+                for vuln in vulnerabilities_found
+            )
+            else 0.0
+        )
         # # The number of detected vulnerabilities must match the template. Otherwise, reduce scores
         # if len(vulnerabilities_found) > 1:
         #     score = score / len(vulnerabilities_found)
@@ -178,9 +208,7 @@ class Validator(ReinforcedValidatorNeuron):
     # TODO: This function is currently unused, but may be useful in the future.
     #  Consider re-evaluating its necessity before removing.
     @classmethod
-    def validate_report(
-        cls, report: VulnerabilityReport, task: ValidatorTask
-    ) -> float:
+    def validate_report(cls, report: VulnerabilityReport, task: ValidatorTask) -> float:
         if is_synonyms(task.vulnerability_class, report.vulnerability_class):
             return 1.0
         else:
@@ -235,7 +263,6 @@ class Validator(ReinforcedValidatorNeuron):
 
 
 if __name__ == "__main__":
-    load_dotenv()
     with Validator() as validator:
         while True:
             bt.logging.info(f"Validator running... {time.time()}")
