@@ -52,8 +52,6 @@ class Validator(ReinforcedValidatorNeuron):
 
         self._buffer_scores = ScoresBuffer(self.MAX_BUFFER)
         super().__init__(config=config)
-        bt.logging.info("load_state()")
-        self.load_state()
         self.set_identity()
 
     @classmethod
@@ -72,6 +70,10 @@ class Validator(ReinforcedValidatorNeuron):
         bt.logging.info(f"Response from model server: {json}")
         task = ValidatorTask(**json)
         return task
+
+    def sync(self):
+        self.load_state()
+        return super().sync()
 
     async def forward(self):
         """
@@ -252,16 +254,19 @@ class Validator(ReinforcedValidatorNeuron):
     def load_state(self):
         """Loads the state of the validator from a file."""
         bt.logging.info("Loading validator state.")
+        try:
+            with open(self.config.neuron.full_path + "/state.pkl", "rb") as f:
+                state = pickle.load(f)
 
-        with open(self.config.neuron.full_path + "/state.pkl", "rb") as f:
-            state = pickle.load(f)
-
-        self.step = state["step"]
-        self.scores = state["scores"]
-        buf = ScoresBuffer(self.MAX_BUFFER)
-        buf.load(state.get("buffer_scores", {}))
-        self._buffer_scores = buf
-        self.hotkeys = state["hotkeys"]
+            self.step = state["step"]
+            self.scores = state["scores"]
+            buf = ScoresBuffer(self.MAX_BUFFER)
+            buf.load(state.get("buffer_scores", {}))
+            self._buffer_scores = buf
+            self.hotkeys = state["hotkeys"]
+        except FileNotFoundError():
+            bt.logging.error("State file is not found.")
+            self.save_state()
 
     @property
     def step(self):
