@@ -70,16 +70,16 @@ Example of an audit JSON object:
 
 ## Validator Operation Principle
 
-Vulnerable contracts for miners are generated using LLM and are entirely random. 
+The validator receives a completely random contract from the LLM, enriches it with vulnerabilities, ensures that the contract remains valid (by performing a full compilation via `solc`), and knows the type of the vulnerability in advance. The contract is then sent to miners for evaluation, and the types of vulnerabilities identified by miners are compared with the expected ones (accounting for synonyms).
 
-Currently, validators operate solely based on the OpenAI model server. In the future, we plan to support task generation using Corcel, as well as provide an example for local models.
+The generation of fully random templates via LLM is currently implemented using OpenAI and Corcel. An example validator for a local model is expected soon.
 
 ## Development Roadmap
 
 - Improvement of Validator Heuristics
   - Extend validation to check not only vulnerability classes but also the specific lines of code affected and the fix proposed by the model.
-- Expanding Contract Templates
-  - Add more contract templates to enhance the validator's effectiveness by providing a wider variety of vulnerable and non-vulnerable scenarios.
+- Expanding Validator Quality
+  - Inject vulnerabilities into LLM-generated contracts by parsing the contract code into an AST and placing them in arbitrary locations.
 - Creation of Integration Tests
   - Develop integration tests to ensure the system functions correctly, covering miner interaction, contract validation, and local subtensor compatibility.
 
