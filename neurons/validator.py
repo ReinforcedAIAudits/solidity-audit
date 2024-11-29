@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 
 from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ValidatorTask
 from ai_audits.subnet_utils import create_session, is_synonyms
-from neurons.base import ReinforcedValidatorNeuron, get_random_uids
+from neurons.base import ReinforcedValidatorNeuron, get_random_uids, ScoresBuffer
 
 load_dotenv()
 CYCLE_TIME = int(os.getenv("VALIDATOR_SEND_REQUESTS_EVERY_X_SECS", "3600"))
@@ -38,6 +38,7 @@ CYCLE_TIME = int(os.getenv("VALIDATOR_SEND_REQUESTS_EVERY_X_SECS", "3600"))
 class Validator(ReinforcedValidatorNeuron):
     WEIGHT_TIME = 0.1
     WEIGHT_SCORE = 0.9
+    MAX_BUFFER = int(os.getenv("VALIDATOR_BUFFER", "100"))
 
     def __init__(self, config=None):
         self._step = 0
@@ -51,6 +52,7 @@ class Validator(ReinforcedValidatorNeuron):
 
         super().__init__(config=config)
         bt.logging.info("load_state()")
+        self._buffer_scores = ScoresBuffer(self.MAX_BUFFER)
         self.load_state()
         self.set_identity()
 
@@ -135,7 +137,25 @@ class Validator(ReinforcedValidatorNeuron):
 
         bt.logging.info(f"Scored responses: {rewards}")
 
+        for num, uid in miner_uids:
+            self._buffer_scores.add_score(uid, rewards[num])
+
         self.update_scores(rewards, miner_uids)
+
+    def set_weights(self):
+        result, msg = self.subtensor.set_weights(
+            wallet=self.wallet,
+            netuid=self.config.netuid,
+            uids=self._buffer_scores.uids(),
+            weights=self._buffer_scores.scores(),
+            wait_for_finalization=False,
+            wait_for_inclusion=False,
+            version_key=self.spec_version,
+        )
+        if result is True:
+            bt.logging.info("set_weights on chain successfully!")
+        else:
+            bt.logging.error("set_weights failed", msg)
 
     def validate_responses(
         self,
@@ -222,6 +242,7 @@ class Validator(ReinforcedValidatorNeuron):
         state = {
             "step": self.step,
             "scores": self.scores,
+            "buffer_scores": self._buffer_scores.dump(),
             "hotkeys": self.hotkeys,
         }
 
@@ -237,6 +258,9 @@ class Validator(ReinforcedValidatorNeuron):
 
         self.step = state["step"]
         self.scores = state["scores"]
+        buf = ScoresBuffer(self.MAX_BUFFER)
+        buf.load(state.get("buffer_scores", {}))
+        self._buffer_scores = buf
         self.hotkeys = state["hotkeys"]
 
     @property
