@@ -16,7 +16,6 @@
 - [Creating your own miner](#creating-your-own-miner)
 - [Audit Protocol](#audit-protocol)
 - [Validator Operation Principle](#validator-operation-principle)
-- [Improving your Validator](#improving-your-validator)
 - [Development Roadmap](#development-roadmap)
 - [Running Localnet](#running-localnet)
 - [Machine Requirements](#machine-requirements)
@@ -53,7 +52,7 @@ Creating your own miner from scratch in the current architecture is not necessar
 
 ## Audit Protocol
 
-The description of the protocol in Pydantic format is available in the `ai_audits/protocol.py` file. This description can be imported and used as the response_format for the model (see `miner_servers/miner_server_open_ai.py`).
+The description of the protocol in Pydantic format is available in the `ai_audits/protocol.py` file. This description can be imported and used as the response_format for the model (see `model_servers/model_open_ai.py`).
 
 Example of an audit JSON object:
 
@@ -71,35 +70,16 @@ Example of an audit JSON object:
 
 ## Validator Operation Principle
 
-The validator operates based on a set of templates for both vulnerable and non-vulnerable contracts, located in the `contract_templates` directory. The validator generates a unique contract from the template and queries miners, evaluating their performance based on the number of matched vulnerability classes identified.
+The validator receives a completely random contract from the LLM, enriches it with vulnerabilities, ensures that the contract remains valid (by performing a full compilation via `solc`), and knows the type of the vulnerability in advance. The contract is then sent to miners for evaluation, and the types of vulnerabilities identified by miners are compared with the expected ones (accounting for synonyms).
 
-If a miner correctly identifies vulnerabilities in the generated contract, it receives a score accordingly. The system relies on the diversity and accuracy of the contract templates to assess the miners' ability to detect potential security issues.
-
-## Improving your Validator
-
-The simplest way to improve the validator is by adding additional contract templates to the `contract_templates directory`. A template consists of two files: `{contract_name}.sol.tpl` and `{contract_name}.json`. If one of these files is missing, an error will occur when the validator runs.
-
-The `{contract_name}.sol.tpl` file contains the contract code to be checked (it can be either vulnerable or non-vulnerable). To create uniqueness, the template can include special variables.
-
-### List of Variables
-
-- `<|timestamp|>` – will be replaced with the current UNIX timestamp when generating the contract from the template.
-- `<|random:value1|value2|value3|>` - will be replaced by one of the listed values. The value is chosen once for the entire document context, making the variable convenient for generating random method and property names.
-
-- Additional variables can be defined in the future.
-
-The `{contract_name}.json` file contains the reference miner response, formatted according to the protocol (see the "Audit Protocol" section).
-
-### Current Validator Behavior
-
-At the moment, the validator only checks the correspondence between the classes of identified vulnerabilities. In the future, the quality score for the miner's response will be improved by considering additional keys from the protocol.
+The generation of fully random templates via LLM is currently implemented using OpenAI and Corcel. An example validator for a local model is expected soon.
 
 ## Development Roadmap
 
 - Improvement of Validator Heuristics
   - Extend validation to check not only vulnerability classes but also the specific lines of code affected and the fix proposed by the model.
-- Expanding Contract Templates
-  - Add more contract templates to enhance the validator's effectiveness by providing a wider variety of vulnerable and non-vulnerable scenarios.
+- Expanding Validator Quality
+  - Inject vulnerabilities into LLM-generated contracts by parsing the contract code into an AST and placing them in arbitrary locations.
 - Creation of Integration Tests
   - Develop integration tests to ensure the system functions correctly, covering miner interaction, contract validation, and local subtensor compatibility.
 
@@ -107,7 +87,7 @@ At the moment, the validator only checks the correspondence between the classes 
 
 The repository includes a method to run a full localnet (a local Subtensor network along with the reference miner and validator). The docker-compose file for this setup can be found at `.docker/docker-compose.localnet.yml`.
 
-Additionally, for testing purposes, there is a dummy microservice template for the miner model, which does not interact with a real AI model but returns a predefined response according to the protocol. This dummy microservice is located in `model_servers/miner_server_dummy.py`.
+Additionally, for testing purposes, there is a dummy microservice template for the miner model, which does not interact with a real AI model but returns a predefined response according to the protocol. This dummy microservice is located in `model_servers/dummy.py`.
 
 ## Machine requirements
 
@@ -120,7 +100,7 @@ In terms of Operation System, you have to follow the requirements
 
 For miner and validator, a CPU machine with the same requirements as a local Subtensor is necessary. For more detailed information, please visit the [Subtensor GitHub](https://github.com/opentensor/subtensor).
 
-It is important to note that a GPU is not required for this implementation, as the primary functionality is handled by a [separate service](miner_servers/miner_server_open_ai.py) that operates independently of miner.
+It is important to note that a GPU is not required for this implementation, as the primary functionality is handled by a [separate service](model_servers/model_open_ai.py) that operates independently of miner.
 
 ## Installation (local) <a id="install-local"></a>
 
@@ -146,7 +126,7 @@ This commands will create virtual python environment and install required depend
 To run the miner server powered by OpenAI, you simply need to execute the command:
 
 ```bash
-python model_servers/miner_server_open_ai.py
+python model_servers/model_open_ai.py
 ```
 
 Remember, that OpenAI miner server requires additional environment variable `OPENAI_API_KEY` with your API key, received from OpenAI.
@@ -173,7 +153,7 @@ TBD
 `NET_UID` must be `222`, `NETWORK_TYPE` must be `test` AND `CHAIN_ENDPOINT` must be `wss://test.finney.opentensor.ai:443/`
 
 ### For localnet
-`NETWORK_TYPE` must be `local` and `CHAIN_ENDPOINT` must be `ws://127.0.0.1:9946`
+`NETWORK_TYPE` must be `local` and `CHAIN_ENDPOINT` must be `ws://127.0.0.1:9944`
 
 > IMPORTANT: Do not run more than one miner per machine. Running multiple miners will result in the loss of incentive and emissions on all miners.
 
@@ -202,9 +182,9 @@ TBD
 `NET_UID` must be `222`, `NETWORK_TYPE` must be `test` AND `CHAIN_ENDPOINT` must be `wss://test.finney.opentensor.ai:443/`
 
 ### For localnet
-`NETWORK_TYPE` must be `local` and `CHAIN_ENDPOINT` must be `ws://127.0.0.1:9946`
+`NETWORK_TYPE` must be `local` and `CHAIN_ENDPOINT` must be `ws://127.0.0.1:9944`
 
-> NOTE: if you run a validator in testnet do not forget to add the argument `--subtensor.network test` or `--subtensor.chain_endpoint ws://<LOCAL_SUBTENSOR_IP>:9946` (the local subtensor has to target the network testnet)
+> NOTE: if you run a validator in testnet do not forget to add the argument `--subtensor.network test` or `--subtensor.chain_endpoint ws://<LOCAL_SUBTENSOR_IP>:9944` (the local subtensor has to target the network testnet)
 
 ## Installation (docker) <a id="install-docker"></a>
 
@@ -244,9 +224,9 @@ To fully leverage the capabilities of the `SoldityAudit` subnetwork, it is essen
 
 Model servers is required for the miner, enabling it to send data for processing, and subsequently receive, structure, and return that data to the validator within a synapse.
 
-However, for testing purposes, you can use the template implemented in `model_servers/miner_server_dummy.py`. You can also use the example with a local LLM from the [sa-model-server-example](https://github.com/ReinforcedAIAudits/sa-model-server-example) repository.
+However, for testing purposes, you can use the template implemented in `model_servers/dummy.py`. You can also use the example with a local LLM from the [sa-model-server-example](https://github.com/ReinforcedAIAudits/sa-model-server-example) repository.
 
-> **NOTE:** Remember to create your `.env` file, which should include the addresses of your miner server in the variable `MINER_SERVER`. For testing purposes, you can use the command `cp .env-example .env`.
+> **NOTE:** Remember to create your `.env` file, which should include the addresses of your miner server in the variable `MODEL_SERVER`. For testing purposes, you can use the command `cp .env-example .env`.
 
 
 ## Local development

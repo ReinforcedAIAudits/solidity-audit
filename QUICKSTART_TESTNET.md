@@ -129,18 +129,18 @@ Cons:
 
 The `docker-compose.yml` file provides two model servers: one for OpenAI and one for Corcel.io. The model server for a local LLM is contained in a separate repository [sa-model-server-example](https://github.com/ReinforcedAIAudits/sa-model-server-example).
 
-The selected model server needs to be recorded in the `docker-compose.yml` file in the MINER_SERVER environment variable (by default, the model server from Corcel.io is used).
+The selected model server needs to be recorded in the `docker-compose.yml` file in the `MODEL_SERVER` environment variable (by default, the model server from Corcel.io is used).
 
 Additionally, the chosen server must be launched separately:
 
 ```bash
-docker compose up -d miner_server_corcel
+docker compose up -d model_server_corcel
 ```
 
 or
 
 ```bash
-docker compose up -d miner_server_openai
+docker compose up -d model_server_openai
 ```
 
 ### Running the miner service

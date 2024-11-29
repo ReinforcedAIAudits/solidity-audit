@@ -16,14 +16,19 @@ WORKDIR /subtensor
 
 RUN ./scripts/init.sh
 
-RUN cargo build --workspace --profile=release --features "pow-faucet runtime-benchmarks fast-blocks" --manifest-path "/subtensor/Cargo.toml"
+RUN cargo build --workspace --profile=release \
+    --features "pow-faucet runtime-benchmarks fast-blocks" \
+    --manifest-path "/subtensor/Cargo.toml" -p node-subtensor
 
 FROM debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y --assume-yes procps
 
 WORKDIR /app
 
 COPY --from=builder /subtensor/target/release/node-subtensor /app/target/release/node-subtensor
 COPY ./scripts/docker_localnet.sh /app/scripts/localnet.sh
 ENV BUILD_BINARY=0
-EXPOSE 9946
+EXPOSE 9944
 CMD ["./scripts/localnet.sh"]

@@ -1,0 +1,6 @@
+{
+  "from": 20,
+  "to": 30,
+  "vulnerabilityClass": "Unguarded function",
+  "contractCode": "pragma solidity ^0.8.0;\n\ncontract MysticVault {\n    address public owner;\n    mapping(address => uint256) public balances;\n    bool public isLocked;\n\n    constructor() {\n        owner = msg.sender;\n        isLocked = false;\n    }\n\n    function deposit() public payable {\n        require(msg.value > 0, \"Must send Ether\");\n        balances[msg.sender] += msg.value;\n    }\n\n    function withdraw(uint256 amount) public {\n        require(balances[msg.sender] >= amount, \"Insufficient balance\");\n        balances[msg.sender] -= amount;\n        payable(msg.sender).transfer(amount);\n    }\n\n    function toggleLock() public {\n        isLocked = !isLocked;\n    }\n\n    function emergencyWithdraw() public {\n        require(!isLocked, \"Vault is locked\");\n        uint256 amount = balances[msg.sender];\n        require(amount > 0, \"No funds to withdraw\");\n        balances[msg.sender] = 0;\n        payable(msg.sender).transfer(amount);\n    }\n}"
+}

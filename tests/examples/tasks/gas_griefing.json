@@ -1,0 +1,6 @@
+{
+  "from": 10,
+  "to": 20,
+  "vulnerabilityClass": "Gas griefing",
+  "contractCode": "pragma solidity ^0.8.0;\n\ncontract TokenDistributor {\n    mapping(address => uint256) public balances;\n    address[] public recipients;\n    uint256 public totalDistributed;\n\n    constructor() {\n        totalDistributed = 0;\n    }\n\n    function addRecipient(address recipient, uint256 amount) public {\n        require(recipient != address(0), \"Invalid address\");\n        balances[recipient] += amount;\n        recipients.push(recipient);\n    }\n\n    function distributeTokens() public {\n        for (uint256 i = 0; i < recipients.length; i++) {\n            address recipient = recipients[i];\n            uint256 amount = balances[recipient];\n            if (amount > 0) {\n                (bool success, ) = recipient.call{value: amount}('');\n                require(success, \"Transfer failed\");\n                balances[recipient] = 0;\n                totalDistributed += amount;\n            }\n        }\n    }\n}"
+}

@@ -1,0 +1,11 @@
+[
+  {
+    "from": 24,
+    "to": 27,
+    "vulnerabilityClass": "Forced reception",
+    "testCase": "contract.call{value: 0}();",
+    "description": "The function `forcedReceiveEther` allows a user to emit the `Received` event without sending any Ether, which could lead to unintended behavior where a contract assumes it's receiving Ether when it isn't. This can result in logical errors in contracts relying on this event for state changes or for further processing.",
+    "priorArt": [],
+    "fixedLines": "// Remove forced receiving of Ether function\n// function forcedReceiveEther() public {\n//     emit Received(msg.sender, 0);\n// }"
+  }
+]

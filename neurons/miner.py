@@ -22,13 +22,13 @@ import typing
 import bittensor as bt
 from dotenv import load_dotenv
 
-from model_servers.subnet_utils import create_session
+from ai_audits.subnet_utils import create_session
 from neurons.base import ReinforcedMinerNeuron
 from ai_audits.protocol import AuditsSynapse, VulnerabilityReport
 
 
 class Miner(ReinforcedMinerNeuron):
-    REQUEST_PERIOD = 20 * 60
+    REQUEST_PERIOD = int(os.getenv("MINER_ACCEPT_REQUESTS_EVERY_X_SECS", 20 * 60))
     _last_call_from_dendrite: dict[str, float]
     _dendrite_whitelist: list[str]
 
@@ -45,7 +45,7 @@ class Miner(ReinforcedMinerNeuron):
 
     def load_website_keys(self):
         try:
-            keys_response = create_session().get("https://audit.reinforced.app/keys")
+            keys_response = create_session().get(os.getenv("KEYS_WEBSITE", "https://audit.reinforced.app/keys"))
             if keys_response.status_code == 200:
                 keys_list = keys_response.json()
                 if isinstance(keys_list, list) and all(
@@ -63,14 +63,11 @@ class Miner(ReinforcedMinerNeuron):
         except Exception as e:
             bt.logging.error(f"An error occurred while connection to key service: {e}")
 
-    async def forward(self, synapse: AuditsSynapse) -> AuditsSynapse:
-        """
-        Processes the incoming synapse by performing a predefined operation on the input data.
-        """
-        bt.logging.info(f"Received synapse from validator {synapse}")
+    @classmethod
+    def do_audit_code(cls, contract_code: str) -> list[VulnerabilityReport]:
         result = create_session().post(
-            f"{os.getenv('MINER_SERVER')}/submit",
-            synapse.contract_code,
+            f"{os.getenv('MODEL_SERVER')}/submit",
+            contract_code,
             headers={"Content-Type": "text/plain"},
         )
         # TODO: Remove the error and allow sending a synapse with an empty response + log this event
@@ -79,13 +76,22 @@ class Miner(ReinforcedMinerNeuron):
             raise ValueError("Contract audit is not successful!")
 
         json = result.json()
-        bt.logging.info(f"Response from miner server: {json}")
+        bt.logging.info(f"Response from model server: {json}")
         vulnerabilities = [
             VulnerabilityReport(
                 **vuln,
             )
             for vuln in json
         ]
+        return vulnerabilities
+
+    async def forward(self, synapse: AuditsSynapse) -> AuditsSynapse:
+        """
+        Processes the incoming synapse by performing a predefined operation on the input data.
+        """
+        bt.logging.info(f"Received synapse from validator {synapse}")
+
+        vulnerabilities = self.do_audit_code(synapse.contract_code)
 
         synapse.response = vulnerabilities
         return synapse
@@ -122,7 +128,9 @@ class Miner(ReinforcedMinerNeuron):
             if time_since_last_request < self.REQUEST_PERIOD:
                 return (
                     True,
-                    f"Request submitted too soon. {int(self.REQUEST_PERIOD - time_since_last_request)} second(s) left until the next request is allowed. Dendrite's associated hotkey: {synapse.dendrite.hotkey}",
+                    f"Request submitted too soon. {int(self.REQUEST_PERIOD - time_since_last_request)} "
+                    f"second(s) left until the next request is allowed. "
+                    f"Dendrite's associated hotkey: {synapse.dendrite.hotkey}",
                 )
 
         self._last_call_from_dendrite[synapse.dendrite.hotkey] = current_time

@@ -1,0 +1,13 @@
+[
+  {
+    "from": 24,
+    "to": 26,
+    "vulnerabilityClass": "Unguarded function",
+    "testCase": "Calling toggleLock() can be done by anyone, leading to a potential lockout or unlocking of the vault at any time.",
+    "description": "The toggleLock function allows any user to lock or unlock the vault without any restrictions, which can lead to misuse and unauthorized control over the vault's state.",
+    "priorArt": [
+      "A similar issue was found in Contract A where functions for changing critical states were not restricted to the owner."
+    ],
+    "fixedLines": "function toggleLock() public onlyOwner {\n    isLocked = !isLocked;\n}\n\nmodifier onlyOwner() {\n    require(msg.sender == owner, \"Caller is not the owner\");\n    _;\n}"
+  }
+]
