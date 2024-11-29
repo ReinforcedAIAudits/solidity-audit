@@ -50,9 +50,9 @@ class Validator(ReinforcedValidatorNeuron):
             else None
         )
 
+        self._buffer_scores = ScoresBuffer(self.MAX_BUFFER)
         super().__init__(config=config)
         bt.logging.info("load_state()")
-        self._buffer_scores = ScoresBuffer(self.MAX_BUFFER)
         self.load_state()
         self.set_identity()
 
@@ -137,7 +137,7 @@ class Validator(ReinforcedValidatorNeuron):
 
         bt.logging.info(f"Scored responses: {rewards}")
 
-        for num, uid in miner_uids:
+        for num, uid in enumerate(miner_uids):
             self._buffer_scores.add_score(uid, rewards[num])
 
         self.update_scores(rewards, miner_uids)
