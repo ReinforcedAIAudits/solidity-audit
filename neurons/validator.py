@@ -264,7 +264,7 @@ class Validator(ReinforcedValidatorNeuron):
             buf.load(state.get("buffer_scores", {}))
             self._buffer_scores = buf
             self.hotkeys = state["hotkeys"]
-        except FileNotFoundError():
+        except FileNotFoundError:
             bt.logging.error("State file is not found.")
             self.save_state()
 
