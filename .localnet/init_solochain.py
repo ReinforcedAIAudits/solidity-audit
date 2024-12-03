@@ -17,7 +17,7 @@ __all__ = ["SoloChainHelper"]
 PARENT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
-class SoloChainHelper(object):
+class SoloChainHelper:
     OWNER_NAME = "owner"
     VALIDATOR_NAME = "validator"
     MINER_NAME = "miner"

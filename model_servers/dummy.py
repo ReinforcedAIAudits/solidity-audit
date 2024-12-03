@@ -18,7 +18,7 @@ logger = logging.getLogger("MinerBlackbox")
 dotenv.load_dotenv()
 
 
-class TemplatesSingleton(object):
+class TemplatesSingleton:
     TEMPLATE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'tests', 'examples'))
 
     def __init__(self):
@@ -96,6 +96,12 @@ async def task_provider(request: Request):
     requested_vulnerability = (await request.body()).decode("utf-8")
     logger.info(f'Requested vulnerability: {requested_vulnerability}')
     return dummy_contracts.get_task(requested_vulnerability)
+
+
+@app.get('/healthcheck')
+async def healthchecker():
+    return {"status": "OK"}
+
 
 
 if __name__ == "__main__":
