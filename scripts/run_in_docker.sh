@@ -11,9 +11,9 @@ while true; do
     status_code=$(check_endpoint)
 
     if [ "$status_code" -eq 200 ]; then
-        echo "Model server is not running yet."
         break
     else
+        echo "Model server is not running yet."
         echo "Retrying in 5 seconds..."
         sleep 5
     fi
