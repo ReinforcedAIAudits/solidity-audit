@@ -5,13 +5,13 @@ import solcx
 __all__ = ['create_session', 'preprocess_text', 'ROLES', 'is_synonyms', 'SolcSingleton']
 
 
-class ROLES(object):
+class ROLES:
     SYSTEM = "system"
     ASSISTANT = "assistant"
     USER = "user"
 
 
-class SynonymsSingleton(object):
+class SynonymsSingleton:
     SYNONYMS = (
         (
             'Missing Check on Signature Recovery', 'Signature replay', 'Authorization Issue',
@@ -84,7 +84,7 @@ def is_synonyms(expected_result: str, answer: str) -> bool:
     return answer in synonyms_instance.synonyms.get(expected_result, set())
 
 
-class SolcSingleton(object):
+class SolcSingleton:
     def __init__(self):
         self.all_versions = solcx.get_installable_solc_versions()
 

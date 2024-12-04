@@ -100,7 +100,7 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> list:
     return uids
 
 
-class ScoresBuffer(object):
+class ScoresBuffer:
     DEFAULT = object()
     U16_MAX = 65535
 

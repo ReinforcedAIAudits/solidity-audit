@@ -102,9 +102,13 @@ async def generate_audit(source: str):
 
 
 async def generate_task(requested_vulnerability: str | None = None) -> ValidatorTask:
-    possible_vulnerabilities = random.sample(
-        VULNERABILITIES_TO_GENERATE, min(3, len(VULNERABILITIES_TO_GENERATE))
-    ) if requested_vulnerability is None else [requested_vulnerability]
+    possible_vulnerabilities = (
+        random.sample(
+            VULNERABILITIES_TO_GENERATE, min(3, len(VULNERABILITIES_TO_GENERATE))
+        )
+        if requested_vulnerability is None
+        else [requested_vulnerability]
+    )
     completion = await client.beta.chat.completions.parse(
         model=GPT_MODEL,
         messages=[
@@ -113,11 +117,11 @@ async def generate_task(requested_vulnerability: str | None = None) -> Validator
             {
                 "role": ROLES.USER,
                 "content": f"Generate new vulnerable contract with one of "
-                           f"vulnerabilities: {', '.join(possible_vulnerabilities)}"
+                f"vulnerabilities: {', '.join(possible_vulnerabilities)}",
             },
         ],
         response_format=ValidatorTask,
-        temperature=0.3
+        temperature=0.3,
     )
     message = completion.choices[0].message
     if message.parsed:
@@ -158,6 +162,11 @@ async def get_task(request: Request):
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
     return validator_template
+
+
+@app.get("/healthcheck")
+async def healthchecker():
+    return {"status": "OK"}
 
 
 if __name__ == "__main__":

@@ -119,25 +119,33 @@ def call_corcel(messages: list):
 
 def generate_audit(source: str):
     preprocessed = preprocess_text(source)
-    return call_corcel([
-        {"role": ROLES.SYSTEM, "content": PROMPT},
-        {"role": ROLES.USER, "content": preprocessed}
-    ])
+    return call_corcel(
+        [
+            {"role": ROLES.SYSTEM, "content": PROMPT},
+            {"role": ROLES.USER, "content": preprocessed},
+        ]
+    )
 
 
 def generate_task(requested_vulnerability: str | None = None):
-    possible_vulnerabilities = random.sample(
-        VULNERABILITIES_TO_GENERATE, min(3, len(VULNERABILITIES_TO_GENERATE))
-    ) if requested_vulnerability is None else [requested_vulnerability]
-    return call_corcel([
-        {"role": ROLES.SYSTEM, "content": PROMPT_VALIDATOR},
-        # Output format guidance is provided automatically by OpenAI SDK.
-        {
-            "role": ROLES.USER,
-            "content": f"Generate new vulnerable contract with one of "
-                       f"vulnerabilities: {', '.join(possible_vulnerabilities)}"
-        }
-    ])
+    possible_vulnerabilities = (
+        random.sample(
+            VULNERABILITIES_TO_GENERATE, min(3, len(VULNERABILITIES_TO_GENERATE))
+        )
+        if requested_vulnerability is None
+        else [requested_vulnerability]
+    )
+    return call_corcel(
+        [
+            {"role": ROLES.SYSTEM, "content": PROMPT_VALIDATOR},
+            # Output format guidance is provided automatically by OpenAI SDK.
+            {
+                "role": ROLES.USER,
+                "content": f"Generate new vulnerable contract with one of "
+                f"vulnerabilities: {', '.join(possible_vulnerabilities)}",
+            },
+        ]
+    )
 
 
 REQUIRED_KEYS = {"fromLine", "toLine", "vulnerabilityClass"}
@@ -195,11 +203,11 @@ def try_prepare_task_result(result) -> dict | None:
             cleared[k] = int(cleared[k])
         else:
             return None
-    if not isinstance(result.get('contractCode'), str):
+    if not isinstance(result.get("contractCode"), str):
         return None
-    cleared['contractCode'] = result['contractCode']
+    cleared["contractCode"] = result["contractCode"]
     try:
-        solc.compile(cleared['contractCode'])
+        solc.compile(cleared["contractCode"])
     except:
         return None
     return cleared
@@ -239,6 +247,11 @@ async def get_task(request: Request):
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
     return result
+
+
+@app.get("/healthcheck")
+async def healthchecker():
+    return {"status": "OK"}
 
 
 if __name__ == "__main__":
