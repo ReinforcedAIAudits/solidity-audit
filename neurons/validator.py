@@ -72,7 +72,8 @@ class Validator(ReinforcedValidatorNeuron):
         return task
 
     def sync(self):
-        self.load_state()
+        if self.step == 0:
+            self.load_state()
         return super().sync()
 
     async def forward(self):
@@ -143,6 +144,58 @@ class Validator(ReinforcedValidatorNeuron):
             self._buffer_scores.add_score(uid, rewards[num])
 
         self.update_scores(rewards, miner_uids)
+
+    def run(self):
+        """
+        Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.
+
+        This function performs the following primary tasks:
+        1. Check for registration on the Bittensor network.
+        2. Continuously forwards queries to the miners on the network, rewarding their responses and updating the scores accordingly.
+        3. Periodically resynchronizes with the chain; updating the metagraph with the latest network state and setting weights.
+
+        The essence of the validator's operations is in the forward function, which is called every step. The forward function is responsible for querying the network and scoring the responses.
+
+        Note:
+            - The function leverages the global configurations set during the initialization of the miner.
+            - The miner's axon serves as its interface to the Bittensor network, handling incoming and outgoing requests.
+
+        Raises:
+            KeyboardInterrupt: If the miner is stopped by a manual interruption.
+            Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
+        """
+
+        # Check that validator is registered on the network.
+        self.sync()
+
+        bt.logging.info(f"Validator starting at block: {self.block}")
+
+        # This loop maintains the validator's operations until intentionally stopped.
+        try:
+            while True:
+                bt.logging.info(f"step({self.step}) block({self.block})")
+
+                # Run multiple forwards concurrently.
+                self.loop.run_until_complete(self.concurrent_forward())
+
+                # Check if we should exit.
+                if self.should_exit:
+                    break
+
+                # Sync metagraph and potentially set weights.
+                self.sync()
+
+                self.step += 1
+
+        except KeyboardInterrupt:
+            self.axon.stop()
+            bt.logging.success("Validator killed by keyboard interrupt.")
+            exit()
+
+        except Exception as err:
+            bt.logging.error(f"Validator killed due to exception: {str(err)}")
+            self.axon.stop()
+            exit(1)
 
     def set_weights(self):
         result, msg = self.subtensor.set_weights(
