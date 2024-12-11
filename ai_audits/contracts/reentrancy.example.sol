@@ -6,7 +6,7 @@ contract Reentrancy {
         owner = msg.sender;
     }
 
-    function balanceChange() public {
+    function balanceChange() public payable {
        balances[msg.sender] = 0;
     }
 }
