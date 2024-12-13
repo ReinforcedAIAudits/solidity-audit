@@ -1,15 +1,14 @@
-contract TreasureVault {
-    mapping(address => uint256) public balances;
-    address public owner;
-    uint256 public totalTreasures;
+// SPDX-License-Identifier: MIT 
+pragma solidity ^0.8.0;
 
-    constructor() {
-        owner = msg.sender;
-    }
+contract SimpleWallet {
+    mapping(address => uint256) private balances;
 
     function deposit() public payable {
         balances[msg.sender] += msg.value;
-        totalTreasures += msg.value;
     }
 
+    function getBalance() public view returns (uint256) {
+        return balances[msg.sender];
+    }
 }

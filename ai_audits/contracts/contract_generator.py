@@ -4,25 +4,20 @@ import solcx
 
 from ai_audits.contracts.ast_models import NodeType, SourceUnit, VariableDeclaration
 
-
-solcx.install_solc("0.8.28", True)
-solcx.compile_solc("0.8.28")
-
-with open("./contract.example.sol") as f:
-    code = f.read()
-suggested_version = solcx.install.select_pragma_version(
-    code, solcx.get_installable_solc_versions()
-)
-
-output_json = solcx.compile_files(
-    "./contract.example.sol", solc_version=suggested_version
-)
-
-output_json_copy = output_json.copy()
+FILE_NAME = "contract.example.sol"
+CONTRACT_NAME = "SimpleWallet"
 
 
-with open("input.json", "w+") as f:
-    f.write(json.dumps(output_json_copy, indent=2))
+def compile_contract_from_file(filename: str, contract_name: str):
+    with open(filename) as f:
+        code = f.read()
+
+    suggested_version = solcx.install.select_pragma_version(
+        code, solcx.get_installable_solc_versions()
+    )
+    json_compiled = solcx.compile_source(code, solc_version=suggested_version)
+
+    return json_compiled[f"<stdin>:{contract_name}"]["ast"]
 
 
 def parse_ast_to_solidity(ast: SourceUnit):
@@ -109,12 +104,12 @@ def parse_ast_to_solidity(ast: SourceUnit):
                                 return_params.append(return_type)
 
                     function_header = f"\n    function {name}({', '.join(params)})"
-                    if return_params:
-                        function_header += f" returns ({', '.join(return_params)})"
                     if mutability:
                         function_header += f" {visibility} {mutability}"
                     else:
                         function_header += f" {visibility}"
+                    if return_params:
+                        function_header += f" returns ({', '.join(return_params)})"
 
                     code += function_header + " {\n"
 
@@ -164,56 +159,43 @@ def parse_ast_to_solidity(ast: SourceUnit):
     return code
 
 
-ast = output_json["contract.example.sol:SimpleWallet"]["ast"]
+solcx.install_solc()
+
+ast = compile_contract_from_file(FILE_NAME, CONTRACT_NAME)
 
 with open("contract_ast.json", "w+") as f:
     f.write(json.dumps(ast, indent=2))
 
-ast_contract = SourceUnit(
-    **output_json_copy["contract.example.sol:SimpleWallet"]["ast"]
-)
-contract = parse_ast_to_solidity(ast_contract)
-print(contract)
+ast_obj_contract = SourceUnit(**ast)
+contract_source = parse_ast_to_solidity(ast_obj_contract)
 
-with open("contract_ast_obj.json", "w+") as f:
-    f.write(json.dumps(jsonable_encoder(ast_contract)))
+with open("restored.example.sol", "w+") as f:
+    f.write(contract_source)
 
-
-with open("./reentrancy.example.sol") as f:
-    code = f.read()
-suggested_version = solcx.install.select_pragma_version(
-    code, solcx.get_installable_solc_versions()
-)
-output_json = solcx.compile_files(
-    "./reentrancy.example.sol", solc_version=suggested_version
+ast_obj_reentrancy = SourceUnit(
+    **compile_contract_from_file("reentrancy.example.sol", "Reentrancy")
 )
 
+contract_source = parse_ast_to_solidity(ast_obj_reentrancy)
 
-ast_obj = SourceUnit(**output_json["reentrancy.example.sol:Reentrancy"]["ast"])
 node_index = -1
-print(json.dumps(jsonable_encoder(ast_obj)))
-
-contract = parse_ast_to_solidity(ast_obj)
-print(contract)
-
-parts = []
 offset = 1
 
-for contract in ast_contract.nodes:
-    for idx, node in enumerate(contract.nodes):
-        # print(json.dumps(jsonable_encoder(node)))
-        if (
-            type(node) != VariableDeclaration
-            and node.node_type == "FunctionDefinition"
-            and node.kind != "constructor"
-        ):
-            print("Hello, World!")
-            node_index = idx
-            break
-    offset += int(contract.nodes[node_index].src.split(":")[0])
+for contract_source in ast_obj_reentrancy.nodes:
+    if contract_source.node_type != NodeType.PRAGMA_DIRECTIVE:
 
-    # contract.nodes.append()
-node = next(n for n in ast_obj.nodes[0].nodes if n.name == "balanceChange")
+        for idx, node in enumerate(contract_source.nodes):
+            if (
+                node.node_type == NodeType.FUNCTION_DEFINITION
+                and node.kind != "constructor"
+            ):
+                print("Node found!")
+                node_index = idx
+                break
+
+        offset += int(contract_source.nodes[node_index].src.split(":")[0])
+
+node = next(n for n in ast_obj_reentrancy.nodes[1].nodes if n.name == "balanceChange")
 
 
 def add_offset(parameter: str, offset: int):
@@ -227,31 +209,29 @@ node.body.src = add_offset(node.body.src, offset)
 node.parameters.src = add_offset(node.parameters.src, offset)
 node.return_parameters.src = add_offset(node.return_parameters.src, offset)
 node.name_location = add_offset(node.name_location, offset)
-node.body.statements[0].expression.left_hand_side["src"] = add_offset(
-    node.body.statements[0].expression.left_hand_side["src"], offset
+node.body.statements[0].expression.left_hand_side.src = add_offset(
+    node.body.statements[0].expression.left_hand_side.src, offset
 )
-node.body.statements[0].expression.left_hand_side["baseExpression"]["src"] = add_offset(
-    node.body.statements[0].expression.left_hand_side["baseExpression"]["src"], offset
+node.body.statements[0].expression.left_hand_side.base_expression.src = add_offset(
+    node.body.statements[0].expression.left_hand_side.base_expression.src, offset
 )
 
-node.body.statements[0].expression.left_hand_side["indexExpression"]["src"] = (
+node.body.statements[0].expression.left_hand_side.index_expression.src = add_offset(
+    node.body.statements[0].expression.left_hand_side.index_expression.src,
+    offset,
+)
+
+node.body.statements[0].expression.left_hand_side.index_expression.expression.src = (
     add_offset(
-        node.body.statements[0].expression.left_hand_side["indexExpression"]["src"],
+        node.body.statements[
+            0
+        ].expression.left_hand_side.index_expression.expression.src,
         offset,
     )
 )
 
-node.body.statements[0].expression.left_hand_side["indexExpression"]["expression"][
-    "src"
-] = add_offset(
-    node.body.statements[0].expression.left_hand_side["indexExpression"]["expression"][
-        "src"
-    ],
-    offset,
-)
-
-node.body.statements[0].expression.right_hand_side["src"] = add_offset(
-    node.body.statements[0].expression.right_hand_side["src"], offset
+node.body.statements[0].expression.right_hand_side.src = add_offset(
+    node.body.statements[0].expression.right_hand_side.src, offset
 )
 
 node.body.statements[0].expression.src = add_offset(
@@ -260,18 +240,14 @@ node.body.statements[0].expression.src = add_offset(
 
 node.body.statements[0].src = add_offset(node.body.statements[0].src, offset)
 
-ast_contract.nodes[0].nodes.append(node)
+ast_obj_contract.nodes[1].nodes.append(node)
 
-output_json_copy["contract.example.sol:TreasureVault"]["ast"] = jsonable_encoder(
-    ast_contract
+contract_source = parse_ast_to_solidity(ast_obj_contract)
+
+suggested_version = solcx.install.select_pragma_version(
+    contract_source, solcx.get_installable_solc_versions()
 )
+solcx.compile_source(contract_source, solc_version=suggested_version)
 
-
-contract = parse_ast_to_solidity(ast_contract)
-print(contract)
-
-
-with open("output_contract.json", "w+") as f:
-    f.write(json.dumps(output_json_copy, indent=2))
-
-solcx.compile_source(contract, solc_version=suggested_version)
+with open("contract_with_vulnerability.sol", "w+") as f:
+    f.write(contract_source)
