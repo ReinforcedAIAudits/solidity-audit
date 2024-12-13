@@ -6,9 +6,7 @@ contract SimpleVoting {
     uint256 public voteCount;
 
     function vote() public {
-        require(!voters[msg.sender], "You have already voted");
         voters[msg.sender] = true;
-        voteCount++;
     }
 
     function getVoteCount() public view returns (uint256) {

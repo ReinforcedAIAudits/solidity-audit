@@ -98,10 +98,21 @@ class Identifier(NodeBase):
     referenced_declaration: int = Field(alias="referencedDeclaration")
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
 
+class Literal(NodeBase):
+    hex_value: str = Field(alias="hexValue")
+    is_constant: bool = Field(alias="isConstant")
+    is_lvalue: bool = Field(alias="isLValue")
+    is_pure: bool = Field(alias="isPure")
+    lvalue_requested: bool = Field(alias="lValueRequested")
+    kind: str 
+    value: str
+    type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
+
+
 
 class Return(NodeBase):
     function_return_parameters: int = Field(alias="functionReturnParameters")
-    expression: Identifier
+    expression: Identifier | Literal
 
 
 class MemberAccess(NodeBase):
@@ -115,25 +126,33 @@ class MemberAccess(NodeBase):
     sub_expression: Optional[Identifier] = Field(default=None, alias="subExpression")
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
 
+class IndexAccess(NodeBase):
+    base_expression: Identifier = Field(alias="baseExpression")
+    index_expression: MemberAccess = Field(alias="indexExpression")
+    is_constant: bool = Field(alias="isConstant")
+    is_lvalue: bool = Field(alias="isLValue")
+    is_pure: bool = Field(alias="isPure")
+    lvalue_requested: bool = Field(alias="lValueRequested") 
+    type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
 
 class Assignment(NodeBase):
     is_constant: bool = Field(alias="isConstant")
     is_lvalue: bool = Field(alias="isLValue")
     is_pure: bool = Field(alias="isPure")
     lvalue_requested: bool = Field(alias="lValueRequested")
-    left_hand_side: Optional[Union[Identifier, Dict]] = Field(default=None, alias="leftHandSide")
+    left_hand_side: Optional[Union[Identifier, IndexAccess]] = Field(default=None, alias="leftHandSide")
     operator: str
     prefix: Optional[bool] = Field(default=None)
-    right_hand_side: Optional[Union[MemberAccess, Identifier, Dict]] = Field(default=None,
+    right_hand_side: Optional[Union[MemberAccess, Identifier, Literal]] = Field(default=None,
         alias="rightHandSide"
     )
     sub_expression: Optional[Identifier] = Field(default=None, alias="subExpression")
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
 
 
-class ExpressionStatement(NodeBase):
-    expression: Assignment
 
+class ExpressionStatement(NodeBase):
+    expression: Union[Assignment, IndexAccess]
 
 class Block(NodeBase):
     statements: List[Union[ExpressionStatement, Return]]
