@@ -158,96 +158,99 @@ def parse_ast_to_solidity(ast: SourceUnit):
 
     return code
 
-
-solcx.install_solc()
-
-ast = compile_contract_from_file(FILE_NAME, CONTRACT_NAME)
-
-with open("contract_ast.json", "w+") as f:
-    f.write(json.dumps(ast, indent=2))
-
-ast_obj_contract = SourceUnit(**ast)
-contract_source = parse_ast_to_solidity(ast_obj_contract)
-
-with open("restored.example.sol", "w+") as f:
-    f.write(contract_source)
-
-ast_obj_reentrancy = SourceUnit(
-    **compile_contract_from_file("reentrancy.example.sol", "Reentrancy")
-)
-
-contract_source = parse_ast_to_solidity(ast_obj_reentrancy)
-
-node_index = -1
-offset = 1
-
-for contract_source in ast_obj_reentrancy.nodes:
-    if contract_source.node_type != NodeType.PRAGMA_DIRECTIVE:
-
-        for idx, node in enumerate(contract_source.nodes):
-            if (
-                node.node_type == NodeType.FUNCTION_DEFINITION
-                and node.kind != "constructor"
-            ):
-                print("Node found!")
-                node_index = idx
-                break
-
-        offset += int(contract_source.nodes[node_index].src.split(":")[0])
-
-node = next(n for n in ast_obj_reentrancy.nodes[1].nodes if n.name == "balanceChange")
-
-
 def add_offset(parameter: str, offset: int):
     parts = [int(x) for x in parameter.split(":")]
     parts[0] += offset
     return ":".join(map(str, parts))
 
-
-node.src = add_offset(node.src, offset)
-node.body.src = add_offset(node.body.src, offset)
-node.parameters.src = add_offset(node.parameters.src, offset)
-node.return_parameters.src = add_offset(node.return_parameters.src, offset)
-node.name_location = add_offset(node.name_location, offset)
-node.body.statements[0].expression.left_hand_side.src = add_offset(
-    node.body.statements[0].expression.left_hand_side.src, offset
-)
-node.body.statements[0].expression.left_hand_side.base_expression.src = add_offset(
-    node.body.statements[0].expression.left_hand_side.base_expression.src, offset
-)
-
-node.body.statements[0].expression.left_hand_side.index_expression.src = add_offset(
-    node.body.statements[0].expression.left_hand_side.index_expression.src,
-    offset,
-)
-
-node.body.statements[0].expression.left_hand_side.index_expression.expression.src = (
-    add_offset(
-        node.body.statements[
-            0
-        ].expression.left_hand_side.index_expression.expression.src,
+def main():
+    solcx.install_solc()
+    
+    ast = compile_contract_from_file(FILE_NAME, CONTRACT_NAME)
+    
+    with open("contract_ast.json", "w+") as f:
+        f.write(json.dumps(ast, indent=2))
+    
+    ast_obj_contract = SourceUnit(**ast)
+    contract_source = parse_ast_to_solidity(ast_obj_contract)
+    
+    with open("restored.example.sol", "w+") as f:
+        f.write(contract_source)
+    
+    ast_obj_reentrancy = SourceUnit(
+        **compile_contract_from_file("reentrancy.example.sol", "Reentrancy")
+    )
+    
+    contract_source = parse_ast_to_solidity(ast_obj_reentrancy)
+    
+    node_index = -1
+    offset = 1
+    
+    for contract_source in ast_obj_reentrancy.nodes:
+        if contract_source.node_type != NodeType.PRAGMA_DIRECTIVE:
+        
+            for idx, node in enumerate(contract_source.nodes):
+                if (
+                    node.node_type == NodeType.FUNCTION_DEFINITION
+                    and node.kind != "constructor"
+                ):
+                    print("Node found!")
+                    node_index = idx
+                    break
+                
+            offset += int(contract_source.nodes[node_index].src.split(":")[0])
+    
+    node = next(n for n in ast_obj_reentrancy.nodes[1].nodes if n.name == "balanceChange")
+    
+    node.src = add_offset(node.src, offset)
+    node.body.src = add_offset(node.body.src, offset)
+    node.parameters.src = add_offset(node.parameters.src, offset)
+    node.return_parameters.src = add_offset(node.return_parameters.src, offset)
+    node.name_location = add_offset(node.name_location, offset)
+    node.body.statements[0].expression.left_hand_side.src = add_offset(
+        node.body.statements[0].expression.left_hand_side.src, offset
+    )
+    node.body.statements[0].expression.left_hand_side.base_expression.src = add_offset(
+        node.body.statements[0].expression.left_hand_side.base_expression.src, offset
+    )
+    
+    node.body.statements[0].expression.left_hand_side.index_expression.src = add_offset(
+        node.body.statements[0].expression.left_hand_side.index_expression.src,
         offset,
     )
-)
+    
+    node.body.statements[0].expression.left_hand_side.index_expression.expression.src = (
+        add_offset(
+            node.body.statements[
+                0
+            ].expression.left_hand_side.index_expression.expression.src,
+            offset,
+        )
+    )
+    
+    node.body.statements[0].expression.right_hand_side.src = add_offset(
+        node.body.statements[0].expression.right_hand_side.src, offset
+    )
+    
+    node.body.statements[0].expression.src = add_offset(
+        node.body.statements[0].expression.src, offset
+    )
+    
+    node.body.statements[0].src = add_offset(node.body.statements[0].src, offset)
+    
+    ast_obj_contract.nodes[1].nodes.append(node)
+    
+    contract_source = parse_ast_to_solidity(ast_obj_contract)
+    
+    suggested_version = solcx.install.select_pragma_version(
+        contract_source, solcx.get_installable_solc_versions()
+    )
+    solcx.compile_source(contract_source, solc_version=suggested_version)
+    
+    with open("contract_with_vulnerability.sol", "w+") as f:
+        f.write(contract_source)
 
-node.body.statements[0].expression.right_hand_side.src = add_offset(
-    node.body.statements[0].expression.right_hand_side.src, offset
-)
 
-node.body.statements[0].expression.src = add_offset(
-    node.body.statements[0].expression.src, offset
-)
 
-node.body.statements[0].src = add_offset(node.body.statements[0].src, offset)
-
-ast_obj_contract.nodes[1].nodes.append(node)
-
-contract_source = parse_ast_to_solidity(ast_obj_contract)
-
-suggested_version = solcx.install.select_pragma_version(
-    contract_source, solcx.get_installable_solc_versions()
-)
-solcx.compile_source(contract_source, solc_version=suggested_version)
-
-with open("contract_with_vulnerability.sol", "w+") as f:
-    f.write(contract_source)
+if __name__ == "__main__":
+    main()
