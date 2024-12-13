@@ -32,7 +32,7 @@ def parse_ast_to_solidity(ast: SourceUnit):
         if node.node_type == NodeType.PRAGMA_DIRECTIVE:
             pragma_str = " ".join(node.literals)
             code += f"pragma {pragma_str};\n\n"
-            
+
         elif node.node_type == NodeType.CONTRACT_DEFINITION:
             code += f"contract {node.name} {{\n\n"
 
@@ -71,7 +71,10 @@ def parse_ast_to_solidity(ast: SourceUnit):
                             if expr.node_type == NodeType.ASSIGNMENT:
                                 left = expr.left_hand_side.name
                                 right = ""
-                                if expr.right_hand_side.node_type == NodeType.MEMBER_ACCESS:
+                                if (
+                                    expr.right_hand_side.node_type
+                                    == NodeType.MEMBER_ACCESS
+                                ):
                                     right = f"msg.sender"
                                 code += f"        {left} = {right};\n"
 
@@ -87,15 +90,21 @@ def parse_ast_to_solidity(ast: SourceUnit):
 
                     params = []
                     for param in contract_node.parameters.parameters:
-                        param_type = param.type_name.name if hasattr(param, 'type_name') else ""
-                        param_name = param.name if hasattr(param, 'name') else ""
+                        param_type = (
+                            param.type_name.name if hasattr(param, "type_name") else ""
+                        )
+                        param_name = param.name if hasattr(param, "name") else ""
                         if param_type or param_name:
                             params.append(f"{param_type} {param_name}".strip())
 
                     return_params = []
-                    if hasattr(contract_node, 'return_parameters'):
+                    if hasattr(contract_node, "return_parameters"):
                         for param in contract_node.return_parameters.parameters:
-                            return_type = param.type_name.name if hasattr(param, 'type_name') else ""
+                            return_type = (
+                                param.type_name.name
+                                if hasattr(param, "type_name")
+                                else ""
+                            )
                             if return_type:
                                 return_params.append(return_type)
 
@@ -106,7 +115,7 @@ def parse_ast_to_solidity(ast: SourceUnit):
                         function_header += f" {visibility} {mutability}"
                     else:
                         function_header += f" {visibility}"
-                    
+
                     code += function_header + " {\n"
 
                     for statement in contract_node.body.statements:
@@ -116,25 +125,36 @@ def parse_ast_to_solidity(ast: SourceUnit):
                                 left = ""
                                 if (
                                     type(expr.left_hand_side) == dict
-                                    and expr.left_hand_side["nodeType"] == NodeType.INDEX_ACCESS
-                                    or getattr(expr.left_hand_side, 'node_type', None) == NodeType.INDEX_ACCESS
+                                    and expr.left_hand_side["nodeType"]
+                                    == NodeType.INDEX_ACCESS
+                                    or getattr(expr.left_hand_side, "node_type", None)
+                                    == NodeType.INDEX_ACCESS
                                 ):
-                                    map_name = expr.left_hand_side["baseExpression"]["name"]
+                                    map_name = expr.left_hand_side.base_expression.name
                                     index = "msg.sender"
                                     left = f"{map_name}[{index}]"
                                 else:
                                     left = expr.left_hand_side.name
 
-                                if hasattr(expr.right_hand_side, 'name'):
+                                if hasattr(expr.right_hand_side, "name"):
                                     right = expr.right_hand_side.name
                                 else:
                                     right = "msg.value"
-                                
+
                                 op = expr.operator
                                 code += f"        {left} {op} {right};\n"
-                        
+
                         elif statement.node_type == NodeType.RETURN:
-                            return_value = getattr(statement.expression, 'name', '')
+                            if statement.expression.node_type == NodeType.LITERAL:
+                                return_value = getattr(
+                                    statement.expression, "value", ""
+                                )
+                            elif (
+                                statement.expression.node_type == NodeType.INDEX_ACCESS
+                            ):
+                                return_value = f"{statement.expression.base_expression.name}[{statement.expression.index_expression.expression.name}.{statement.expression.index_expression.member_name}]"
+                            else:
+                                return_value = getattr(statement.expression, "name", "")
                             code += f"        return {return_value};\n"
 
                     code += "    }\n"
@@ -143,21 +163,20 @@ def parse_ast_to_solidity(ast: SourceUnit):
 
     return code
 
-ast = output_json["contract.example.sol:TaskManager"]["ast"]
+
+ast = output_json["contract.example.sol:SimpleWallet"]["ast"]
 
 with open("contract_ast.json", "w+") as f:
     f.write(json.dumps(ast, indent=2))
 
 ast_contract = SourceUnit(
-    **output_json_copy["contract.example.sol:TaskManager"]["ast"]
+    **output_json_copy["contract.example.sol:SimpleWallet"]["ast"]
 )
 contract = parse_ast_to_solidity(ast_contract)
 print(contract)
 
 with open("contract_ast_obj.json", "w+") as f:
     f.write(json.dumps(jsonable_encoder(ast_contract)))
-
-
 
 
 with open("./reentrancy.example.sol") as f:
