@@ -84,7 +84,7 @@ class VariableDeclaration(NodeBase):
     state_variable: bool = Field(alias="stateVariable")
     storage_location: str = Field(alias="storageLocation")
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
-    type_name: Union[Mapping, ElementaryTypeName] = Field(alias="typeName")
+    type_name: Union[Mapping, ElementaryTypeName, UserDefinedTypeName] = Field(alias="typeName")
     visibility: str
 
 
@@ -98,25 +98,52 @@ class Identifier(NodeBase):
     referenced_declaration: int = Field(alias="referencedDeclaration")
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
 
+
 class Literal(NodeBase):
     hex_value: str = Field(alias="hexValue")
     is_constant: bool = Field(alias="isConstant")
     is_lvalue: bool = Field(alias="isLValue")
     is_pure: bool = Field(alias="isPure")
     lvalue_requested: bool = Field(alias="lValueRequested")
-    kind: str 
+    kind: str
     value: str
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
 
 
+class UnaryOperation(NodeBase):
+    is_constant: bool = Field(alias="isConstant")
+    is_lvalue: bool = Field(alias="isLValue")
+    is_pure: bool = Field(alias="isPure")
+    lvalue_requested: bool = Field(alias="lValueRequested")
+    operator: str
+    prefix: bool
+    sub_expression: Identifier = Field(alias="subExpression")
+    type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
+
+
+class BinaryOperation(NodeBase):
+    common_type: TypeDescriptions = Field(alias="commonType")
+    is_constant: bool = Field(alias="isConstant")
+    is_lvalue: bool = Field(alias="isLValue")
+    is_pure: bool = Field(alias="isPure")
+    lvalue_requested: bool = Field(alias="lValueRequested")
+    left_expression: Union[Identifier, Literal, "BinaryOperation"] = Field(
+        alias="leftExpression"
+    )
+    operator: str
+    right_expression: Union[Identifier, Literal, "BinaryOperation"] = Field(
+        alias="rightExpression"
+    )
+    type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
+
 
 class Return(NodeBase):
     function_return_parameters: int = Field(alias="functionReturnParameters")
-    expression: Identifier | Literal
+    expression: Union[Identifier, Literal]
 
 
 class MemberAccess(NodeBase):
-    expression: Identifier
+    expression: Union[Identifier, "IndexAccess"]
     is_constant: bool = Field(alias="isConstant")
     is_lvalue: bool = Field(alias="isLValue")
     is_pure: bool = Field(alias="isPure")
@@ -126,36 +153,82 @@ class MemberAccess(NodeBase):
     sub_expression: Optional[Identifier] = Field(default=None, alias="subExpression")
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
 
+
 class IndexAccess(NodeBase):
     base_expression: Identifier = Field(alias="baseExpression")
-    index_expression: MemberAccess = Field(alias="indexExpression")
+    index_expression: Union[MemberAccess, Identifier] = Field(alias="indexExpression")
     is_constant: bool = Field(alias="isConstant")
     is_lvalue: bool = Field(alias="isLValue")
     is_pure: bool = Field(alias="isPure")
-    lvalue_requested: bool = Field(alias="lValueRequested") 
+    lvalue_requested: bool = Field(alias="lValueRequested")
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
+
+
+class FunctionCall(NodeBase):
+    arguments: List[Union[Identifier, Literal, BinaryOperation]]
+    expression: Identifier
+    is_constant: bool = Field(alias="isConstant")
+    is_lvalue: bool = Field(alias="isLValue")
+    is_pure: bool = Field(alias="isPure")
+    lvalue_requested: bool = Field(alias="lValueRequested")
+    kind: str
+    name_locations: List[str] = Field(alias="nameLocations")
+    names: List[str]
+    try_call: bool = Field(alias="tryCall")
+    type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
+
+
+class EmitStatement(NodeBase):
+    event_call: FunctionCall = Field(alias="eventCall")
+
 
 class Assignment(NodeBase):
     is_constant: bool = Field(alias="isConstant")
     is_lvalue: bool = Field(alias="isLValue")
     is_pure: bool = Field(alias="isPure")
     lvalue_requested: bool = Field(alias="lValueRequested")
-    left_hand_side: Optional[Union[Identifier, IndexAccess]] = Field(default=None, alias="leftHandSide")
+    left_hand_side: Optional[Union[Identifier, MemberAccess, IndexAccess]] = Field(
+        default=None, alias="leftHandSide"
+    )
     operator: str
     prefix: Optional[bool] = Field(default=None)
-    right_hand_side: Optional[Union[MemberAccess, Identifier, Literal]] = Field(default=None,
-        alias="rightHandSide"
-    )
+    right_hand_side: Optional[
+        Union[MemberAccess, Identifier, Literal, FunctionCall]
+    ] = Field(default=None, alias="rightHandSide")
     sub_expression: Optional[Identifier] = Field(default=None, alias="subExpression")
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
 
 
+class TupleExpression(NodeBase):
+    is_constant: bool = Field(alias="isConstant")
+    is_lvalue: bool = Field(alias="isLValue")
+    is_pure: bool = Field(alias="isPure")
+    lvalue_requested: bool = Field(alias="lValueRequested")
+    is_inline_array: bool = Field(alias="isInlineArray")
+    components: List[Union[MemberAccess, IndexAccess]]
+    type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
+
+
+class VariableDeclarationStatement(NodeBase):
+    assignments: List[int]
+    declarations: List[VariableDeclaration]
+    initial_value: IndexAccess = Field(alias="initialValue")
+
 
 class ExpressionStatement(NodeBase):
-    expression: Union[Assignment, IndexAccess]
+    expression: Union[
+        Assignment,
+        UnaryOperation,
+        IndexAccess,
+        BinaryOperation,
+        FunctionCall,
+        TupleExpression,
+        VariableDeclarationStatement,
+    ]
+
 
 class Block(NodeBase):
-    statements: List[Union[ExpressionStatement, Return]]
+    statements: List[Union[ExpressionStatement, Return, EmitStatement, FunctionCall, VariableDeclarationStatement]]
 
 
 class FunctionDefinition(NodeBase):
