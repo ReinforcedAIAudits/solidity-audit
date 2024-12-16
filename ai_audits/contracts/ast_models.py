@@ -84,7 +84,9 @@ class VariableDeclaration(NodeBase):
     state_variable: bool = Field(alias="stateVariable")
     storage_location: str = Field(alias="storageLocation")
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
-    type_name: Union[Mapping, ElementaryTypeName, UserDefinedTypeName] = Field(alias="typeName")
+    type_name: Union[Mapping, ElementaryTypeName, UserDefinedTypeName] = Field(
+        alias="typeName"
+    )
     visibility: str
 
 
@@ -193,7 +195,7 @@ class Assignment(NodeBase):
     operator: str
     prefix: Optional[bool] = Field(default=None)
     right_hand_side: Optional[
-        Union[MemberAccess, Identifier, Literal, FunctionCall]
+        Union[MemberAccess, IndexAccess, Identifier, Literal, FunctionCall]
     ] = Field(default=None, alias="rightHandSide")
     sub_expression: Optional[Identifier] = Field(default=None, alias="subExpression")
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
@@ -228,7 +230,15 @@ class ExpressionStatement(NodeBase):
 
 
 class Block(NodeBase):
-    statements: List[Union[ExpressionStatement, Return, EmitStatement, FunctionCall, VariableDeclarationStatement]]
+    statements: List[
+        Union[
+            ExpressionStatement,
+            Return,
+            EmitStatement,
+            FunctionCall,
+            VariableDeclarationStatement,
+        ]
+    ]
 
 
 class FunctionDefinition(NodeBase):
