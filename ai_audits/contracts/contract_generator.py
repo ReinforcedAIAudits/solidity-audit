@@ -1,12 +1,16 @@
+from enum import Enum
 import json
-from typing import Union
+from typing import Union, Mapping, List, Optional
+from dataclasses import dataclass
 from fastapi.encoders import jsonable_encoder
 import solcx
 
 from ai_audits.contracts.ast_models import (
+    Assignment,
     BinaryOperation,
     ElementaryTypeName,
     EventDefinition,
+    FunctionCall,
     FunctionDefinition,
     IndexAccess,
     MemberAccess,
@@ -14,6 +18,7 @@ from ai_audits.contracts.ast_models import (
     ParameterList,
     SourceUnit,
     StructDefinition,
+    TupleExpression,
     UnaryOperation,
     UserDefinedTypeName,
     Mapping,
@@ -73,24 +78,105 @@ def parse_parameter_list(node: ParameterList, spaces_count: int = 0) -> str:
         var_type = parse_type_name(parameter.type_name)
         name = parameter.name
         parsed.append(f"{var_type}{storage_location} {name}")
-    return {", ".join(parsed)}
+    return ", ".join(parsed)
 
 
 def parse_unary_operation(node: UnaryOperation, spaces_count: int = 0) -> str:
     if node.prefix:
-        return f"{' ' * spaces_count}{node.operator}{node.sub_expression.name}"
+        return f"{' ' * spaces_count}{node.operator}{node.sub_expression.name};\n"
     else:
-        return f"{' ' * spaces_count}{node.sub_expression.name}{node.operator}"
+        return f"{' ' * spaces_count}{node.sub_expression.name}{node.operator};\n"
 
 
 def parse_binary_operation(node: BinaryOperation, spaces_count: int = 0):
-    if node.left_expression.node_type == NodeType.IDENTIFIER:
-        pass
+    left = ""
+    right = ""
+
+    if node.left_expression.node_type == NodeType.BINARY_OPERATION:
+        left = parse_binary_operation(node.left_expression)
+    elif node.left_expression.node_type == NodeType.IDENTIFIER:
+        left = node.left_expression.name
+    elif node.left_expression.node_type == NodeType.LITERAL:
+        left = node.left_expression.value
+
+    if node.right_expression.node_type == NodeType.BINARY_OPERATION:
+        right = parse_binary_operation(node.right_expression)
+    elif node.right_expression.node_type == NodeType.IDENTIFIER:
+        right = node.right_expression.name
+    elif node.right_expression.node_type == NodeType.LITERAL:
+        right = node.right_expression.value
+
+    return f"{' ' * spaces_count}{left} {node.operator} {right}"
+
+
+def parse_function_call(node: FunctionCall, spaces_count: int = 0) -> str:
+    arguments = []
+    for arg in node.arguments:
+        if arg.node_type == NodeType.IDENTIFIER:
+            arguments.append(arg.name)
+
+        elif arg.node_type == NodeType.LITERAL:
+            if arg.kind == "string":
+                arguments.append(repr(arg.value))
+                continue
+            arguments.append(arg.value)
+
+        elif arg.node_type == NodeType.BINARY_OPERATION:
+            arguments.append(parse_binary_operation(arg))
+
+    return f"{' ' * spaces_count}{node.expression.name}({', '.join(arguments)})"
+
+
+def parse_assignment(node: Assignment, spaces_count: int = 0) -> str:
+    left = ""
+    if node.left_hand_side.node_type == NodeType.INDEX_ACCESS:
+        left = parse_index_access(node.left_hand_side)
+    elif node.left_hand_side.node_type == NodeType.MEMBER_ACCESS:
+        left = parse_member_access(node.left_hand_side)
+    else:
+        left = node.left_hand_side.name
+
+    match node.right_hand_side.node_type:
+        case NodeType.INDEX_ACCESS:
+            right = parse_index_access(node.right_hand_side)
+        case NodeType.MEMBER_ACCESS:
+            right = parse_member_access(node.right_hand_side)
+        case NodeType.FUNCTION_CALL:
+            right = parse_function_call(node.right_hand_side)
+        case NodeType.IDENTIFIER:
+            right = node.right_hand_side.name
+        case NodeType.LITERAL:
+            right = node.right_hand_side.value
+    op = node.operator
+    return f"{' ' * spaces_count}{left} {op} {right};\n"
 
 
 def parse_variable_declaration(node: VariableDeclaration, spaces_count: int = 0) -> str:
-    return f"{' ' * spaces_count}{parse_type_name(node.type_name)} {node.visibility} {node.name}"
+    storage_location = (
+        f" {node.storage_location}" if node.storage_location != "default" else ""
+    )
+    visibility = f" {node.visibility}" if node.visibility != "internal" else ""
+    return f"{' ' * spaces_count}{parse_type_name(node.type_name)}{visibility}{storage_location} {node.name}"
 
+
+def parse_tuple_expression(node: TupleExpression, spaces_count: int = 0) -> str:
+    res_tuple = []
+    for component in node.components:
+        match component.node_type:
+            case NodeType.INDEX_ACCESS:
+                res_tuple.append(parse_index_access(component))
+            case NodeType.MEMBER_ACCESS:
+                res_tuple.append(parse_member_access(component))
+            case NodeType.IDENTIFIER:
+                res_tuple.append(component.name)
+            case NodeType.LITERAL:
+                if component.kind == "string":
+                    res_tuple.append(repr(component.value))
+                    continue
+                res_tuple.append(component.value)
+
+    return f"({', '.join(res_tuple)})"
+                
 
 def parse_function_definition(node: FunctionDefinition, spaces_count: int = 0) -> str:
     result = ""
@@ -116,28 +202,36 @@ def parse_function_definition(node: FunctionDefinition, spaces_count: int = 0) -
     for statement in node.body.statements:
         if statement.node_type == NodeType.EXPRESSION_STATEMENT:
             expr = statement.expression
+
             if expr.node_type == NodeType.ASSIGNMENT:
-                left = ""
-                if expr.left_hand_side.node_type == NodeType.INDEX_ACCESS:
-                    left = parse_index_access(expr.left_hand_side)
-                elif expr.left_hand_side.node_type == NodeType.MEMBER_ACCESS:
-                    left = parse_member_access(expr.left_hand_side)
-                else:
-                    left = expr.left_hand_side.name
-                if hasattr(expr.right_hand_side, "name"):
-                    right = expr.right_hand_side.name
-                else:
-                    right = "msg.value"
-                op = expr.operator
-                result += f"{' ' * spaces_count + 2}{left} {op} {right};\n"
+                result += parse_assignment(expr, spaces_count + 2)
+
+            elif expr.node_type == NodeType.UNARY_OPERATION:
+                result += parse_unary_operation(expr, spaces_count + 2)
+
+            elif expr.node_type == NodeType.FUNCTION_CALL:
+                result += f"{parse_function_call(expr, spaces_count + 2)};\n"
+
+        elif statement.node_type == NodeType.EMIT_STATEMENT:
+            result += f"{' ' * (spaces_count + 2)}emit {parse_function_call(statement.event_call)};\n"
+
+        elif statement.node_type == NodeType.VARIABLE_DECLARATION_STATEMENT:
+            left = parse_variable_declaration(statement.declarations[0])
+            right = parse_index_access(statement.initial_value)
+            result += f"{' ' * (spaces_count + 2)}{left} = {right};\n"
+
         elif statement.node_type == NodeType.RETURN:
+
             if statement.expression.node_type == NodeType.LITERAL:
                 return_value = getattr(statement.expression, "value", "")
+
             elif statement.expression.node_type == NodeType.INDEX_ACCESS:
                 return_value = f"{statement.expression.base_expression.name}[{statement.expression.index_expression.expression.name}.{statement.expression.index_expression.member_name}]"
+            elif statement.expression.node_type == NodeType.TUPLE_EXPRESSION:
+                return_value = parse_tuple_expression(statement.expression)
             else:
                 return_value = getattr(statement.expression, "name", "")
-            result += f"{' ' * spaces_count + 2}return {return_value};\n"
+            result += f"{' ' * (spaces_count + 2)}return {return_value};\n"
     result += f"{' ' * spaces_count}}}\n"
     return result
 
@@ -168,7 +262,7 @@ def parse_struct_definition(node: StructDefinition, spaces_count: int = 0) -> st
 
 
 def parse_event_definition(node: EventDefinition, spaces_count: int = 0) -> str:
-    return f"{' ' * spaces_count}event {node.name}({', '.join([parse_variable_declaration(parameter) for parameter in node.parameters.parameters])});\n"
+    return f"{' ' * spaces_count}event {node.name}({parse_parameter_list(node.parameters)});\n"
 
 
 def parse_ast_to_solidity(ast: SourceUnit) -> str:
@@ -201,9 +295,9 @@ def parse_ast_to_solidity(ast: SourceUnit) -> str:
                     params = []
                     for param in contract_node.parameters.parameters:
                         param_type = (
-                            param["typeName"]["name"] if "typeName" in param else ""
+                            param["typeName"].name if "typeName" in param else ""
                         )
-                        param_name = param["name"]
+                        param_name = param.name
                         params.append(f"{param_type} {param_name}")
 
                     code += f"\n    constructor({', '.join(params)}) {{\n"
@@ -227,81 +321,7 @@ def parse_ast_to_solidity(ast: SourceUnit) -> str:
                     contract_node.node_type == NodeType.FUNCTION_DEFINITION
                     and contract_node.kind == "function"
                 ):
-                    name = contract_node.name
-                    visibility = contract_node.visibility
-                    mutability = contract_node.state_mutability
-
-                    params = []
-                    for param in contract_node.parameters.parameters:
-                        param_type = (
-                            param.type_name.name if hasattr(param, "type_name") else ""
-                        )
-                        param_name = param.name if hasattr(param, "name") else ""
-                        if param_type or param_name:
-                            params.append(f"{param_type} {param_name}".strip())
-
-                    return_params = []
-                    if hasattr(contract_node, "return_parameters"):
-                        for param in contract_node.return_parameters.parameters:
-                            return_type = (
-                                param.type_name.name
-                                if hasattr(param, "type_name")
-                                else ""
-                            )
-                            if return_type:
-                                return_params.append(return_type)
-
-                    function_header = f"\n    function {name}({', '.join(params)})"
-                    if mutability:
-                        function_header += f" {visibility} {mutability}"
-                    else:
-                        function_header += f" {visibility}"
-                    if return_params:
-                        function_header += f" returns ({', '.join(return_params)})"
-
-                    code += function_header + " {\n"
-
-                    for statement in contract_node.body.statements:
-                        if statement.node_type == NodeType.EXPRESSION_STATEMENT:
-                            expr = statement.expression
-                            if expr.node_type == NodeType.ASSIGNMENT:
-                                left = ""
-                                if (
-                                    expr.left_hand_side.node_type
-                                    == NodeType.INDEX_ACCESS
-                                ):
-                                    print(expr.left_hand_side)
-                                    left = parse_index_access(expr.left_hand_side)
-                                elif (
-                                    expr.left_hand_side.node_type
-                                    == NodeType.MEMBER_ACCESS
-                                ):
-                                    left = parse_member_access(expr.left_hand_side)
-                                else:
-                                    left = expr.left_hand_side.name
-
-                                if hasattr(expr.right_hand_side, "name"):
-                                    right = expr.right_hand_side.name
-                                else:
-                                    right = "msg.value"
-
-                                op = expr.operator
-                                code += f"        {left} {op} {right};\n"
-
-                        elif statement.node_type == NodeType.RETURN:
-                            if statement.expression.node_type == NodeType.LITERAL:
-                                return_value = getattr(
-                                    statement.expression, "value", ""
-                                )
-                            elif (
-                                statement.expression.node_type == NodeType.INDEX_ACCESS
-                            ):
-                                return_value = f"{statement.expression.base_expression.name}[{statement.expression.index_expression.expression.name}.{statement.expression.index_expression.member_name}]"
-                            else:
-                                return_value = getattr(statement.expression, "name", "")
-                            code += f"        return {return_value};\n"
-
-                    code += "    }\n"
+                    code += parse_function_definition(contract_node, spaces_count)
 
             code += "}"
 
@@ -318,13 +338,7 @@ def main():
     solcx.install_solc()
 
     ast = compile_contract_from_file(FILE_NAME, CONTRACT_NAME)
-
-    filtered = filter_dict(
-        ast["nodes"][1]["nodes"], ["id", "nodeType", "body", "expression", "statements"]
-    )
-    with open("contract_ast_node_types.json", "w+") as f:
-        f.write(json.dumps(filtered, indent=2))
-
+    
     with open("contract_ast.json", "w+") as f:
         f.write(json.dumps(ast, indent=2))
 
