@@ -193,11 +193,9 @@ class Assignment(NodeBase):
         default=None, alias="leftHandSide"
     )
     operator: str
-    prefix: Optional[bool] = Field(default=None)
     right_hand_side: Optional[
         Union[MemberAccess, IndexAccess, Identifier, Literal, FunctionCall]
     ] = Field(default=None, alias="rightHandSide")
-    sub_expression: Optional[Identifier] = Field(default=None, alias="subExpression")
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
 
 
@@ -207,7 +205,7 @@ class TupleExpression(NodeBase):
     is_pure: bool = Field(alias="isPure")
     lvalue_requested: bool = Field(alias="lValueRequested")
     is_inline_array: bool = Field(alias="isInlineArray")
-    components: List[Union[MemberAccess, IndexAccess]]
+    components: List[Union[MemberAccess, IndexAccess, Identifier, Literal]]
     type_descriptions: TypeDescriptions = Field(alias="typeDescriptions")
 
 
