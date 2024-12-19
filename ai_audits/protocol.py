@@ -117,6 +117,9 @@ class VulnerabilityReport(AuditBase):
     )
 
 
+class SmartContract(BaseModel):
+    code: str = Field(..., title="Code", description="Solidity code of the contract")
+
 class ValidatorTask(AuditBase):
     contract_code: str = Field(..., title="Contract code", description="Code of vulnerable contract")
 
