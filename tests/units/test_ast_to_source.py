@@ -21,6 +21,8 @@ class AstToSourceTestCase(unittest.TestCase):
                 self._test_single_ast(contract_name, contract_filename)
 
     def _test_single_ast(self, contract_name, contract_filename):
+        self.maxDiff = None
+
         with open(join(CONTRACT_PATH, contract_filename)) as f:
             source_code = f.read()
         suggested_version = solcx.install.select_pragma_version(
@@ -29,9 +31,15 @@ class AstToSourceTestCase(unittest.TestCase):
         solc_output = solcx.compile_source(source_code, solc_version=suggested_version)
         ast = SourceUnit(**solc_output[f"<stdin>:{contract_name}"]["ast"])
         try:
-            parse_ast_to_solidity(ast)
+            generated = parse_ast_to_solidity(ast)
         except Exception as ex:
             self.fail(f"Exception occurred while parsing {contract_name} contract code: {ex}")
+
+        source = source_code.replace("\n", "").replace('"', "'")
+        generated = generated.replace("\n", "")
+
+        self.assertEqual(source, generated)
+
 
 if __name__ == "__main__":
     unittest.main()
