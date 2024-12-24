@@ -167,8 +167,6 @@ def parse_binary_operation(node: BinaryOperation, spaces_count: int = 0):
 
 
 def parse_function_call(node: FunctionCall, spaces_count: int = 0) -> str:
-    if node.kind == "typeConversion":
-        return f"{' ' * spaces_count}({parse_type_name(node.expression.type_name)}){parse_function_call(node.expression)}"
     arguments = []
     for arg in node.arguments:
         if arg.node_type == NodeType.IDENTIFIER:
@@ -199,6 +197,9 @@ def parse_function_call(node: FunctionCall, spaces_count: int = 0) -> str:
                 expression = parse_member_access(node.expression)
             case NodeType.INDEX_ACCESS:
                 expression = parse_index_access(node.expression)
+
+    if node.kind == "typeConversion":
+        return f"{' ' * spaces_count}{parse_type_name(node.expression.type_name)}({', '.join(arguments)})"
 
     return f"{' ' * spaces_count}{expression}({', '.join(arguments)})"
 
@@ -352,6 +353,8 @@ def parse_type_name(
         case NodeType.USER_DEFINED_TYPE_NAME:
             return node.path_node.name
         case _:
+            if node.state_mutability and node.state_mutability != "nonpayable":
+                return node.state_mutability
             return node.name
 
 
