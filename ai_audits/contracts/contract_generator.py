@@ -278,11 +278,34 @@ def parse_ast_to_solidity(ast: SourceUnit) -> str:
     return code
 
 
-def add_offset(parameter: str, offset: int):
-    parts = [int(x) for x in parameter.split(":")]
-    parts[0] += offset
-    return ":".join(map(str, parts))
+def get_contract_variables(ast: SourceUnit) -> List[VariableDeclaration]:
+    variables = []
 
+    for node in ast.nodes:
+        if node.node_type == NodeType.CONTRACT_DEFINITION:
+            for contract_node in node.nodes:
+                if contract_node.node_type == NodeType.VARIABLE_DECLARATION:
+                    variables.append(contract_node)
+    
+    return variables
+
+def get_contract_functions(ast: SourceUnit) -> List[FunctionDefinition]:
+    functions = []
+
+    for node in ast.nodes:
+        if node.node_type == NodeType.CONTRACT_DEFINITION:
+            for contract_node in node.nodes:
+                if contract_node.node_type == NodeType.FUNCTION_DEFINITION:
+                    functions.append(contract_node)
+    
+    return functions
+
+def apppend_node_to_contract(ast: SourceUnit, node: Union[FunctionDefinition, VariableDeclaration]):
+    for contract_node in ast.nodes:
+        if contract_node.node_type == NodeType.CONTRACT_DEFINITION:
+            contract_node.nodes.append(node)
+    
+    return ast
 
 def main():
     solcx.install_solc()
@@ -307,64 +330,28 @@ def main():
 
     contract_source = parse_ast_to_solidity(ast_obj_reentrancy)
 
-    node_index = -1
-    offset = 1
 
-    for contract_source in ast_obj_reentrancy.nodes:
-        if contract_source.node_type != NodeType.PRAGMA_DIRECTIVE:
+    variables_of_source = get_contract_variables(ast_obj_contract)
+    functions_of_source = get_contract_functions(ast_obj_reentrancy)
 
-            for idx, node in enumerate(contract_source.nodes):
-                if (
-                    node.node_type == NodeType.FUNCTION_DEFINITION
-                    and node.kind != "constructor"
-                ):
-                    print("Node found!")
-                    node_index = idx
-                    break
+    variables_of_reentrancy = get_contract_variables(ast_obj_reentrancy)
+    functions_of_reentrancy = get_contract_functions(ast_obj_reentrancy)
 
-            offset += int(contract_source.nodes[node_index].src.split(":")[0])
+    for variable in variables_of_reentrancy:
+        if variable.name not in [var.name for var in variables_of_source]:
+            ast_obj_contract = apppend_node_to_contract(ast_obj_contract, variable)
 
-    node = next(
-        n for n in ast_obj_reentrancy.nodes[1].nodes if n.name == "balanceChange"
-    )
-
-    node.src = add_offset(node.src, offset)
-    node.body.src = add_offset(node.body.src, offset)
-    node.parameters.src = add_offset(node.parameters.src, offset)
-    node.return_parameters.src = add_offset(node.return_parameters.src, offset)
-    node.name_location = add_offset(node.name_location, offset)
-    node.body.statements[0].expression.left_hand_side.src = add_offset(
-        node.body.statements[0].expression.left_hand_side.src, offset
-    )
-    node.body.statements[0].expression.left_hand_side.base_expression.src = add_offset(
-        node.body.statements[0].expression.left_hand_side.base_expression.src, offset
-    )
-
-    node.body.statements[0].expression.left_hand_side.index_expression.src = add_offset(
-        node.body.statements[0].expression.left_hand_side.index_expression.src,
-        offset,
-    )
-
-    node.body.statements[
-        0
-    ].expression.left_hand_side.index_expression.expression.src = add_offset(
-        node.body.statements[
-            0
-        ].expression.left_hand_side.index_expression.expression.src,
-        offset,
-    )
-
-    node.body.statements[0].expression.right_hand_side.src = add_offset(
-        node.body.statements[0].expression.right_hand_side.src, offset
-    )
-
-    node.body.statements[0].expression.src = add_offset(
-        node.body.statements[0].expression.src, offset
-    )
-
-    node.body.statements[0].src = add_offset(node.body.statements[0].src, offset)
-
-    ast_obj_contract.nodes[1].nodes.append(node)
+    for function in functions_of_reentrancy:
+        if function.kind == "constructor":
+            source_constructor = next(func for func in functions_of_source if func.kind == "constructor")
+            if source_constructor:
+                source_constructor.body.statements += function.body.statements
+            else:
+                ast_obj_contract = apppend_node_to_contract(ast_obj_contract, function)
+            continue
+        if function in functions_of_source:
+            function.name = f"Test{function.name}" ## TODO - add a check for name uniqueness
+        ast_obj_contract = apppend_node_to_contract(ast_obj_contract, function)
 
     contract_source = parse_ast_to_solidity(ast_obj_contract)
 
