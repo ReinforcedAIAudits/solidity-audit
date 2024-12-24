@@ -117,10 +117,13 @@ def parse_tuple_expression(node: TupleExpression, spaces_count: int = 0) -> str:
     return f"{' ' * spaces_count}({', '.join(res_tuple)})"
 
 
-def parse_variable_declaration_statement(node: VariableDeclarationStatement, spaces_count: int = 0) -> str:
+def parse_variable_declaration_statement(
+    node: VariableDeclarationStatement, spaces_count: int = 0
+) -> str:
     left = parse_variable_declaration(node.declarations[0])
     right = parse_index_access(node.initial_value)
     return f"{' ' * (spaces_count)}{left} = {right}"
+
 
 def parse_expression(
     node: Union[
@@ -196,7 +199,9 @@ def parse_function_definition(node: FunctionDefinition, spaces_count: int = 0) -
             result += f"{' ' * (spaces_count)}emit {parse_function_call(statement.event_call)};\n"
 
         elif statement.node_type == NodeType.VARIABLE_DECLARATION_STATEMENT:
-            result += f"{parse_variable_declaration_statement(statement, spaces_count)};\n"
+            result += (
+                f"{parse_variable_declaration_statement(statement, spaces_count)};\n"
+            )
 
         elif statement.node_type == NodeType.RETURN:
             if statement.expression:
@@ -230,7 +235,9 @@ def parse_struct_definition(node: StructDefinition, spaces_count: int = 0) -> st
     code = f"{' ' * spaces_count}struct {node.name} {{\n"
     spaces_count += 4
     for member in node.members:
-        code += f"{' ' * spaces_count}{parse_type_name(member.type_name)} {member.name};\n"
+        code += (
+            f"{' ' * spaces_count}{parse_type_name(member.type_name)} {member.name};\n"
+        )
     spaces_count -= 4
 
     code += f"{' ' * spaces_count}}}\n"
@@ -239,6 +246,7 @@ def parse_struct_definition(node: StructDefinition, spaces_count: int = 0) -> st
 
 def parse_event_definition(node: EventDefinition, spaces_count: int = 0) -> str:
     return f"{' ' * spaces_count}event {node.name}({parse_parameter_list(node.parameters)});\n"
+
 
 def parse_pragma_directive(node: PragmaDirective, spaces_count: int = 0) -> str:
     pragma_str = "".join(node.literals[1:])
@@ -254,9 +262,7 @@ def parse_contract_definition(node: SourceUnit, spaces_count: int = 0) -> str:
         elif contract_node.node_type == NodeType.EVENT_DEFINITION:
             code += parse_event_definition(contract_node, spaces_count)
         elif contract_node.node_type == NodeType.VARIABLE_DECLARATION:
-            code += (
-                f"{parse_variable_declaration(contract_node, spaces_count)};\n"
-            )
+            code += f"{parse_variable_declaration(contract_node, spaces_count)};\n"
         elif contract_node.node_type == NodeType.FUNCTION_DEFINITION:
             code += parse_function_definition(contract_node, spaces_count)
     code += "}"
@@ -271,7 +277,7 @@ def parse_ast_to_solidity(ast: SourceUnit) -> str:
     for node in ast.nodes:
         if node.node_type == NodeType.PRAGMA_DIRECTIVE:
             code += parse_pragma_directive(node, spaces_count)
-        
+
         elif node.node_type == NodeType.CONTRACT_DEFINITION:
             code += parse_contract_definition(node, spaces_count)
 
@@ -286,8 +292,9 @@ def get_contract_variables(ast: SourceUnit) -> List[VariableDeclaration]:
             for contract_node in node.nodes:
                 if contract_node.node_type == NodeType.VARIABLE_DECLARATION:
                     variables.append(contract_node)
-    
+
     return variables
+
 
 def get_contract_functions(ast: SourceUnit) -> List[FunctionDefinition]:
     functions = []
@@ -297,15 +304,41 @@ def get_contract_functions(ast: SourceUnit) -> List[FunctionDefinition]:
             for contract_node in node.nodes:
                 if contract_node.node_type == NodeType.FUNCTION_DEFINITION:
                     functions.append(contract_node)
-    
+
     return functions
 
-def apppend_node_to_contract(ast: SourceUnit, node: Union[FunctionDefinition, VariableDeclaration]):
-    for contract_node in ast.nodes:
-        if contract_node.node_type == NodeType.CONTRACT_DEFINITION:
-            contract_node.nodes.append(node)
-    
+
+def apppend_node_to_contract(
+    ast: SourceUnit, node: Union[FunctionDefinition, VariableDeclaration]
+):
+    for ast_node in ast.nodes:
+        if ast_node.node_type == NodeType.CONTRACT_DEFINITION:
+            if node.node_type == NodeType.FUNCTION_DEFINITION:
+                if node.kind == "constructor":
+                    source_constructor = next(
+                        func for func in ast_node.nodes if func.kind == "constructor"
+                    )
+                    if source_constructor:
+                        source_constructor.body.statements += node.body.statements
+                        continue
+
+            else:
+                last_var_declaration = next(
+                    (
+                        idx
+                        for idx, contract_node in enumerate(reversed(ast_node.nodes))
+                        if contract_node.node_type == NodeType.VARIABLE_DECLARATION
+                    ),
+                    None,
+                )
+                if last_var_declaration:
+                    ast_node.nodes.insert(last_var_declaration, node)
+                    continue
+
+            ast_node.nodes.append(node)
+
     return ast
+
 
 def main():
     solcx.install_solc()
@@ -330,7 +363,6 @@ def main():
 
     contract_source = parse_ast_to_solidity(ast_obj_reentrancy)
 
-
     variables_of_source = get_contract_variables(ast_obj_contract)
     functions_of_source = get_contract_functions(ast_obj_reentrancy)
 
@@ -343,14 +375,18 @@ def main():
 
     for function in functions_of_reentrancy:
         if function.kind == "constructor":
-            source_constructor = next(func for func in functions_of_source if func.kind == "constructor")
+            source_constructor = next(
+                func for func in functions_of_source if func.kind == "constructor"
+            )
             if source_constructor:
                 source_constructor.body.statements += function.body.statements
             else:
                 ast_obj_contract = apppend_node_to_contract(ast_obj_contract, function)
             continue
         if function in functions_of_source:
-            function.name = f"Test{function.name}" ## TODO - add a check for name uniqueness
+            function.name = (
+                f"Test{function.name}"  ## TODO - add a check for name uniqueness
+            )
         ast_obj_contract = apppend_node_to_contract(ast_obj_contract, function)
 
     contract_source = parse_ast_to_solidity(ast_obj_contract)
