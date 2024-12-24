@@ -122,6 +122,7 @@ class Identifier(TypeBase):
 
 class Literal(ExpressionBase):
     hex_value: str = Field(alias="hexValue")
+    subdenomination: Optional[str] = Field(default=None)
     kind: str
     value: str
 
