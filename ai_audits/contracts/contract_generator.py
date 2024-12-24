@@ -28,7 +28,7 @@ from ai_audits.contracts.ast_models import (
 )
 
 FILE_NAME = "contract.example.sol"
-CONTRACT_NAME = "GalacticHub"
+CONTRACT_NAME = "GalacticAuction"
 
 
 def filter_dict(data, allowed_keys):
@@ -55,31 +55,11 @@ def compile_contract_from_file(filename: str, contract_name: str):
 
     return json_compiled[f"<stdin>:{contract_name}"]["ast"]
 
-
-def parse_default_member(
-    node: Union[
-        Identifier,
-        Literal,
-        UnaryOperation,
-        BinaryOperation,
-        MemberAccess,
-        IndexAccess,
-    ],
-    spaces_count: int = 0,
-):
-    match node.node_type:
-        case NodeType.IDENTIFIER:
-            return f"{' ' * spaces_count}{node.name}"
-        case NodeType.LITERAL:
-            return f"{' ' * spaces_count}{node.value}"
-        case NodeType.UNARY_OPERATION:
-            return f"{' ' * spaces_count}{node.operator}{node.sub_expression.name}"
-        case NodeType.BINARY_OPERATION:
-            return f"{' ' * spaces_count}{node.left_expression.name} {node.operator} {node.right_expression.name}"
-        case NodeType.MEMBER_ACCESS:
-            return f"{' ' * spaces_count}{node.expression.name}.{node.member_name}"
-        case NodeType.INDEX_ACCESS:
-            return f"{' ' * spaces_count}{node.base_expression.name}[{node.index_expression.name}]"
+def parse_literal(node: Literal, spaces_count: int = 0) -> str:
+    subdenomination = f" {node.subdenomination}" if node.subdenomination else ""
+    if node.kind == "string":
+        return f"{' ' * spaces_count}{repr(node.value)}{subdenomination}"
+    return f"{' ' * spaces_count}{node.value}{subdenomination}"
 
 
 def parse_index_access(node: IndexAccess) -> str:
@@ -137,7 +117,7 @@ def parse_binary_operation(node: BinaryOperation, spaces_count: int = 0):
         case NodeType.IDENTIFIER:
             left = node.left_expression.name
         case NodeType.LITERAL:
-            left = node.left_expression.value
+            left = parse_literal(node.left_expression)
         case NodeType.MEMBER_ACCESS:
             left = parse_member_access(node.left_expression)
         case NodeType.INDEX_ACCESS:
@@ -153,7 +133,7 @@ def parse_binary_operation(node: BinaryOperation, spaces_count: int = 0):
         case NodeType.IDENTIFIER:
             right = node.right_expression.name
         case NodeType.LITERAL:
-            right = node.right_expression.value
+            right = parse_literal(node.right_expression)
         case NodeType.MEMBER_ACCESS:
             right = parse_member_access(node.right_expression)
         case NodeType.INDEX_ACCESS:
@@ -173,10 +153,7 @@ def parse_function_call(node: FunctionCall, spaces_count: int = 0) -> str:
             arguments.append(arg.name)
 
         elif arg.node_type == NodeType.LITERAL:
-            if arg.kind == "string":
-                arguments.append(repr(arg.value))
-                continue
-            arguments.append(arg.value)
+            arguments.append(parse_literal(arg))
 
         elif arg.node_type == NodeType.BINARY_OPERATION:
             arguments.append(parse_binary_operation(arg))
@@ -225,7 +202,7 @@ def parse_assignment(node: Assignment, spaces_count: int = 0) -> str:
         case NodeType.IDENTIFIER:
             right = node.right_hand_side.name
         case NodeType.LITERAL:
-            right = node.right_hand_side.value
+            right = parse_literal(node.right_hand_side)
     op = node.operator
     return f"{' ' * spaces_count}{left} {op} {right};\n"
 
@@ -240,11 +217,7 @@ def parse_variable_declaration(node: VariableDeclaration, spaces_count: int = 0)
             case NodeType.IDENTIFIER:
                 value = node.value.name
             case NodeType.LITERAL:
-                value = (
-                    repr(node.value.value)
-                    if node.value.kind == "string"
-                    else node.value.value
-                )
+                value = parse_literal(node.value)
             case NodeType.INDEX_ACCESS:
                 value = parse_index_access(node.value)
             case NodeType.MEMBER_ACCESS:
@@ -270,10 +243,7 @@ def parse_tuple_expression(node: TupleExpression, spaces_count: int = 0) -> str:
             case NodeType.IDENTIFIER:
                 res_tuple.append(component.name)
             case NodeType.LITERAL:
-                if component.kind == "string":
-                    res_tuple.append(repr(component.value))
-                    continue
-                res_tuple.append(component.value)
+                res_tuple.append(parse_literal(component))
 
             case NodeType.BINARY_OPERATION:
                 res_tuple.append(parse_binary_operation(component))
@@ -329,10 +299,22 @@ def parse_function_definition(node: FunctionDefinition, spaces_count: int = 0) -
         elif statement.node_type == NodeType.RETURN:
 
             if statement.expression.node_type == NodeType.LITERAL:
-                return_value = getattr(statement.expression, "value", "")
+                return_value = parse_literal(statement.expression)
 
             elif statement.expression.node_type == NodeType.INDEX_ACCESS:
-                return_value = f"{statement.expression.base_expression.name}[{statement.expression.index_expression.expression.name}.{statement.expression.index_expression.member_name}]"
+                return_value = parse_index_access(statement.expression)
+            
+            elif statement.expression.node_type == NodeType.MEMBER_ACCESS:
+                return_value = parse_member_access(statement.expression)
+
+            elif statement.expression.node_type == NodeType.FUNCTION_CALL:
+                return_value = parse_function_call(statement.expression)
+            elif statement.expression.node_type == NodeType.BINARY_OPERATION:
+                return_value = parse_binary_operation(statement.expression)
+            elif statement.expression.node_type == NodeType.UNARY_OPERATION:
+                return_value = parse_unary_operation(statement.expression)
+            elif statement.expression.node_type == NodeType.IDENTIFIER:
+                return_value = statement.expression.name            
             elif statement.expression.node_type == NodeType.TUPLE_EXPRESSION:
                 return_value = parse_tuple_expression(statement.expression)
             else:
