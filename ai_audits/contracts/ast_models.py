@@ -171,7 +171,9 @@ class IndexAccess(ExpressionBase):
 
 class FunctionCall(ExpressionBase):
     arguments: List[DefaultMember]
-    expression: Union[Identifier, MemberAccess, IndexAccess, "ElementaryTypeNameExpression"]
+    expression: Union[
+        Identifier, MemberAccess, IndexAccess, "ElementaryTypeNameExpression"
+    ]
     kind: str
     name_locations: List[str] = Field(alias="nameLocations")
     names: List[str]
@@ -208,16 +210,19 @@ class VariableDeclarationStatement(NodeBase):
     initial_value: IndexAccess = Field(alias="initialValue")
 
 
+Expression = Union[
+    Assignment,
+    UnaryOperation,
+    IndexAccess,
+    BinaryOperation,
+    FunctionCall,
+    TupleExpression,
+    VariableDeclarationStatement,
+]
+
+
 class ExpressionStatement(NodeBase):
-    expression: Union[
-        Assignment,
-        UnaryOperation,
-        IndexAccess,
-        BinaryOperation,
-        FunctionCall,
-        TupleExpression,
-        VariableDeclarationStatement,
-    ]
+    expression: Expression
 
 
 class Block(NodeBase):
