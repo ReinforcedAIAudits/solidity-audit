@@ -17,6 +17,7 @@ from ai_audits.contracts.ast_models import (
     MemberAccess,
     NodeType,
     ParameterList,
+    PragmaDirective,
     SourceUnit,
     StructDefinition,
     TupleExpression,
@@ -29,7 +30,7 @@ from ai_audits.contracts.ast_models import (
 )
 
 FILE_NAME = "contract.example.sol"
-CONTRACT_NAME = "SimpleStorage"
+CONTRACT_NAME = "GalacticHub"
 
 
 def compile_contract_from_file(filename: str, contract_name: str):
@@ -113,8 +114,13 @@ def parse_variable_declaration(node: VariableDeclaration, spaces_count: int = 0)
 def parse_tuple_expression(node: TupleExpression, spaces_count: int = 0) -> str:
     res_tuple = [parse_expression(component) for component in node.components]
 
-    return f"({', '.join(res_tuple)})"
+    return f"{' ' * spaces_count}({', '.join(res_tuple)})"
 
+
+def parse_variable_declaration_statement(node: VariableDeclarationStatement, spaces_count: int = 0) -> str:
+    left = parse_variable_declaration(node.declarations[0])
+    right = parse_index_access(node.initial_value)
+    return f"{' ' * (spaces_count)}{left} = {right}"
 
 def parse_expression(
     node: Union[
@@ -141,9 +147,7 @@ def parse_expression(
         case NodeType.VARIABLE_DECLARATION:
             return parse_variable_declaration(node, spaces_count)
         case NodeType.VARIABLE_DECLARATION_STATEMENT:
-            left = parse_variable_declaration(node.declarations[0])
-            right = parse_index_access(node.initial_value)
-            return f"{' ' * (spaces_count + 4)}{left} = {right}"
+            return parse_variable_declaration_statement(node, spaces_count)
         case NodeType.ASSIGNMENT:
             return parse_assignment(node, spaces_count)
         case NodeType.UNARY_OPERATION:
@@ -180,26 +184,27 @@ def parse_function_definition(node: FunctionDefinition, spaces_count: int = 0) -
 
     result += build_function_header(node, spaces_count)
 
+    spaces_count += 4
+
     for statement in node.body.statements:
         if statement.node_type == NodeType.EXPRESSION_STATEMENT:
             result += (
-                f"{' ' * (spaces_count + 4)}{parse_expression(statement.expression)};\n"
+                f"{' ' * (spaces_count)}{parse_expression(statement.expression)};\n"
             )
 
         elif statement.node_type == NodeType.EMIT_STATEMENT:
-            result += f"{' ' * (spaces_count + 4)}emit {parse_function_call(statement.event_call)};\n"
+            result += f"{' ' * (spaces_count)}emit {parse_function_call(statement.event_call)};\n"
 
         elif statement.node_type == NodeType.VARIABLE_DECLARATION_STATEMENT:
-            left = parse_variable_declaration(statement.declarations[0])
-            right = parse_index_access(statement.initial_value)
-            result += f"{' ' * (spaces_count + 4)}{left} = {right};\n"
+            result += f"{parse_variable_declaration_statement(statement, spaces_count)};\n"
 
         elif statement.node_type == NodeType.RETURN:
             if statement.expression:
-                result += f"{' ' * (spaces_count + 4)}return {parse_expression(statement.expression)};\n"
+                result += f"{' ' * (spaces_count)}return {parse_expression(statement.expression)};\n"
             else:
-                result += f"{' ' * (spaces_count + 4)}return;\n"
+                result += f"{' ' * (spaces_count)}return;\n"
 
+    spaces_count -= 4
     result += f"{' ' * spaces_count}}}\n\n"
     return result
 
@@ -222,17 +227,41 @@ def parse_type_name(
 
 def parse_struct_definition(node: StructDefinition, spaces_count: int = 0) -> str:
     spaces = " " * spaces_count
-    code = f"{spaces}struct {node.name} {{\n"
-
+    code = f"{' ' * spaces_count}struct {node.name} {{\n"
+    spaces_count += 4
     for member in node.members:
-        code += f"{spaces}    {parse_type_name(member.type_name)} {member.name};\n"
+        code += f"{' ' * spaces_count}{parse_type_name(member.type_name)} {member.name};\n"
+    spaces_count -= 4
 
-    code += f"{spaces}}}\n"
+    code += f"{' ' * spaces_count}}}\n"
     return code
 
 
 def parse_event_definition(node: EventDefinition, spaces_count: int = 0) -> str:
     return f"{' ' * spaces_count}event {node.name}({parse_parameter_list(node.parameters)});\n"
+
+def parse_pragma_directive(node: PragmaDirective, spaces_count: int = 0) -> str:
+    pragma_str = "".join(node.literals[1:])
+    return f"{' ' * spaces_count}pragma {node.literals[0]} {pragma_str};\n\n"
+
+
+def parse_contract_definition(node: SourceUnit, spaces_count: int = 0) -> str:
+    code = f"contract {node.name} {{\n"
+    spaces_count = 4
+    for contract_node in node.nodes:
+        if contract_node.node_type == NodeType.STRUCT_DEFINITION:
+            code += parse_struct_definition(contract_node, spaces_count)
+        elif contract_node.node_type == NodeType.EVENT_DEFINITION:
+            code += parse_event_definition(contract_node, spaces_count)
+        elif contract_node.node_type == NodeType.VARIABLE_DECLARATION:
+            code += (
+                f"{parse_variable_declaration(contract_node, spaces_count)};\n"
+            )
+        elif contract_node.node_type == NodeType.FUNCTION_DEFINITION:
+            code += parse_function_definition(contract_node, spaces_count)
+    code += "}"
+
+    return code
 
 
 def parse_ast_to_solidity(ast: SourceUnit) -> str:
@@ -241,28 +270,10 @@ def parse_ast_to_solidity(ast: SourceUnit) -> str:
 
     for node in ast.nodes:
         if node.node_type == NodeType.PRAGMA_DIRECTIVE:
-
-            pragma_str = "".join(node.literals[1:])
-            code += f"pragma {node.literals[0]} {pragma_str};\n\n"
-
+            code += parse_pragma_directive(node, spaces_count)
+        
         elif node.node_type == NodeType.CONTRACT_DEFINITION:
-            code += f"contract {node.name} {{\n"
-            spaces_count = 4
-
-            for contract_node in node.nodes:
-                if contract_node.node_type == NodeType.STRUCT_DEFINITION:
-                    code += parse_struct_definition(contract_node, spaces_count)
-
-                elif contract_node.node_type == NodeType.EVENT_DEFINITION:
-                    code += parse_event_definition(contract_node, spaces_count)
-                elif contract_node.node_type == NodeType.VARIABLE_DECLARATION:
-                    code += (
-                        f"{parse_variable_declaration(contract_node, spaces_count)};\n"
-                    )
-                elif contract_node.node_type == NodeType.FUNCTION_DEFINITION:
-                    code += parse_function_definition(contract_node, spaces_count)
-
-            code += "}"
+            code += parse_contract_definition(node, spaces_count)
 
     return code
 
