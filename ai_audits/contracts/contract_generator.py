@@ -8,8 +8,10 @@ import solcx
 from ai_audits.contracts.ast_models import (
     Assignment,
     BinaryOperation,
+    Block,
     ElementaryTypeName,
     EventDefinition,
+    ExpressionStatement,
     FunctionCall,
     FunctionDefinition,
     Identifier,
@@ -18,6 +20,7 @@ from ai_audits.contracts.ast_models import (
     NodeType,
     ParameterList,
     PragmaDirective,
+    Return,
     SourceUnit,
     StructDefinition,
     TupleExpression,
@@ -307,6 +310,85 @@ def get_contract_functions(ast: SourceUnit) -> List[FunctionDefinition]:
 
     return functions
 
+def rename_variable_in_function(ast_node: FunctionDefinition, old_name: str, new_name: str):
+    for param in ast_node.parameters.parameters:
+        if param.name == old_name:
+            param.name = new_name
+            
+    for param in ast_node.return_parameters.parameters:
+        if param.name == old_name:
+            param.name = new_name
+            
+    def traverse_node(node):
+        if isinstance(node, Identifier) and node.name == old_name:
+            node.name = new_name
+            
+        elif isinstance(node, VariableDeclaration) and node.name == old_name:
+            node.name = new_name
+            
+        elif isinstance(node, Block):
+            for stmt in node.statements:
+                traverse_node(stmt)
+                
+        elif isinstance(node, ExpressionStatement):
+            traverse_node(node.expression)
+            
+        elif isinstance(node, Assignment):
+            if node.left_hand_side:
+                traverse_node(node.left_hand_side)
+            if node.right_hand_side:
+                traverse_node(node.right_hand_side)
+                
+        elif isinstance(node, BinaryOperation):
+            traverse_node(node.left_expression)
+            traverse_node(node.right_expression)
+            
+        elif isinstance(node, UnaryOperation):
+            traverse_node(node.sub_expression)
+            
+        elif isinstance(node, FunctionCall):
+            traverse_node(node.expression)
+            for arg in node.arguments:
+                traverse_node(arg)
+                
+        elif isinstance(node, MemberAccess):
+            traverse_node(node.expression)
+            if node.sub_expression:
+                traverse_node(node.sub_expression)
+                
+        elif isinstance(node, IndexAccess):
+            traverse_node(node.base_expression)
+            traverse_node(node.index_expression)
+            
+        elif isinstance(node, TupleExpression):
+            for comp in node.components:
+                traverse_node(comp)
+                
+        elif isinstance(node, VariableDeclarationStatement):
+            for decl in node.declarations:
+                traverse_node(decl)
+            if node.initial_value:
+                traverse_node(node.initial_value)
+                
+        elif isinstance(node, Return):
+            if node.expression:
+                traverse_node(node.expression)
+    traverse_node(ast_node.body)
+
+
+def rename_variable_in_contract(ast: SourceUnit, old_name: str, new_name: str):
+    for node in ast.nodes:
+        if node.node_type == NodeType.CONTRACT_DEFINITION:
+            for contract_node in node.nodes:
+                if contract_node.node_type == NodeType.VARIABLE_DECLARATION:
+                    if contract_node.name == old_name:
+                        contract_node.name = new_name
+
+                if contract_node.node_type == NodeType.FUNCTION_DEFINITION:
+                    rename_variable_in_function(contract_node, old_name, new_name)
+
+    return ast
+        
 
 def apppend_node_to_contract(
     ast: SourceUnit, node: Union[FunctionDefinition, VariableDeclaration]
@@ -372,6 +454,12 @@ def main():
     for variable in variables_of_reentrancy:
         if variable.name not in [var.name for var in variables_of_source]:
             ast_obj_contract = apppend_node_to_contract(ast_obj_contract, variable)
+        else:
+            old_name = variable.name
+            variable.name = f"Test{variable.name}"  ## TODO - add a check for name uniqueness
+            rename_variable_in_contract(ast_obj_reentrancy, old_name, variable.name)
+            ast_obj_contract = apppend_node_to_contract(ast_obj_contract, variable)
+            
 
     for function in functions_of_reentrancy:
         if function.kind == "constructor":
