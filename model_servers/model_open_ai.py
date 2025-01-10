@@ -16,14 +16,11 @@ class AuditResponse(BaseModel):
 
 solc = SolcSingleton()
 
-client = AsyncOpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENAI_API_KEY"),
-)
+client = AsyncOpenAI()
 app = FastAPI()
 
 
-GPT_MODEL = "openai/gpt-4o-mini-2024-07-18"
+GPT_MODEL = "gpt-4o-mini-2024-07-18"
 
 
 PROMPT = """
