@@ -6,6 +6,8 @@ contract GalacticHub {
     uint256 public totalSupply;
     mapping(address => mapping(address => uint256)) public allowance;
     uint256 public feePercentage;
+    mapping(address => uint256) public balances;
+
 
     constructor() {
         owner = msg.sender;

@@ -1,0 +1,14 @@
+[
+    {
+      "from": 17,
+      "to": 19,
+      "vulnerabilityClass": ["unguarded function", "missed access check", "(un?)intentional backdoor", "unprotected function"],
+      "testCase": "contractInstance.changeOwner(address(0x123)); // Changing ownership without any checks",
+      "description": "The function `changeOwner` does not have the `onlyOwner` modifier, allowing any user to change the contract's ownership without restriction.",
+      "priorArt": [
+        "Similar ownership bypasses have been observed in contracts like XYZ",
+        "In the past, contracts like ABC allowed unauthorized ownership changes leading to fund theft."
+      ],
+      "fixedLines": "    function changeOwner(address _newOwner) onlyOwner { owner = _newOwner; }"
+    }
+  ]
