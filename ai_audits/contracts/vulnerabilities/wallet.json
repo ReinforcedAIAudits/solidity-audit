@@ -1,0 +1,15 @@
+[
+    {
+      "from": 12,
+      "to": 18,
+      "vulnerabilityClass": ["reentrancy", "reentrancy vulnerability"],
+      "testCase": "1. User A deposits 1 ether to the contract. \n2. User A calls withdrawBalance(). \n3. Contract sends 1 ether to User A's fallback, which can call withdrawBalance() again before the funds[msg.sender] is set to 0, leading to withdrawing ether multiple times.",
+      "description": "This contract is vulnerable to reentrancy attacks. The `withdrawBalance` function sends ether to `msg.sender` and then sets `funds[msg.sender]` to 0 afterwards. This allows for a reentrancy attack, where if `msg.sender` is a contract, the fallback function of that contract can re-enter `withdrawBalance` before `funds[msg.sender]` is updated, allowing the attacker to withdraw more than intended.",
+      "priorArt": [
+        "The DAO incident",
+        "2000 Ether theft from Parity Wallet",
+        "bZx protocol attack"
+      ],
+      "fixedLines": "function withdrawBalance() {\n    uint amount = funds[msg.sender];\n    require(amount > 0);\n    funds[msg.sender] = 0;  // Set to zero before the transfer\n    require(msg.sender.call.value(amount)());\n}"
+    }
+  ]
