@@ -16,11 +16,13 @@ class AuditResponse(BaseModel):
 
 solc = SolcSingleton()
 
-client = AsyncOpenAI()
+client = AsyncOpenAI(
+    base_url=os.getenv("OPENAI_API_URL", "https://api.openai.com"),
+)
 app = FastAPI()
 
 
-GPT_MODEL = "gpt-4o-mini-2024-07-18"
+GPT_MODEL = os.getenv("GPT_MODEL", "gpt-4o-mini-2024-07-18")
 
 
 PROMPT = """
