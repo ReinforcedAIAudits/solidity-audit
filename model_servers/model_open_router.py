@@ -3,9 +3,11 @@ import json
 import os
 import random
 import time
+from typing import List
 
 from fastapi import FastAPI, Request, HTTPException
 from openai import AsyncOpenAI
+from pydantic import BaseModel
 
 from ai_audits.protocol import SmartContract
 from ai_audits.subnet_utils import create_session, preprocess_text, ROLES, SolcSingleton
@@ -49,34 +51,35 @@ Each report entry should describe a separate vulnerability with precise line num
 The generated audit report should not contain any extra comments or explanations.
 """.strip()
 
-PROMPT_VALIDATOR = """
+def get_prompt(functions: List[str], storages: List[str]) -> str:
+    return f"""
 You are a Solidity smart contract writer. 
 Your role is to help user writers learn Solidity smart contracts by providing them different examples of contracts.
 Be creative when generating contracts, avoid using common names or known contract structures. 
 Do not use primritive examples of contracts, human writers need to understand the complexity of the contracts.
 
 Aim to create more complex contracts rather than simple, typical examples. 
-Each contract should include 3-5 state variables and 3-5 functions. 
+Each contract must include {functions} functions, {storages} storages and more 2-3 state variables and 2-3 functions. 
 Ensure that the contract code is valid and can be successfully compiled.
 
 Generate response in JSON format with no extra comments or explanations.
-Answer with only JSON, without markdown formatting.
+Answer with only JSON text, without markdown formatting.
 
 Output format:
-{
+{{
     "code": "Solidity code of the contract"
-}
+}}
 """.strip()
 
 solc = SolcSingleton()
 
 
-async def generate_contract() -> SmartContract:
+async def generate_contract(functions: List[str], storages: List[str]) -> SmartContract:
 
     completion = await client.beta.chat.completions.parse(
         model=os.getenv("OPEN_ROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct"),
         messages=[
-            {"role": ROLES.SYSTEM, "content": PROMPT_VALIDATOR},
+            {"role": ROLES.SYSTEM, "content": get_prompt(functions, storages)},
             # Output format guidance is provided automatically by OpenAI SDK.
             {
                 "role": ROLES.USER,
@@ -149,12 +152,17 @@ async def submit(request: Request):
     return result
 
 
+class ContractInfo(BaseModel):
+    functions: List[str]
+    storages: List[str]
+
+
 @app.post("/task")
-async def get_task(request: Request):
+async def get_task(request: Request, contract_info: ContractInfo):
     tries = int(os.getenv("MAX_TRIES", "3"))
     is_valid, result = False, None
     while tries > 0:
-        result = await generate_contract()
+        result = await generate_contract(contract_info.functions, contract_info.storages)
         print(f"Generated contract: {result}")
         try:
             solc.compile(result.code)
