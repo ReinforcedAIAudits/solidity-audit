@@ -12,16 +12,16 @@ contract Bridge {
         _;
     }
 
-    function changeOwner(address _newOwner) {
+    function changeOwner(address _newOwner) public {
         owner = _newOwner;
     }
 
-    function deposit(address _token, uint256 _amount) {
+    function deposit(address _token, uint256 _amount) public {
         IERC20(_token).transferFrom(msg.sender, address(this), _amount);
         emit Deposit(_token, _amount);
     }
 
-    function withdraw(address _token, uint256 _amount) onlyOwner {
+    function withdraw(address _token, uint256 _amount) public {
         IERC20(_token).transfer(msg.sender, _amount);
     }
 }
