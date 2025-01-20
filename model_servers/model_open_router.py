@@ -1,16 +1,15 @@
 import datetime
 import json
 import os
-import random
-import time
 from typing import List
 
 from fastapi import FastAPI, Request, HTTPException
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
-from ai_audits.protocol import SmartContract
-from ai_audits.subnet_utils import create_session, preprocess_text, ROLES, SolcSingleton
+from ai_audits.contracts.contract_generator import create_task
+from ai_audits.protocol import SmartContract, ValidatorTask
+from ai_audits.subnet_utils import ROLES, SolcSingleton
 
 
 client = AsyncOpenAI(
@@ -161,6 +160,13 @@ class ContractInfo(BaseModel):
 async def get_task(request: Request, contract_info: ContractInfo):
     tries = int(os.getenv("MAX_TRIES", "3"))
     is_valid, result = False, None
+    vulnerability = ("../ai_audits/contracts/vulnerabilities/wallet.sol", "../ai_audits/contracts/vulnerabilities/wallet.json")
+    with open(vulnerability[0], "r") as f:
+        vulnerability_source = f.read()
+
+    with open(vulnerability[1], "r") as f:
+        validator_task = json.loads(f.read())[0]
+
     while tries > 0:
         result = await generate_contract(contract_info.functions, contract_info.storages)
         print(f"Generated contract: {result}")
@@ -179,7 +185,8 @@ async def get_task(request: Request, contract_info: ContractInfo):
     
     with open(f"contracts_from_llm/{datetime.datetime.now()}.sol", "w+") as f:
         f.write(result.code)
-    return result
+
+    return create_task(result.code, vulnerability_source, validator_task)
 
 
 @app.get("/healthcheck")

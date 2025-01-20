@@ -2,7 +2,7 @@ from enum import Enum
 import json
 import os
 import random
-from typing import Union, Mapping, List, Optional
+from typing import Tuple, Union, Mapping, List, Optional
 from dataclasses import dataclass
 
 from pydantic import ValidationError
@@ -28,16 +28,16 @@ from solc_ast_parser.models.ast_models import (
 from solc_ast_parser.models.base_ast_models import NodeType
 import solcx
 
+from ai_audits.protocol import ValidatorTask
+
 FILE_NAME = "contract.example.sol"
 
-def compile_contract_from_file(filename: str):
-    with open(filename) as f:
-        code = f.read()
 
+def compile_contract_from_source(source: str):
     suggested_version = solcx.install.select_pragma_version(
-        code, solcx.get_installable_solc_versions()
+        source, solcx.get_installable_solc_versions()
     )
-    json_compiled = solcx.compile_source(code, solc_version=suggested_version)
+    json_compiled = solcx.compile_source(source, solc_version=suggested_version)
     with open("compiled.json", "w+") as f:
         f.write(json.dumps(json_compiled, indent=2))
     return json_compiled[list(json_compiled.keys())[0]]["ast"]
@@ -135,6 +135,7 @@ def rename_variable_in_function(
 
     traverse_node(ast_node.body)
 
+
 def change_function_in_contract(ast: SourceUnit, new_function: FunctionDefinition):
     for node in ast.nodes:
         if node.node_type == NodeType.CONTRACT_DEFINITION:
@@ -201,9 +202,12 @@ def append_node_to_contract(
     return ast
 
 
-def get_random_vulnerability(directory_path) -> (str, str):
+def get_random_vulnerability(directory_path) -> Tuple[str, str]:
+    """
+    Get random vulnerability from directory
+    :return: Tuple of vulnerability file and json file
+    """
     files = [f for f in os.listdir(directory_path) if f.endswith(".sol")]
-    jsons = [f for f in os.listdir(directory_path) if f.endswith(".json")]
 
     if not files:
         return None
@@ -275,101 +279,55 @@ def find_function_in_contract_by_lines(
     return None
 
 
-def get_vulnerability_strings_number(
-    vulnerability_json: str,
+def get_vulnerability_bounds(
+    validator_task: ValidatorTask,
     contract_ast: SourceUnit,
     contract_source: str,
     vulnerability_source: str,
-) -> (int, int):
-    with open(vulnerability_json) as f:
-        json_source = json.loads(f.read())[0]
+) -> Tuple[int, int]:
+
     return find_function_boundaries(
         vulnerability_source,
         contract_ast,
         contract_source,
-        json_source["from"],
-        json_source["to"],
+        validator_task["from"],
+        validator_task["to"],
     )
 
 
-def main():
-    solcx.install_solc()
-
-    ast = compile_contract_from_file(FILE_NAME)
-
-    with open("contract_ast.json", "w+") as f:
-        f.write(json.dumps(ast, indent=2))
-
+def create_task(contract_source: str, vulnerability_source: str, validator_task: ValidatorTask) -> ValidatorTask:
+    ast = compile_contract_from_source(contract_source)
     try:
         ast_obj_contract = SourceUnit(**ast)
     except ValidationError as e:
         with open("contract.errors.txt", "w+") as f:
             f.write(str(e))
+        raise e
 
-    contract_source = parse_ast_to_solidity(ast_obj_contract)
-
-    with open("restored.example.sol", "w+") as f:
-        f.write(contract_source)
-
-    vulnerability = get_random_vulnerability("./vulnerabilities")
+    # vulnerability = get_random_vulnerability("./vulnerabilities")
 
     # TODO REMOVE
-    vulnerability = ("./vulnerabilities/wallet.sol", "./vulnerabilities/wallet.json")
-
-    ast_vulnerability = compile_contract_from_file(vulnerability[0])
-
-    with open("vulnerability_ast.json", "w+") as f:
-        f.write(json.dumps(ast_vulnerability, indent=2))
+    # vulnerability = ("./vulnerabilities/wallet.sol", "./vulnerabilities/wallet.json")
+    ast_vulnerability = compile_contract_from_source(vulnerability_source)
 
     try:
         ast_obj_vulnerability = SourceUnit(**ast_vulnerability)
     except ValidationError as e:
         with open("vulnerability.errors.txt", "w+") as f:
             f.write(str(e))
-    contract_source = parse_ast_to_solidity(ast_obj_vulnerability)
+        raise e
 
-    variables_of_source = get_contract_variables(ast_obj_contract)
-    functions_of_source = get_contract_functions(ast_obj_vulnerability)
-
-    variables_of_vulnerability = get_contract_variables(ast_obj_vulnerability)
-    functions_of_vulnerability = get_contract_functions(ast_obj_vulnerability)
-
-    for variable in variables_of_vulnerability:
+    for variable in get_contract_variables(ast_obj_vulnerability):
         if not check_storage_in_contract(ast_obj_contract, variable.name):
             ast_obj_contract = append_node_to_contract(ast_obj_contract, variable)
 
-    for function in functions_of_vulnerability:
+    for function in get_contract_functions(ast_obj_vulnerability):
         if check_function_in_contract(ast_obj_contract, function.name):
             change_function_in_contract(ast_obj_contract, function)
         else:
             ast_obj_contract = append_node_to_contract(
                 ast_obj_contract, function
             )  # TODO - max tries or logs
-
-    # for variable in variables_of_vulnerability:
-    #     if variable.name not in [var.name for var in variables_of_source]:
-    #         ast_obj_contract = apppend_node_to_contract(ast_obj_contract, variable)
-    #     else:
-    #         old_name = variable.name
-    #         variable.name = f"Test{variable.name}"  ## TODO - add a check for name uniqueness
-    #         rename_variable_in_contract(ast_obj_vulnerability, old_name, variable.name)
-    #         ast_obj_contract = apppend_node_to_contract(ast_obj_contract, variable)
-
-    # for function in functions_of_vulnerability:
-    #     if function.kind == "constructor":
-    #         source_constructor = next(
-    #             func for func in functions_of_source if func.kind == "constructor"
-    #         )
-    #         if source_constructor:
-    #             source_constructor.body.statements += function.body.statements
-    #         else:
-    #             ast_obj_contract = apppend_node_to_contract(ast_obj_contract, function)
-    #         continue
-    #     if function in functions_of_source:
-    #         function.name = (
-    #             f"Test{function.name}"  ## TODO - add a check for name uniqueness
-    #         )
-    #     ast_obj_contract = apppend_node_to_contract(ast_obj_contract, function)
 
     contract_source = parse_ast_to_solidity(ast_obj_contract)
 
@@ -378,20 +336,8 @@ def main():
     )
     ast = solcx.compile_source(contract_source, solc_version=suggested_version)
 
-    with open("contract_with_vulnerability.json", "w+") as f:
-        f.write(json.dumps(ast[list(ast.keys())[0]]["ast"], indent=2))
-
-    with open(vulnerability[0], "r") as f:
-        vu = f.read()
-        print(
-            get_vulnerability_strings_number(
-                vulnerability[1], ast_obj_contract, contract_source, vu
-            )
-        )
-
-    with open("contract_with_vulnerability.sol", "w+") as f:
-        f.write(contract_source)
-
-
-if __name__ == "__main__":
-    main()
+    validator_task["contract_code"] = contract_source
+    validator_task["from"], validator_task["to"] = get_vulnerability_bounds(
+        validator_task, ast_obj_contract, contract_source, vulnerability_source
+    )
+    return validator_task
