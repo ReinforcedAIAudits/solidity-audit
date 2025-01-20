@@ -60,7 +60,7 @@ Do not use primritive examples of contracts, human writers need to understand th
 
 Aim to create more complex contracts rather than simple, typical examples. 
 Each contract must include {functions} functions, {storages} storages and more 2-3 state variables and 2-3 functions. 
-Ensure that the contract code is valid and can be successfully compiled.
+Ensure that the contract code is valid and can be successfully compiled by solidity compiler.
 
 Generate response in JSON format with no extra comments or explanations.
 Answer with only JSON text, without markdown formatting.
@@ -166,7 +166,8 @@ async def get_task(request: Request, contract_info: ContractInfo):
         print(f"Generated contract: {result}")
         try:
             solc.compile(result.code)
-        except:
+        except Exception as e:
+            print(f"Compilation error: {e}")
             continue
 
         if result is not None:
