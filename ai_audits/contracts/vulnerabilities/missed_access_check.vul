@@ -1,0 +1,9 @@
+address public owner;
+
+constructor() {
+    owner = msg.sender;
+}
+
+function vulnerability_changeOwner(address _newOwner) public { 
+    owner = _newOwner;
+}
