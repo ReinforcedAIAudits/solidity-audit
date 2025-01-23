@@ -1,0 +1,9 @@
+mapping (address => uint) userBalance;
+
+function vulnerability_withdrawBalance() public{
+    (bool success, ) = msg.sender.call{value: userBalance[msg.sender]}("");
+    if (!success) {
+        revert();
+    }
+    userBalance[msg.sender] = 0;
+}

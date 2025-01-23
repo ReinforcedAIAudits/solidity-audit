@@ -28,7 +28,7 @@ from solc_ast_parser.models.ast_models import (
 from solc_ast_parser.models.base_ast_models import NodeType
 import solcx
 
-from ai_audits.protocol import ValidatorTask
+from ai_audits.protocol import ValidatorTask, VulnerabilityReport
 
 FILE_NAME = "contract.example.sol"
 
@@ -65,76 +65,6 @@ def get_contract_functions(ast: SourceUnit) -> List[FunctionDefinition]:
                     functions.append(contract_node)
 
     return functions
-
-
-def rename_variable_in_function(
-    ast_node: FunctionDefinition, old_name: str, new_name: str
-):
-    for param in ast_node.parameters.parameters:
-        if param.name == old_name:
-            param.name = new_name
-
-    for param in ast_node.return_parameters.parameters:
-        if param.name == old_name:
-            param.name = new_name
-
-    def traverse_node(node):
-        if isinstance(node, Identifier) and node.name == old_name:
-            node.name = new_name
-
-        elif isinstance(node, VariableDeclaration) and node.name == old_name:
-            node.name = new_name
-
-        elif isinstance(node, Block):
-            for stmt in node.statements:
-                traverse_node(stmt)
-
-        elif isinstance(node, ExpressionStatement):
-            traverse_node(node.expression)
-
-        elif isinstance(node, Assignment):
-            if node.left_hand_side:
-                traverse_node(node.left_hand_side)
-            if node.right_hand_side:
-                traverse_node(node.right_hand_side)
-
-        elif isinstance(node, BinaryOperation):
-            traverse_node(node.left_expression)
-            traverse_node(node.right_expression)
-
-        elif isinstance(node, UnaryOperation):
-            traverse_node(node.sub_expression)
-
-        elif isinstance(node, FunctionCall):
-            traverse_node(node.expression)
-            for arg in node.arguments:
-                traverse_node(arg)
-
-        elif isinstance(node, MemberAccess):
-            traverse_node(node.expression)
-            if node.sub_expression:
-                traverse_node(node.sub_expression)
-
-        elif isinstance(node, IndexAccess):
-            traverse_node(node.base_expression)
-            traverse_node(node.index_expression)
-
-        elif isinstance(node, TupleExpression):
-            for comp in node.components:
-                traverse_node(comp)
-
-        elif isinstance(node, VariableDeclarationStatement):
-            for decl in node.declarations:
-                traverse_node(decl)
-            if node.initial_value:
-                traverse_node(node.initial_value)
-
-        elif isinstance(node, Return):
-            if node.expression:
-                traverse_node(node.expression)
-
-    traverse_node(ast_node.body)
-
 
 def change_function_in_contract(ast: SourceUnit, new_function: FunctionDefinition):
     for node in ast.nodes:
@@ -202,27 +132,9 @@ def append_node_to_contract(
     return ast
 
 
-def get_random_vulnerability(directory_path) -> Tuple[str, str]:
-    """
-    Get random vulnerability from directory
-    :return: Tuple of vulnerability file and json file
-    """
-    files = [f for f in os.listdir(directory_path) if f.endswith(".sol")]
-
-    if not files:
-        return None
-    random_file = random.choice(files)
-    random_json = random_file.split(".")[0] + ".json"
-    return (
-        os.path.join(directory_path, random_file),
-        os.path.join(directory_path, random_json),
-    )
-
-
 def find_function_in_contract(
     contract_ast: SourceUnit, function_name: str
 ) -> Optional[FunctionDefinition]:
-    print(function_name)
     for node in contract_ast.nodes:
         if node.node_type == NodeType.CONTRACT_DEFINITION:
             for contract_node in node.nodes:
@@ -253,7 +165,6 @@ def find_function_boundaries(
     total_length = int(
         find_function_in_contract(contract_ast, function_name).src.split(":")[1]
     )
-    print(total_length)
     lines = contract_code.split("\n")
     for i, line in enumerate(lines, 1):
         if function_name in line and "function" in line:
@@ -266,21 +177,8 @@ def find_function_boundaries(
     raise ValueError(f"Function {function_name} not found or length mismatch")
 
 
-def find_function_in_contract_by_lines(
-    contract_ast: SourceUnit, contract_source: str, from_line: int, to_line: int
-) -> Optional[FunctionDefinition]:
-    function_name = find_function_name_in_source(contract_source, from_line, to_line)
-    for node in contract_ast.nodes:
-        if node.node_type == NodeType.CONTRACT_DEFINITION:
-            for contract_node in node.nodes:
-                if contract_node.node_type == NodeType.FUNCTION_DEFINITION:
-                    if contract_node.name == function_name:
-                        return contract_node
-    return None
-
-
 def get_vulnerability_bounds(
-    validator_task: ValidatorTask,
+    vulnerability_report: VulnerabilityReport,
     contract_ast: SourceUnit,
     contract_source: str,
     vulnerability_source: str,
@@ -290,12 +188,31 @@ def get_vulnerability_bounds(
         vulnerability_source,
         contract_ast,
         contract_source,
-        validator_task["from"],
-        validator_task["to"],
+        vulnerability_report.from_line,
+        vulnerability_report.to_line,
     )
 
 
-def create_task(contract_source: str, vulnerability_source: str, validator_task: ValidatorTask) -> ValidatorTask:
+def rename_function_in_pseudo_contract(pseudocode: str) -> str:
+    vuln_regex = regex.compile(r"function\s+vulnerability_(\w+)\s*\(")
+    return regex.sub(
+        vuln_regex, f"function {regex.findall(vuln_regex, pseudocode)[0]}(", pseudocode
+    )
+
+
+def create_contract(pseudocode: str, vulnerability_report: VulnerabilityReport) -> str:
+    contract = f"contract PseudoContract {{\n\n{pseudocode}\n}}"
+    contract = rename_function_in_pseudo_contract(contract)
+    vulnerability_report.from_line += 2
+    vulnerability_report.to_line += 2
+    return contract
+
+
+def create_task(
+    contract_source: str,
+    pseudo_vulnerability: str,
+    vulnerability_report: VulnerabilityReport,
+) -> ValidatorTask:
     ast = compile_contract_from_source(contract_source)
     try:
         ast_obj_contract = SourceUnit(**ast)
@@ -304,11 +221,8 @@ def create_task(contract_source: str, vulnerability_source: str, validator_task:
             f.write(str(e))
         raise e
 
-    # vulnerability = get_random_vulnerability("./vulnerabilities")
-
-    # TODO REMOVE
-    # vulnerability = ("./vulnerabilities/wallet.sol", "./vulnerabilities/wallet.json")
-    ast_vulnerability = compile_contract_from_source(vulnerability_source)
+    vulnerability_contract = create_contract(pseudo_vulnerability, vulnerability_report)
+    ast_vulnerability = compile_contract_from_source(vulnerability_contract)
 
     try:
         ast_obj_vulnerability = SourceUnit(**ast_vulnerability)
@@ -325,9 +239,7 @@ def create_task(contract_source: str, vulnerability_source: str, validator_task:
         if check_function_in_contract(ast_obj_contract, function.name):
             change_function_in_contract(ast_obj_contract, function)
         else:
-            ast_obj_contract = append_node_to_contract(
-                ast_obj_contract, function
-            )  # TODO - max tries or logs
+            ast_obj_contract = append_node_to_contract(ast_obj_contract, function)
 
     contract_source = parse_ast_to_solidity(ast_obj_contract)
 
@@ -336,8 +248,18 @@ def create_task(contract_source: str, vulnerability_source: str, validator_task:
     )
     ast = solcx.compile_source(contract_source, solc_version=suggested_version)
 
-    validator_task["contract_code"] = contract_source
-    validator_task["from"], validator_task["to"] = get_vulnerability_bounds(
-        validator_task, ast_obj_contract, contract_source, vulnerability_source
+    vulnerability_report.from_line, vulnerability_report.to_line = (
+        get_vulnerability_bounds(
+            vulnerability_report,
+            ast_obj_contract,
+            contract_source,
+            vulnerability_contract,
+        )
     )
-    return validator_task
+
+    return ValidatorTask(
+        contract_code=contract_source,
+        from_line=vulnerability_report.from_line,
+        to_line=vulnerability_report.to_line,
+        vulnerability_class=vulnerability_report.vulnerability_class,
+    )

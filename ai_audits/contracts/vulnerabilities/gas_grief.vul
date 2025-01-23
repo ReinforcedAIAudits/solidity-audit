@@ -1,0 +1,8 @@
+mapping (bytes => bool) executedBytes;
+address targetContract;
+
+function vulnerability_forward(bytes memory _data) public {
+    require(!executedBytes[_data], "Replay protection");
+    executedBytes[_data] = true;
+    targetContract.call(abi.encodeWithSignature("execute(bytes)", _data));
+}
