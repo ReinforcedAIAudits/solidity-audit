@@ -1,9 +1,5 @@
-from enum import Enum
 import json
-import os
-import random
-from typing import Tuple, Union, Mapping, List, Optional
-from dataclasses import dataclass
+from typing import Tuple, Union, List, Optional
 
 from pydantic import ValidationError
 import regex
@@ -12,18 +8,6 @@ from solc_ast_parser.models.ast_models import (
     SourceUnit,
     VariableDeclaration,
     FunctionDefinition,
-    Identifier,
-    Block,
-    ExpressionStatement,
-    Assignment,
-    BinaryOperation,
-    UnaryOperation,
-    FunctionCall,
-    MemberAccess,
-    IndexAccess,
-    TupleExpression,
-    VariableDeclarationStatement,
-    Return,
 )
 from solc_ast_parser.models.base_ast_models import NodeType
 import solcx
@@ -34,9 +18,7 @@ FILE_NAME = "contract.example.sol"
 
 
 def compile_contract_from_source(source: str):
-    suggested_version = solcx.install.select_pragma_version(
-        source, solcx.get_installable_solc_versions()
-    )
+    suggested_version = solcx.install.select_pragma_version(source, solcx.get_installable_solc_versions())
     json_compiled = solcx.compile_source(source, solc_version=suggested_version)
     with open("compiled.json", "w+") as f:
         f.write(json.dumps(json_compiled, indent=2))
@@ -66,15 +48,13 @@ def get_contract_functions(ast: SourceUnit) -> List[FunctionDefinition]:
 
     return functions
 
+
 def change_function_in_contract(ast: SourceUnit, new_function: FunctionDefinition):
     for node in ast.nodes:
         if node.node_type == NodeType.CONTRACT_DEFINITION:
             for idx, contract_node in enumerate(node.nodes):
                 if contract_node.node_type == NodeType.FUNCTION_DEFINITION:
-                    if (
-                        contract_node.kind == new_function.kind
-                        and contract_node.name == new_function.name
-                    ):
+                    if contract_node.kind == new_function.kind and contract_node.name == new_function.name:
                         node.nodes[idx] = new_function
                         return ast
     raise ValueError("Function not found in contract")
@@ -100,16 +80,12 @@ def check_storage_in_contract(ast: SourceUnit, storage_name: str):
     return False
 
 
-def append_node_to_contract(
-    ast: SourceUnit, node: Union[FunctionDefinition, VariableDeclaration]
-):
+def append_node_to_contract(ast: SourceUnit, node: Union[FunctionDefinition, VariableDeclaration]):
     for ast_node in ast.nodes:
         if ast_node.node_type == NodeType.CONTRACT_DEFINITION:
             if node.node_type == NodeType.FUNCTION_DEFINITION:
                 if node.kind == "constructor":
-                    source_constructor = next(
-                        func for func in ast_node.nodes if func.kind == "constructor"
-                    )
+                    source_constructor = next(func for func in ast_node.nodes if func.kind == "constructor")
                     if source_constructor:
                         source_constructor.body.statements += node.body.statements
                         continue
@@ -132,9 +108,7 @@ def append_node_to_contract(
     return ast
 
 
-def find_function_in_contract(
-    contract_ast: SourceUnit, function_name: str
-) -> Optional[FunctionDefinition]:
+def find_function_in_contract(contract_ast: SourceUnit, function_name: str) -> Optional[FunctionDefinition]:
     for node in contract_ast.nodes:
         if node.node_type == NodeType.CONTRACT_DEFINITION:
             for contract_node in node.nodes:
@@ -144,9 +118,7 @@ def find_function_in_contract(
     return None
 
 
-def find_function_name_in_source(
-    contract_source: str, from_line: int, to_line: int
-) -> str:
+def find_function_name_in_source(contract_source: str, from_line: int, to_line: int) -> str:
     for idx, text in enumerate(contract_source.split("\n"), 1):
         if idx >= from_line and idx <= to_line:
             if "function" in text:
@@ -158,13 +130,12 @@ def find_function_boundaries(
     vulnerability_code: str,
     contract_ast: SourceUnit,
     contract_code: str,
-    from_line: int,
-    to_line: int,
+    vulnerability_report: VulnerabilityReport,
 ) -> tuple[int, int]:
-    function_name = find_function_name_in_source(vulnerability_code, from_line, to_line)
-    total_length = int(
-        find_function_in_contract(contract_ast, function_name).src.split(":")[1]
+    function_name = find_function_name_in_source(
+        vulnerability_code, vulnerability_report.from_line, vulnerability_report.to_line
     )
+    total_length = int(find_function_in_contract(contract_ast, function_name).src.split(":")[1])
     lines = contract_code.split("\n")
     for i, line in enumerate(lines, 1):
         if function_name in line and "function" in line:
@@ -177,27 +148,9 @@ def find_function_boundaries(
     raise ValueError(f"Function {function_name} not found or length mismatch")
 
 
-def get_vulnerability_bounds(
-    vulnerability_report: VulnerabilityReport,
-    contract_ast: SourceUnit,
-    contract_source: str,
-    vulnerability_source: str,
-) -> Tuple[int, int]:
-
-    return find_function_boundaries(
-        vulnerability_source,
-        contract_ast,
-        contract_source,
-        vulnerability_report.from_line,
-        vulnerability_report.to_line,
-    )
-
-
 def rename_function_in_pseudo_contract(pseudocode: str) -> str:
     vuln_regex = regex.compile(r"function\s+vulnerability_(\w+)\s*\(")
-    return regex.sub(
-        vuln_regex, f"function {regex.findall(vuln_regex, pseudocode)[0]}(", pseudocode
-    )
+    return regex.sub(vuln_regex, f"function {regex.findall(vuln_regex, pseudocode)[0]}(", pseudocode)
 
 
 def create_contract(pseudocode: str, vulnerability_report: VulnerabilityReport) -> str:
@@ -208,53 +161,53 @@ def create_contract(pseudocode: str, vulnerability_report: VulnerabilityReport) 
     return contract
 
 
-def create_task(
-    contract_source: str,
-    pseudo_vulnerability: str,
-    vulnerability_report: VulnerabilityReport,
-) -> ValidatorTask:
-    ast = compile_contract_from_source(contract_source)
+def create_ast_from_source(source: str) -> SourceUnit:
+    ast = compile_contract_from_source(source)
     try:
-        ast_obj_contract = SourceUnit(**ast)
+        return SourceUnit(**ast)
     except ValidationError as e:
         with open("contract.errors.txt", "w+") as f:
             f.write(str(e))
         raise e
 
-    vulnerability_contract = create_contract(pseudo_vulnerability, vulnerability_report)
-    ast_vulnerability = compile_contract_from_source(vulnerability_contract)
 
-    try:
-        ast_obj_vulnerability = SourceUnit(**ast_vulnerability)
-    except ValidationError as e:
-        with open("vulnerability.errors.txt", "w+") as f:
-            f.write(str(e))
-        raise e
+def insert_vulnerability_to_contract(
+    contract_ast: SourceUnit,
+    vulnerability_ast: SourceUnit,
+) -> str:
+    for variable in get_contract_variables(vulnerability_ast):
+        if not check_storage_in_contract(contract_ast, variable.name):
+            contract_ast = append_node_to_contract(contract_ast, variable)
 
-    for variable in get_contract_variables(ast_obj_vulnerability):
-        if not check_storage_in_contract(ast_obj_contract, variable.name):
-            ast_obj_contract = append_node_to_contract(ast_obj_contract, variable)
-
-    for function in get_contract_functions(ast_obj_vulnerability):
-        if check_function_in_contract(ast_obj_contract, function.name):
-            change_function_in_contract(ast_obj_contract, function)
+    for function in get_contract_functions(vulnerability_ast):
+        if check_function_in_contract(contract_ast, function.name):
+            change_function_in_contract(contract_ast, function)
         else:
-            ast_obj_contract = append_node_to_contract(ast_obj_contract, function)
+            contract_ast = append_node_to_contract(contract_ast, function)
 
-    contract_source = parse_ast_to_solidity(ast_obj_contract)
+    return parse_ast_to_solidity(contract_ast)
 
-    suggested_version = solcx.install.select_pragma_version(
-        contract_source, solcx.get_installable_solc_versions()
-    )
-    ast = solcx.compile_source(contract_source, solc_version=suggested_version)
 
-    vulnerability_report.from_line, vulnerability_report.to_line = (
-        get_vulnerability_bounds(
-            vulnerability_report,
-            ast_obj_contract,
-            contract_source,
-            vulnerability_contract,
-        )
+def create_task(
+    contract_source: str,
+    pseudo_vulnerability: str,
+    vulnerability_report: VulnerabilityReport,
+) -> ValidatorTask:
+    ast_obj_contract = create_ast_from_source(contract_source)
+
+    vulnerability_contract = create_contract(pseudo_vulnerability, vulnerability_report)
+    ast_obj_vulnerability = create_ast_from_source(vulnerability_contract)
+
+    contract_source = insert_vulnerability_to_contract(ast_obj_contract, ast_obj_vulnerability)
+
+    suggested_version = solcx.install.select_pragma_version(contract_source, solcx.get_installable_solc_versions())
+    ast_contract_with_vul = solcx.compile_source(contract_source, solc_version=suggested_version)
+
+    vulnerability_report.from_line, vulnerability_report.to_line = find_function_boundaries(
+        vulnerability_contract,
+        ast_contract_with_vul,
+        contract_source,
+        vulnerability_report,
     )
 
     return ValidatorTask(
