@@ -7,8 +7,9 @@ from fastapi import FastAPI, Request, HTTPException
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
-from ai_audits.contracts.contract_generator import create_task
-from ai_audits.protocol import SmartContract, ValidatorTask
+from ai_audits.contracts.contract_generator import create_contract, create_task, get_contract_nodes_from_source
+from solc_ast_parser.models.base_ast_models import NodeType
+from ai_audits.protocol import SmartContract, VulnerabilityReport
 from ai_audits.subnet_utils import ROLES, SolcSingleton
 
 
@@ -50,6 +51,7 @@ Each report entry should describe a separate vulnerability with precise line num
 The generated audit report should not contain any extra comments or explanations.
 """.strip()
 
+
 def get_prompt(functions: List[str], storages: List[str]) -> str:
     return f"""
 You are a Solidity smart contract writer. 
@@ -62,13 +64,14 @@ Each contract must include {functions} functions, {storages} storages and more 2
 Ensure that the contract code is valid and can be successfully compiled by solidity compiler.
 
 Generate response in JSON format with no extra comments or explanations.
-Answer with only JSON text, without markdown formatting.
+Answer with only JSON text, without markdown formatting, without any formatting.
 
 Output format:
 {{
     "code": "Solidity code of the contract"
 }}
 """.strip()
+
 
 solc = SolcSingleton()
 
@@ -124,9 +127,7 @@ def try_prepare_audit_result(result) -> list[dict] | None:
             if isinstance(item.get(key, None), str):
                 cleared[key] = item[key]
         for k in INT_KEYS:
-            if isinstance(cleared[k], int) or (
-                isinstance(item[k], str) and item[k].isdigit()
-            ):
+            if isinstance(cleared[k], int) or (isinstance(item[k], str) and item[k].isdigit()):
                 cleared[k] = int(cleared[k])
             else:
                 return None
@@ -151,24 +152,29 @@ async def submit(request: Request):
     return result
 
 
-class ContractInfo(BaseModel):
-    functions: List[str]
-    storages: List[str]
-
-
-@app.post("/task")
-async def get_task(request: Request, contract_info: ContractInfo):
+@app.post("/hybrid_task")
+async def get_hybrid_task(request: Request):
     tries = int(os.getenv("MAX_TRIES", "3"))
     is_valid, result = False, None
-    vulnerability = ("../ai_audits/contracts/vulnerabilities/wallet.sol", "../ai_audits/contracts/vulnerabilities/wallet.json")
+
+    # TODO add vul and vul json here
+    vulnerability = (
+        "../ai_audits/contracts/vulnerabilities/wallet.vul",
+        "../ai_audits/contracts/vulnerabilities/wallet.json",
+    )
     with open(vulnerability[0], "r") as f:
         vulnerability_source = f.read()
 
     with open(vulnerability[1], "r") as f:
-        validator_task = json.loads(f.read())[0]
+        vulnerability_report = VulnerabilityReport(**json.loads(f.read())[0])
+
+    vulnerability_contract, _ = create_contract(vulnerability_source, vulnerability_report.model_copy())
 
     while tries > 0:
-        result = await generate_contract(contract_info.functions, contract_info.storages)
+        result = await generate_contract(
+            get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION),
+            get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION),
+        )
         print(f"Generated contract: {result}")
         try:
             solc.compile(result.code)
@@ -182,11 +188,8 @@ async def get_task(request: Request, contract_info: ContractInfo):
         tries -= 1
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
-    
-    with open(f"contracts_from_llm/{datetime.datetime.now()}.sol", "w+") as f:
-        f.write(result.code)
 
-    return create_task(result.code, vulnerability_source, validator_task)
+    return create_task(result.code, vulnerability_source, vulnerability_report)
 
 
 @app.get("/healthcheck")
