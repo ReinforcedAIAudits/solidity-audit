@@ -1,6 +1,7 @@
 import json
 from typing import Tuple, Union, List, Optional
 
+from openai import BaseModel
 from pydantic import ValidationError
 import regex
 from solc_ast_parser import parse_ast_to_solidity
@@ -138,17 +139,40 @@ def find_function_boundaries(
     raise ValueError(f"Function {function_name} not found or length mismatch")
 
 
-def rename_function_in_pseudo_contract(pseudocode: str) -> str:
-    vuln_regex = regex.compile(r"function\s+vulnerability_(\w+)\s*\(")
-    return regex.sub(vuln_regex, f"function {regex.findall(vuln_regex, pseudocode)[0]}(", pseudocode)
+def find_vulnerability_function(solidity_code: str) -> Tuple[int, int, str]:
+    lines = solidity_code.split('\n')
+    start_line = -1
+    end_line = -1
+    
+    for i, line in enumerate(lines):
+        if 'function vulnerability_' in line:
+            start_line = i
+            break
+    
+    if start_line == -1:
+        return -1, -1
+        
+    brace_count = 0
+    found_first_brace = False
+    
+    for i in range(start_line, len(lines)):
+        line = lines[i]
+        brace_count += line.count('{')
+        
+        if brace_count > 0:
+            found_first_brace = True
+            
+        brace_count -= line.count('}')
+        if found_first_brace and brace_count == 0:
+            end_line = i
+            break
+    
+    solidity_code.replace('vulnerability_', '')
+    return start_line, end_line, solidity_code
+            
 
-
-def create_contract(pseudocode: str, vulnerability_report: VulnerabilityReport) -> str:
-    contract = f"contract PseudoContract {{\n\n{pseudocode}\n}}"
-    contract = rename_function_in_pseudo_contract(contract)
-    vulnerability_report.from_line += 2
-    vulnerability_report.to_line += 2
-    return contract, vulnerability_report
+def create_contract(pseudocode: str) -> str:
+    return f"contract PseudoContract {{\n\n{pseudocode}\n}}"
 
 
 def create_ast_from_source(source: str) -> SourceUnit:
@@ -178,14 +202,42 @@ def insert_vulnerability_to_contract(
     return parse_ast_to_solidity(contract_ast)
 
 
+class Vulnerability(BaseModel):
+    vulnerabilityClass: str
+    code: str
+
+
+def fake_get_vulnerability():
+    return Vulnerability(
+        vulnerabilityClass="Reentrancy",
+        code="""mapping (address => uint) userBalance;
+function vulnerability_withdrawBalance() public{
+
+    (bool success, ) = msg.sender.call{value: userBalance[msg.sender]}("");
+    if (!success) {
+
+        revert();
+    }
+
+    userBalance[msg.sender] = 0;
+}""",
+    )
+
+
 def create_task(
     contract_source: str,
-    pseudo_vulnerability: str,
-    vulnerability_report: VulnerabilityReport,
+    raw_vulnerability: Vulnerability,
 ) -> ValidatorTask:
     ast_obj_contract = create_ast_from_source(contract_source)
 
-    vulnerability_contract, vulnerability_report = create_contract(pseudo_vulnerability, vulnerability_report)
+    vulnerability_contract = create_contract(raw_vulnerability.code)
+    from_line, to_line, vulnerability_contract = find_vulnerability_function(vulnerability_contract)
+    vulnerability_report = VulnerabilityReport(
+        from_line=from_line,
+        to_line=to_line,
+        vulnerability_class=raw_vulnerability.vulnerabilityClass,
+    )
+
     ast_obj_vulnerability = create_ast_from_source(vulnerability_contract)
 
     contract_source = insert_vulnerability_to_contract(ast_obj_contract, ast_obj_vulnerability)

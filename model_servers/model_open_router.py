@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, HTTPException
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
-from ai_audits.contracts.contract_generator import create_contract, create_task, get_contract_nodes_from_source
+from ai_audits.contracts.contract_generator import create_contract, create_task, fake_get_vulnerability, get_contract_nodes_from_source
 from solc_ast_parser.models.base_ast_models import NodeType
 from ai_audits.protocol import SmartContract, VulnerabilityReport
 from ai_audits.subnet_utils import ROLES, SolcSingleton
@@ -151,24 +151,45 @@ async def submit(request: Request):
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
     return result
 
+class ContractInfo(BaseModel):
+    functions: List[str]
+    storages: List[str]
+
+
+@app.post("/valid_contract")
+async def get_valid_contract(request: Request, contract_info: ContractInfo):
+    tries = int(os.getenv("MAX_TRIES", "3"))
+    is_valid, result = False, None
+
+    while tries > 0:
+        result = await generate_contract(
+            contract_info.functions,
+            contract_info.storages,
+        )
+        print(f"Generated contract: {result}")
+        try:
+            solc.compile(result.code)
+        except Exception as e:
+            print(f"Compilation error: {e}")
+            continue
+
+        if result is not None:
+            is_valid = True
+            break
+        tries -= 1
+    if not is_valid:
+        raise HTTPException(status_code=400, detail="Invalid answer from LLM")
+
+    return result.code
 
 @app.post("/hybrid_task")
 async def get_hybrid_task(request: Request):
     tries = int(os.getenv("MAX_TRIES", "3"))
     is_valid, result = False, None
 
-    # TODO add vul and vul json here
-    vulnerability = (
-        "../ai_audits/contracts/vulnerabilities/wallet.vul",
-        "../ai_audits/contracts/vulnerabilities/wallet.json",
-    )
-    with open(vulnerability[0], "r") as f:
-        vulnerability_source = f.read()
+    raw_vulnerability = fake_get_vulnerability()
 
-    with open(vulnerability[1], "r") as f:
-        vulnerability_report = VulnerabilityReport(**json.loads(f.read())[0])
-
-    vulnerability_contract, _ = create_contract(vulnerability_source, vulnerability_report.model_copy())
+    vulnerability_contract = create_contract(raw_vulnerability.code)
 
     while tries > 0:
         result = await generate_contract(
@@ -189,7 +210,7 @@ async def get_hybrid_task(request: Request):
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
 
-    return create_task(result.code, vulnerability_source, vulnerability_report)
+    return create_task(result.code, raw_vulnerability)
 
 
 @app.get("/healthcheck")
