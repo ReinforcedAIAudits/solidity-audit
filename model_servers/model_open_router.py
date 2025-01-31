@@ -1,16 +1,28 @@
 import datetime
 import json
 import os
+import random
+import pycryptor
+import markovify
 from typing import List
 
 from fastapi import FastAPI, Request, HTTPException
 from openai import AsyncOpenAI
 from pydantic import BaseModel
+from pycryptor import PyVuln, get_vulnerability
+from markovify import Text
+from ai_audits.contracts.contract_generator import (
+    Vulnerability,
+    create_contract,
+    create_task,
+    fake_get_vulnerability,
+    get_contract_nodes_from_source,
+)
 
-from ai_audits.contracts.contract_generator import create_contract, create_task, fake_get_vulnerability, get_contract_nodes_from_source
 from solc_ast_parser.models.base_ast_models import NodeType
-from ai_audits.protocol import SmartContract, VulnerabilityReport
+from ai_audits.protocol import SmartContract, ValidatorTask, VulnerabilityReport
 from ai_audits.subnet_utils import ROLES, SolcSingleton
+from model_servers.model_corcel import PROMPT_VALIDATOR, VULNERABILITIES_TO_GENERATE
 
 
 client = AsyncOpenAI(
@@ -18,6 +30,10 @@ client = AsyncOpenAI(
     api_key=os.getenv("OPEN_ROUTER_API_KEY"),
 )
 app = FastAPI()
+
+with open(f"{os.path.dirname(os.path.abspath(__file__))}/data/pg75244.txt", "r", encoding="utf-8") as f:
+    text = f.read()
+text_model = Text(text)
 
 
 PROMPT = """
@@ -151,6 +167,7 @@ async def submit(request: Request):
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
     return result
 
+
 class ContractInfo(BaseModel):
     functions: List[str]
     storages: List[str]
@@ -182,14 +199,67 @@ async def get_valid_contract(request: Request, contract_info: ContractInfo):
 
     return result.code
 
+
+async def generate_task(requested_vulnerability: str | None = None) -> ValidatorTask:
+    possible_vulnerabilities = (
+        random.sample(VULNERABILITIES_TO_GENERATE, min(3, len(VULNERABILITIES_TO_GENERATE)))
+        if requested_vulnerability is None
+        else [requested_vulnerability]
+    )
+    completion = await client.beta.chat.completions.parse(
+        model=os.getenv("OPEN_ROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct"),
+        messages=[
+            {"role": ROLES.SYSTEM, "content": PROMPT_VALIDATOR},
+            # Output format guidance is provided automatically by OpenAI SDK.
+            {
+                "role": ROLES.USER,
+                "content": f"Generate new vulnerable contract with one of "
+                f"vulnerabilities: {', '.join(possible_vulnerabilities)}",
+            },
+        ],
+        response_format=ValidatorTask,
+        temperature=0.3,
+    )
+    message = completion.choices[0].message
+    if message.parsed:
+        return message.parsed
+    else:
+        return None
+
+
+@app.post("/task", response_model=ValidatorTask)
+async def get_task(request: Request):
+    requested_vulnerability = (await request.body()).decode("utf-8")
+    if requested_vulnerability not in VULNERABILITIES_TO_GENERATE:
+        requested_vulnerability = None
+    tries = int(os.getenv("MAX_TRIES", "3"))
+    is_valid, validator_template = False, None
+    while tries > 0:
+        tries -= 1
+        validator_template = await generate_task(requested_vulnerability)
+        if validator_template is None:
+            continue
+        try:
+            solc.compile(validator_template.contract_code)
+        except:
+            continue
+        if validator_template is not None:
+            is_valid = True
+            break
+    if not is_valid:
+        raise HTTPException(status_code=400, detail="Invalid answer from LLM")
+    return validator_template
+
+
 @app.post("/hybrid_task")
 async def get_hybrid_task(request: Request):
     tries = int(os.getenv("MAX_TRIES", "3"))
     is_valid, result = False, None
 
-    raw_vulnerability = fake_get_vulnerability()
+    raw_vulnerability = get_vulnerability()
+    raw_vulnerability = Vulnerability(vulnerabilityClass=raw_vulnerability.name, code=raw_vulnerability.code)
 
-    vulnerability_contract = create_contract(raw_vulnerability.code)
+    vulnerability_contract = create_contract(raw_vulnerability.code).replace("vulnerability_", "")
 
     while tries > 0:
         result = await generate_contract(
@@ -211,6 +281,19 @@ async def get_hybrid_task(request: Request):
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
 
     return create_task(result.code, raw_vulnerability)
+
+
+@app.post("/random_text")
+async def get_markov_sentence(_: Request):
+    text = None
+    while not text:
+        text = text_model.make_sentence(min_words=50, max_words=150)
+    return ValidatorTask(
+        contract_code=text,
+        from_line=1,
+        to_line=1,
+        vulnerability_class="Invalid Code",
+    )  # TODO
 
 
 @app.get("/healthcheck")
