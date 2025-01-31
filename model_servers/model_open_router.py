@@ -1,12 +1,9 @@
-import datetime
 import json
 import os
 import random
-import pycryptor
-import markovify
 from typing import List
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Response
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 from pycryptor import PyVuln, get_vulnerability
@@ -15,15 +12,16 @@ from ai_audits.contracts.contract_generator import (
     Vulnerability,
     create_contract,
     create_task,
-    fake_get_vulnerability,
     get_contract_nodes_from_source,
 )
 
 from solc_ast_parser.models.base_ast_models import NodeType
 from ai_audits.protocol import SmartContract, ValidatorTask, VulnerabilityReport
-from ai_audits.subnet_utils import ROLES, SolcSingleton
+from ai_audits.subnet_utils import ROLES, SolcSingleton, preprocess_text
 from model_servers.model_corcel import PROMPT_VALIDATOR, VULNERABILITIES_TO_GENERATE
+from model_servers.model_open_ai import AuditResponse
 
+GPT_MODEL = "meta-llama/llama-3.3-70b-instruct"
 
 client = AsyncOpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -34,7 +32,6 @@ app = FastAPI()
 with open(f"{os.path.dirname(os.path.abspath(__file__))}/data/pg75244.txt", "r", encoding="utf-8") as f:
     text = f.read()
 text_model = Text(text)
-
 
 PROMPT = """
 You are an auditor reviewing smart contract source code. 
@@ -50,7 +47,7 @@ Output format:
         "description": "Detailed description of the issue",
         "priorArt": "Similar vulnerabilities encountered in wild before. Type: array",
         "fixedLines": "Fixed version of the original source",
-    },
+    }
 ]
 
 If the entire code is invalid or cannot be meaningfully analyzed:
@@ -95,7 +92,7 @@ solc = SolcSingleton()
 async def generate_contract(functions: List[str], storages: List[str]) -> SmartContract:
 
     completion = await client.beta.chat.completions.parse(
-        model=os.getenv("OPEN_ROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct"),
+        model=os.getenv("OPEN_ROUTER_MODEL", GPT_MODEL),
         messages=[
             {"role": ROLES.SYSTEM, "content": get_prompt(functions, storages)},
             # Output format guidance is provided automatically by OpenAI SDK.
@@ -151,13 +148,39 @@ def try_prepare_audit_result(result) -> list[dict] | None:
     return prepared
 
 
+async def generate_audit(source: str):
+    """
+    Here goes the magic.
+    Reference implementation simply feeds all the data to LLM and hopes something good comes out.
+
+    Good implementation should have good preprocessing, response augmentation for LLM to provide good prior art
+    descriptions, it may call external linters to provide some initial guidance to LLM, etc.
+    It also needs to verify the output, as LLM might hallucinate and produce invalid line ranges
+    and other sorts of undesired output.
+    """
+    preprocessed = preprocess_text(source)
+    completion = await client.chat.completions.create(
+        model=os.getenv("OPEN_ROUTER_MODEL", GPT_MODEL),
+        messages=[
+            {
+                "role": ROLES.SYSTEM,
+                "content": PROMPT,
+            },
+            # Output format guidance is provided automatically by OpenAI SDK.
+            {"role": ROLES.USER, "content": preprocessed},
+        ],
+    )
+    
+    return completion.choices[0].message.content
+
+
 @app.post("/submit")
 async def submit(request: Request):
     contract_code = (await request.body()).decode("utf-8")
     tries = int(os.getenv("MAX_TRIES", "3"))
     is_valid, result = False, None
     while tries > 0:
-        result = generate_audit(contract_code)
+        result = await generate_audit(contract_code)
         result = try_prepare_audit_result(result)
         if result is not None:
             is_valid = True
@@ -166,6 +189,7 @@ async def submit(request: Request):
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
     return result
+
 
 
 class ContractInfo(BaseModel):
@@ -259,12 +283,12 @@ async def get_hybrid_task(request: Request):
     raw_vulnerability = get_vulnerability()
     raw_vulnerability = Vulnerability(vulnerabilityClass=raw_vulnerability.name, code=raw_vulnerability.code)
 
-    vulnerability_contract = create_contract(raw_vulnerability.code).replace("vulnerability_", "")
+    vulnerability_contract = create_contract(raw_vulnerability.code)
 
     while tries > 0:
         result = await generate_contract(
-            get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION),
-            get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION),
+            [node.name for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)],
+            [node.name for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION)],
         )
         print(f"Generated contract: {result}")
         try:

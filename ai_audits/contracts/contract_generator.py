@@ -1,9 +1,7 @@
-import json
-from typing import Tuple, Union, List, Optional
+from typing import Union, List, Optional
 
 from openai import BaseModel
 from pydantic import ValidationError
-import regex
 from solc_ast_parser import parse_ast_to_solidity
 from solc_ast_parser.models.ast_models import (
     SourceUnit,
@@ -31,6 +29,8 @@ def get_contract_nodes(ast: SourceUnit, node_type: NodeType) -> List[ast_models.
         if node.node_type == NodeType.CONTRACT_DEFINITION:
             for contract_node in node.nodes:
                 if contract_node.node_type == node_type:
+                    if contract_node.node_type == NodeType.FUNCTION_DEFINITION and contract_node.kind == "constructor":
+                        continue
                     nodes.append(contract_node)
     return nodes
 
@@ -109,68 +109,27 @@ def find_function_in_contract(contract_ast: SourceUnit, function_name: str) -> O
     return None
 
 
-def find_function_name_in_source(contract_source: str, from_line: int, to_line: int) -> str:
-    for idx, text in enumerate(contract_source.split("\n"), 1):
-        if idx >= from_line and idx <= to_line:
-            if "function" in text:
-                return regex.findall(r"function\s+(\w+)\s*\(", text)[0]
-    return None
-
-
 def find_function_boundaries(
-    vulnerability_code: str,
     contract_ast: SourceUnit,
     contract_code: str,
-    vulnerability_report: VulnerabilityReport,
+    function_names: List[str],
 ) -> tuple[int, int]:
-    function_name = find_function_name_in_source(
-        vulnerability_code, vulnerability_report.from_line, vulnerability_report.to_line
-    )
-    total_length = int(find_function_in_contract(contract_ast, function_name).src.split(":")[1])
-    lines = contract_code.split("\n")
-    for i, line in enumerate(lines, 1):
-        if "function" in line and function_name in line:
-            curr_length = 0
-            for j in range(i - 1, len(lines)):
-                curr_length += len(lines[j])
-                if curr_length >= total_length:
-                    return (i, j + 1)
+    for function_name in function_names:
+        total_length = int(find_function_in_contract(contract_ast, function_name).src.split(":")[1])
+        lines = contract_code.split("\n")
+        for i, line in enumerate(lines, 1):
+            if "function" in line and function_name in line:
+                curr_length = 0
+                for j in range(i - 1, len(lines)):
+                    curr_length += len(lines[j])
+                    if curr_length >= total_length:
+                        return (i, j + 1)
 
-            raise ValueError(
-                f"Something went wrong with length calculation: lines: {lines}, total_length: {total_length}, curr_length: {curr_length}"
-            )
+                raise ValueError(
+                    f"Something went wrong with length calculation: lines: {lines}, total_length: {total_length}, curr_length: {curr_length}"
+                )
 
-    raise ValueError(f"Function {function_name} not found or length mismatch.")
-
-
-def find_vulnerability_function(solidity_code: str) -> Tuple[int, int, str]:
-    lines = solidity_code.split("\n")
-    start_line = -1
-    end_line = -1
-
-    for i, line in enumerate(lines):
-        if "function vulnerability_" in line:
-            start_line = i
-            break
-
-    if start_line == -1:
-        return -1, -1
-
-    brace_count = 0
-    found_first_brace = False
-
-    for i in range(start_line, len(lines)):
-        line = lines[i]
-        brace_count += line.count("{")
-
-        if brace_count > 0:
-            found_first_brace = True
-
-        brace_count -= line.count("}")
-        if found_first_brace and brace_count == 0:
-            end_line = i
-            break
-    return start_line, end_line, solidity_code.replace("vulnerability_", "")
+        raise ValueError(f"Function {function_name} not found or length mismatch.")
 
 
 def create_contract(pseudocode: str) -> str:
@@ -209,23 +168,6 @@ class Vulnerability(BaseModel):
     code: str
 
 
-def fake_get_vulnerability():
-    return Vulnerability(
-        vulnerabilityClass="Reentrancy",
-        code="""mapping (address => uint) userBalance;
-function vulnerability_withdrawBalance() public{
-
-    (bool success, ) = msg.sender.call{value: userBalance[msg.sender]}("");
-    if (!success) {
-
-        revert();
-    }
-
-    userBalance[msg.sender] = 0;
-}""",
-    )
-
-
 def create_task(
     contract_source: str,
     raw_vulnerability: Vulnerability,
@@ -233,25 +175,24 @@ def create_task(
     ast_obj_contract = create_ast_from_source(contract_source)
 
     vulnerability_contract = create_contract(raw_vulnerability.code)
-    from_line, to_line, vulnerability_contract = find_vulnerability_function(vulnerability_contract)
+    ast_obj_vulnerability = create_ast_from_source(vulnerability_contract)
+
+    contract_source = insert_vulnerability_to_contract(ast_obj_contract, ast_obj_vulnerability)
+
+    ast_contract_with_vul = create_ast_from_source(contract_source)
+
+    from_line, to_line = find_function_boundaries(
+        ast_contract_with_vul,
+        contract_source,
+        [node.name for node in get_contract_nodes(ast_obj_vulnerability, NodeType.FUNCTION_DEFINITION)],
+    )
+
     vulnerability_report = VulnerabilityReport(
         from_line=from_line,
         to_line=to_line,
         vulnerability_class=raw_vulnerability.vulnerabilityClass,
     )
 
-    ast_obj_vulnerability = create_ast_from_source(vulnerability_contract)
-
-    contract_source = insert_vulnerability_to_contract(ast_obj_contract, ast_obj_vulnerability)
-
-    ast_contract_with_vul = create_ast_from_source(contract_source)
-    vulnerability_report.from_line, vulnerability_report.to_line = find_function_boundaries(
-        vulnerability_contract,
-        ast_contract_with_vul,
-        contract_source,
-        vulnerability_report,
-    )
-    # TODO: remove prefix vulnerability_ from function name
     return ValidatorTask(
         contract_code=contract_source,
         from_line=vulnerability_report.from_line,
