@@ -18,9 +18,11 @@
 
 
 import asyncio
+import enum
 import copy
 import os
 import pickle
+from random import choices
 import time
 from typing import List
 
@@ -36,6 +38,12 @@ load_dotenv()
 CYCLE_TIME = int(os.getenv("VALIDATOR_SEND_REQUESTS_EVERY_X_SECS", "3600"))
 
 
+class TaskType(enum.StrEnum):
+    PYCRYPTOR = "hybrid_task"
+    LLM = "task"
+    RANDOM_TEXT = "random_task"
+
+
 class Validator(ReinforcedValidatorNeuron):
     WEIGHT_TIME = 0.1
     WEIGHT_SCORE = 0.9
@@ -46,8 +54,7 @@ class Validator(ReinforcedValidatorNeuron):
         self._start_time = time.time()
         self._validator_time_min = (
             int(os.getenv("VALIDATOR_TIME"))
-            if os.getenv("VALIDATOR_TIME")
-            and 0 <= int(os.getenv("VALIDATOR_TIME")) <= 59
+            if os.getenv("VALIDATOR_TIME") and 0 <= int(os.getenv("VALIDATOR_TIME")) <= 59
             else None
         )
 
@@ -57,8 +64,9 @@ class Validator(ReinforcedValidatorNeuron):
 
     @classmethod
     def get_audit_task(cls, vulnerability_type: str | None = None) -> ValidatorTask:
+        endpoint = choices(list(TaskType), [70, 25, 5])[0]
         result = create_session().post(
-            f"{os.getenv('MODEL_SERVER')}/task",
+            f"{os.getenv('MODEL_SERVER')}/{endpoint}",
             *([] if vulnerability_type is None else [vulnerability_type]),
             headers={"Content-Type": "text/plain"},
         )
@@ -89,11 +97,7 @@ class Validator(ReinforcedValidatorNeuron):
         self.synchronise_state()
         miner_uids = self.metagraph.n.item()
         bt.logging.info(f"Metagraph uids: {miner_uids}")
-        active_uids = [
-            index
-            for index, is_active in enumerate(self.metagraph.active)
-            if is_active == 1
-        ]
+        active_uids = [index for index, is_active in enumerate(self.metagraph.active) if is_active == 1]
         bt.logging.info(f"Active UIDs: {active_uids}")
         axon_count = len(self.metagraph.axons) - 1
 
@@ -112,13 +116,9 @@ class Validator(ReinforcedValidatorNeuron):
                 bt.logging.info(f"task: {task}")
                 break
             except ValueError as e:
-                bt.logging.warning(
-                    f"Attempt {attempt + 1}/{max_retries_to_get_tasks} failed: {str(e)}"
-                )
+                bt.logging.warning(f"Attempt {attempt + 1}/{max_retries_to_get_tasks} failed: {str(e)}")
                 if attempt < max_retries_to_get_tasks - 1:
-                    bt.logging.info(
-                        f"Waiting {retry_delay} seconds before next attempt..."
-                    )
+                    bt.logging.info(f"Waiting {retry_delay} seconds before next attempt...")
                     await asyncio.sleep(retry_delay)
                 else:
                     bt.logging.error("Max retries reached. Unable to get audit task.")
@@ -237,15 +237,11 @@ class Validator(ReinforcedValidatorNeuron):
                 f"synapse: axon hotkey: {synapse.axon.hotkey} | is success: {synapse.is_success} | "
                 f"is blacklisted: {synapse.is_blacklist} | message: {synapse.axon.status_message}"
             )
-            scores_by_report = (
-                self.validate_reports_by_reference(synapse.response, task)
-                * self.WEIGHT_SCORE
-            )
+            scores_by_report = self.validate_reports_by_reference(synapse.response, task) * self.WEIGHT_SCORE
             scores_by_time = (
                 (
                     (min_time / synapse.dendrite.process_time)
-                    if synapse.dendrite.process_time
-                    and synapse.axon.hotkey != axon_info.hotkey
+                    if synapse.dendrite.process_time and synapse.axon.hotkey != axon_info.hotkey
                     else 0
                 )
                 * (scores_by_report / self.WEIGHT_SCORE)
@@ -255,15 +251,9 @@ class Validator(ReinforcedValidatorNeuron):
         return scores
 
     @classmethod
-    def _get_replaced_keys(
-        cls, old_state: list[str], new_state: list[str]
-    ) -> list[int]:
+    def _get_replaced_keys(cls, old_state: list[str], new_state: list[str]) -> list[int]:
         min_length = min(len(old_state), len(new_state))
-        return [
-            netuid
-            for netuid in range(min_length)
-            if old_state[netuid] != new_state[netuid]
-        ]
+        return [netuid for netuid in range(min_length) if old_state[netuid] != new_state[netuid]]
 
     @classmethod
     def validate_reports_by_reference(
@@ -275,14 +265,7 @@ class Validator(ReinforcedValidatorNeuron):
             return 0.0
 
         vulnerabilities_found = [x.vulnerability_class for x in report]
-        score = (
-            1.0
-            if any(
-                is_synonyms(task.vulnerability_class, vuln)
-                for vuln in vulnerabilities_found
-            )
-            else 0.0
-        )
+        score = 1.0 if any(is_synonyms(task.vulnerability_class, vuln) for vuln in vulnerabilities_found) else 0.0
         # # The number of detected vulnerabilities must match the template. Otherwise, reduce scores
         # if len(vulnerabilities_found) > 1:
         #     score = score / len(vulnerabilities_found)
@@ -309,9 +292,7 @@ class Validator(ReinforcedValidatorNeuron):
         for key in replaced_keys:
             self._buffer_scores.reset(key)
             self.scores[key] = 0
-            bt.logging.info(
-                "Synchronise state: uid f{key} was replaced: f{old_hotkeys[key]} -> f{self.hotkeys[key]}"
-            )
+            bt.logging.info("Synchronise state: uid f{key} was replaced: f{old_hotkeys[key]} -> f{self.hotkeys[key]}")
         if replaced_keys:
             self.save_state()
 

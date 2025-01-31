@@ -129,47 +129,49 @@ def find_function_boundaries(
     total_length = int(find_function_in_contract(contract_ast, function_name).src.split(":")[1])
     lines = contract_code.split("\n")
     for i, line in enumerate(lines, 1):
-        if function_name in line and "function" in line:
+        if "function" in line and function_name in line:
             curr_length = 0
             for j in range(i - 1, len(lines)):
                 curr_length += len(lines[j])
                 if curr_length >= total_length:
                     return (i, j + 1)
 
-    raise ValueError(f"Function {function_name} not found or length mismatch")
+            raise ValueError(
+                f"Something went wrong with length calculation: lines: {lines}, total_length: {total_length}, curr_length: {curr_length}"
+            )
+
+    raise ValueError(f"Function {function_name} not found or length mismatch.")
 
 
 def find_vulnerability_function(solidity_code: str) -> Tuple[int, int, str]:
-    lines = solidity_code.split('\n')
+    lines = solidity_code.split("\n")
     start_line = -1
     end_line = -1
-    
+
     for i, line in enumerate(lines):
-        if 'function vulnerability_' in line:
+        if "function vulnerability_" in line:
             start_line = i
             break
-    
+
     if start_line == -1:
         return -1, -1
-        
+
     brace_count = 0
     found_first_brace = False
-    
+
     for i in range(start_line, len(lines)):
         line = lines[i]
-        brace_count += line.count('{')
-        
+        brace_count += line.count("{")
+
         if brace_count > 0:
             found_first_brace = True
-            
-        brace_count -= line.count('}')
+
+        brace_count -= line.count("}")
         if found_first_brace and brace_count == 0:
             end_line = i
             break
-    
-    solidity_code.replace('vulnerability_', '')
-    return start_line, end_line, solidity_code
-            
+    return start_line, end_line, solidity_code.replace("vulnerability_", "")
+
 
 def create_contract(pseudocode: str) -> str:
     return f"contract PseudoContract {{\n\n{pseudocode}\n}}"
@@ -249,7 +251,7 @@ def create_task(
         contract_source,
         vulnerability_report,
     )
-
+    # TODO: remove prefix vulnerability_ from function name
     return ValidatorTask(
         contract_code=contract_source,
         from_line=vulnerability_report.from_line,
