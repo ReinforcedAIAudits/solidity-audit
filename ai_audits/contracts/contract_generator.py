@@ -12,7 +12,7 @@ from solc_ast_parser.models.base_ast_models import NodeType
 from solc_ast_parser.models import ast_models
 import solcx
 
-from ai_audits.protocol import ValidatorTask, VulnerabilityReport
+from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
 
 FILE_NAME = "contract.example.sol"
 
@@ -198,4 +198,5 @@ def create_task(
         from_line=vulnerability_report.from_line,
         to_line=vulnerability_report.to_line,
         vulnerability_class=vulnerability_report.vulnerability_class,
+        taskType=TaskType.HYBRID
     )

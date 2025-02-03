@@ -3,31 +3,29 @@ import os
 import random
 
 from fastapi import FastAPI, Request, HTTPException
+from py_solidity_vuln_db import get_vulnerability
+from solc_ast_parser.models.base_ast_models import NodeType
 
-from ai_audits.protocol import KnownVulnerability
+from ai_audits.protocol import KnownVulnerability, SmartContract
 from ai_audits.subnet_utils import create_session, preprocess_text, ROLES, SolcSingleton
+from ai_audits.contracts.contract_generator import (
+    Vulnerability,
+    create_contract,
+    create_task,
+    get_contract_nodes_from_source,
+)
 
 
 app = FastAPI()
 
 
 VULNERABILITIES_TO_GENERATE = [
-    # KnownVulnerability.KNOWN_COMPILER_BUGS.value,  # ambiguous, skip this
-    KnownVulnerability.REENTRANCY.value,  # works
-    KnownVulnerability.GAS_GRIEFING.value,  # works
-    # KnownVulnerability.ORACLE_MANIPULATION.value,  # doesn't works
-    KnownVulnerability.BAD_RANDOMNESS.value,  # works
-    # KnownVulnerability.UNEXPECTED_PRIVILEGE_GRANTS.value,  # doesn't works
-    # KnownVulnerability.FORCED_RECEPTION.value,  # partially works
-    # KnownVulnerability.INTEGER_OVERFLOW_UNDERFLOW.value,  # doesn't works
-    # KnownVulnerability.RACE_CONDITION.value,  # partially works
-    KnownVulnerability.UNGUARDED_FUNCTION.value,  # partially works
-    # KnownVulnerability.INEFFICIENT_STORAGE_KEY.value,  # doesn't works
-    # KnownVulnerability.FRONT_RUNNING_POTENTIAL.value,  # doesn't works
-    # KnownVulnerability.MINER_MANIPULATION.value,  # doesn't works
-    # KnownVulnerability.STORAGE_COLLISION.value,  # doesn't works
-    # KnownVulnerability.SIGNATURE_REPLAY.value,  # works, but bad for openai
-    # KnownVulnerability.UNSAFE_OPERATION.value,  # partially works
+    KnownVulnerability.REENTRANCY.value,
+    KnownVulnerability.GAS_GRIEFING.value,
+    KnownVulnerability.BAD_RANDOMNESS.value,
+    KnownVulnerability.FORCED_RECEPTION.value,
+    KnownVulnerability.UNGUARDED_FUNCTION.value,
+    KnownVulnerability.SIGNATURE_REPLAY.value
 ]
 
 
@@ -87,6 +85,27 @@ Output format:
 solc = SolcSingleton()
 
 
+def get_hybrid_validator_prompt(functions: list[str], storages: list[str]) -> str:
+    return f"""
+You are a Solidity smart contract writer. 
+Your role is to help user writers learn Solidity smart contracts by providing them different examples of contracts.
+Be creative when generating contracts, avoid using common names or known contract structures. 
+Do not use primitive examples of contracts, human writers need to understand the complexity of the contracts.
+
+Aim to create more complex contracts rather than simple, typical examples. 
+Each contract must include {functions} functions, {storages} storages and more 2-3 state variables and 2-3 functions. 
+Ensure that the contract code is valid and can be successfully compiled by solidity compiler.
+
+Generate response in JSON format with no extra comments or explanations.
+Answer with only JSON text, without markdown formatting, without any formatting.
+
+Output format:
+{{
+    "code": "Solidity code of the contract"
+}}
+""".strip()
+
+
 def call_corcel(messages: list):
     payload = {
         "model": os.getenv("CORCEL_MODEL", "llama-3-1-70b"),
@@ -138,7 +157,6 @@ def generate_task(requested_vulnerability: str | None = None):
     return call_corcel(
         [
             {"role": ROLES.SYSTEM, "content": PROMPT_VALIDATOR},
-            # Output format guidance is provided automatically by OpenAI SDK.
             {
                 "role": ROLES.USER,
                 "content": f"Generate new vulnerable contract with one of "
@@ -247,6 +265,74 @@ async def get_task(request: Request):
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
     return result
+
+
+def try_prepare_contract(result) -> SmartContract | None:
+    if isinstance(result, str):
+        try:
+            result = json.loads(result)
+        except:
+            return None
+    if not isinstance(result, dict):
+        return None
+    if 'code' not in result:
+        return None
+    return SmartContract(code=result['code'])
+
+
+def generate_contract(functions: list[str], storages: list[str]) -> SmartContract | None:
+    result = call_corcel(
+        [
+            {"role": ROLES.SYSTEM, "content": get_hybrid_validator_prompt(functions, storages)},
+            {"role": ROLES.USER, "content": f"Generate new valid smart contract"},
+        ]
+    )
+
+    if result:
+        return try_prepare_contract(result)
+    else:
+        return None
+
+
+@app.post("/hybrid_task")
+async def get_hybrid_task(request: Request):
+    tries = int(os.getenv("MAX_TRIES", "3"))
+    is_valid, result = False, None
+
+    requested_vulnerability = (await request.body()).decode("utf-8")
+    if requested_vulnerability not in VULNERABILITIES_TO_GENERATE:
+        requested_vulnerability = None
+
+    raw_vulnerability = get_vulnerability(requested_vulnerability.lower())
+    raw_vulnerability = Vulnerability(vulnerabilityClass=raw_vulnerability.name, code=raw_vulnerability.code)
+
+    while tries > 0:
+        tries -= 1
+        vulnerability_contract = create_contract(raw_vulnerability.code)
+        result = generate_contract(
+            [
+                node.name for node in
+                get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)
+            ],
+            [
+                node.name for node in
+                get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION)
+            ],
+        )
+        print(f"Generated contract: {result}")
+        try:
+            solc.compile(result.code)
+        except Exception as e:
+            print(f"Compilation error: {e}")
+            continue
+
+        if result is not None:
+            is_valid = True
+            break
+    if not is_valid:
+        raise HTTPException(status_code=400, detail="Invalid answer from LLM")
+
+    return create_task(result.code, raw_vulnerability)
 
 
 @app.get("/healthcheck")

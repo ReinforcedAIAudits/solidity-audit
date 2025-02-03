@@ -114,6 +114,19 @@ Cons:
 
 - High cost
 
+
+### API OpenRouter
+
+Props:
+
+- Many models to choose from with different pricing policies
+- Fast performance
+
+Cons:
+
+- Not all models are well-suited for Solidity auditing
+
+
 ### Local LLM
 
 Pros:
@@ -141,6 +154,12 @@ or
 
 ```bash
 docker compose up -d model_server_openai
+```
+
+or
+
+```bash
+docker compose up -d model_server_open_router
 ```
 
 ### Running the miner service

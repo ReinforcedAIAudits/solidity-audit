@@ -18,7 +18,6 @@ contract ComplexContract {
     uint256 public totalFeesCollected;
     address[] public minters;
     address[] public burners;
-
     constructor() {
         owner = msg.sender;
         totalSupply = 0;
@@ -38,10 +37,8 @@ contract ComplexContract {
         require(amount <= maxTransactionAmount, 'Transaction amount is too high');
         require(balanceForUser[msg.sender] >= amount, 'Insufficient balance');
         require(balanceForUser[recipient] + amount <= maxBalance, 'Recipient balance exceeds maximum allowed balance');
-
         balanceForUser[msg.sender] -= amount;
         balanceForUser[recipient] += amount;
-
         if (lastTransactionTime[msg.sender] + transactionTimeout < block.timestamp) {
             lastTransactionTime[msg.sender] = block.timestamp;
         }
@@ -50,7 +47,6 @@ contract ComplexContract {
     function approve(address spender, uint256 amount) public {
         require(!paused, 'Contract is paused');
         require(amount >= 0, 'Approval amount must be non-negative');
-
         allowance[msg.sender][spender] = amount;
     }
 
@@ -61,11 +57,9 @@ contract ComplexContract {
         require(allowance[sender][msg.sender] >= amount, 'Insufficient allowance');
         require(balanceForUser[sender] >= amount, 'Insufficient balance');
         require(balanceForUser[recipient] + amount <= maxBalance, 'Recipient balance exceeds maximum allowed balance');
-
         allowance[sender][msg.sender] -= amount;
         balanceForUser[sender] -= amount;
         balanceForUser[recipient] += amount;
-
         if (lastTransactionTime[sender] + transactionTimeout < block.timestamp) {
             lastTransactionTime[sender] = block.timestamp;
         }
@@ -75,7 +69,6 @@ contract ComplexContract {
         require(isMinter[msg.sender], 'Only minters can mint');
         require(amount > 0, 'Mint amount must be positive');
         require(totalSupply + amount <= maxBalance, 'Total supply exceeds maximum allowed balance');
-
         totalSupply += amount;
         balanceForUser[account] += amount;
     }
@@ -84,7 +77,6 @@ contract ComplexContract {
         require(isBurner[msg.sender], 'Only burners can burn');
         require(amount > 0, 'Burn amount must be positive');
         require(balanceForUser[account] >= amount, 'Insufficient balance');
-
         totalSupply -= amount;
         balanceForUser[account] -= amount;
     }
@@ -92,7 +84,6 @@ contract ComplexContract {
     function addMinter(address minter) public {
         require(msg.sender == owner, 'Only the owner can add minters');
         require(!isMinter[minter], 'Minter already exists');
-
         isMinter[minter] = true;
         minters.push(minter);
     }
@@ -100,7 +91,6 @@ contract ComplexContract {
     function removeMinter(address minter) public {
         require(msg.sender == owner, 'Only the owner can remove minters');
         require(isMinter[minter], 'Minter does not exist');
-
         isMinter[minter] = false;
         for (uint256 i = 0; i < minters.length; i++) {
             if (minters[i] == minter) {
@@ -114,7 +104,6 @@ contract ComplexContract {
     function addBurner(address burner) public {
         require(msg.sender == owner, 'Only the owner can add burners');
         require(!isBurner[burner], 'Burner already exists');
-
         isBurner[burner] = true;
         burners.push(burner);
     }
@@ -122,7 +111,6 @@ contract ComplexContract {
     function removeBurner(address burner) public {
         require(msg.sender == owner, 'Only the owner can remove burners');
         require(isBurner[burner], 'Burner does not exist');
-
         isBurner[burner] = false;
         for (uint256 i = 0; i < burners.length; i++) {
             if (burners[i] == burner) {
@@ -175,9 +163,9 @@ contract ComplexContract {
     function withdrawBalance() public {
         require(!paused, 'Contract is paused');
         require(balanceForUser[msg.sender] > 0, 'Insufficient balance');
-
         uint256 amount = balanceForUser[msg.sender];
         balanceForUser[msg.sender] = 0;
         payable(msg.sender).transfer(amount);
     }
+
 }

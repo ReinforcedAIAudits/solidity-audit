@@ -18,7 +18,6 @@
 
 
 import asyncio
-import enum
 import copy
 import os
 import pickle
@@ -30,23 +29,20 @@ import bittensor as bt
 from dotenv import load_dotenv
 
 
-from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ValidatorTask
-from ai_audits.subnet_utils import create_session, is_synonyms
+from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ValidatorTask, TaskType
+from ai_audits.subnet_utils import create_session, is_synonyms, get_invalid_code
 from neurons.base import ReinforcedValidatorNeuron, get_random_uids, ScoresBuffer
 
 load_dotenv()
 CYCLE_TIME = int(os.getenv("VALIDATOR_SEND_REQUESTS_EVERY_X_SECS", "3600"))
 
 
-class TaskType(enum.StrEnum):
-    PYCRYPTOR = "hybrid_task"
-    LLM = "task"
-    RANDOM_TEXT = "random_task"
-
-
 class Validator(ReinforcedValidatorNeuron):
     WEIGHT_TIME = 0.1
-    WEIGHT_SCORE = 0.9
+    WEIGHT_ONLY_SCORE = 0.9
+    WEIGHT_LINES = 0.45
+    WEIGHT_SCORE = 0.45
+
     MAX_BUFFER = int(os.getenv("VALIDATOR_BUFFER", "100"))
 
     def __init__(self, config=None):
@@ -64,9 +60,11 @@ class Validator(ReinforcedValidatorNeuron):
 
     @classmethod
     def get_audit_task(cls, vulnerability_type: str | None = None) -> ValidatorTask:
-        endpoint = choices(list(TaskType), [70, 25, 5])[0]
+        task_type = choices(list(TaskType), [70, 25, 5])[0]
+        if task_type == TaskType.RANDOM_TEXT:
+            return get_invalid_code()
         result = create_session().post(
-            f"{os.getenv('MODEL_SERVER')}/{endpoint}",
+            f"{os.getenv('MODEL_SERVER')}/{task_type}",
             *([] if vulnerability_type is None else [vulnerability_type]),
             headers={"Content-Type": "text/plain"},
         )
@@ -77,7 +75,7 @@ class Validator(ReinforcedValidatorNeuron):
 
         json = result.json()
         bt.logging.info(f"Response from model server: {json}")
-        task = ValidatorTask(**json)
+        task = ValidatorTask(task_type=task_type, **json)
         return task
 
     def sync(self):
@@ -272,6 +270,14 @@ class Validator(ReinforcedValidatorNeuron):
 
         # Currently, we forgive the miner for identifying additional vulnerabilities
         # due to the imperfection of LLM generation
+
+        if task.task_type == TaskType.HYBRID:
+            vuln_lines = {i for i in range(task.from_line, task.to_line + 1)}
+            reported_lines = set()
+            for r in report:
+                reported_lines |= {i for i in range(r.from_line, r.to_line + 1)}
+            reported_score = len(vuln_lines & reported_lines) / len(vuln_lines)
+            score = (score + reported_score) / 2
 
         return score
 
