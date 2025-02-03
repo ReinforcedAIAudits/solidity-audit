@@ -11,7 +11,13 @@ from substrateinterface import SubstrateInterface, Keypair
 from template.utils.uids import check_uid_availability
 
 
-__all__ = ["IdentityException", "ReinforcedMinerNeuron", "ReinforcedValidatorNeuron", "ScoresBuffer", "get_random_uids"]
+__all__ = [
+    "IdentityException",
+    "ReinforcedMinerNeuron",
+    "ReinforcedValidatorNeuron",
+    "ScoresBuffer",
+    "get_random_uids",
+]
 
 
 class IdentityException(Exception):
@@ -83,14 +89,9 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> list:
         If `k` is larger than the number of available `uids`, set `k` to the number of available `uids`.
     """
     exclude = set(exclude) if exclude else set()
-    
+
     candidate_uids = [
-        uid
-        for uid in range(self.metagraph.n.item())
-        if check_uid_availability(
-            self.metagraph, uid, self.config.neuron.vpermit_tao_limit
-        )
-        and uid not in exclude
+        uid for uid in range(self.metagraph.n.item()) if uid not in exclude
     ]
 
     k = min(k, len(candidate_uids))
@@ -111,14 +112,14 @@ class ScoresBuffer:
     def __getitem__(self, uid):
         self._check_uid(uid)
         if uid not in self._items:
-            raise KeyError('No scores for neuron uid')
+            raise KeyError("No scores for neuron uid")
         return self._items[uid]
 
     def __setitem__(self, uid, scores):
         if not isinstance(uid, int):
-            raise KeyError('Neuron uid must be int')
+            raise KeyError("Neuron uid must be int")
         if not isinstance(scores, (list, collections.deque)):
-            raise ValueError('Scores must be list')
+            raise ValueError("Scores must be list")
         buff = collections.deque(maxlen=self.max_size)
         for score in scores:
             self._check_score(score)
@@ -134,14 +135,14 @@ class ScoresBuffer:
     @classmethod
     def _check_score(cls, score):
         if not isinstance(score, (int, float)):
-            raise ValueError('Invalid score type')
+            raise ValueError("Invalid score type")
         if score > 1:
-            raise ValueError('Score must be <= 1')
+            raise ValueError("Score must be <= 1")
 
     @classmethod
     def _check_uid(cls, uid: int):
         if not isinstance(uid, int):
-            raise KeyError('Neuron uid must be int')
+            raise KeyError("Neuron uid must be int")
 
     def add_score(self, uid, score):
         self._check_uid(uid)
