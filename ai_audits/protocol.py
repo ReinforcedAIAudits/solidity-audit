@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Optional, Union
 import bittensor as bt
 from pydantic import (
@@ -13,7 +13,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel, to_snake
 
 
-__all__ = ["VulnerabilityReport", "AuditsSynapse", "ValidatorTask", "KnownVulnerability"]
+__all__ = ["VulnerabilityReport", "AuditsSynapse", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType"]
 
 
 class KnownVulnerability(str, Enum):
@@ -33,6 +33,7 @@ class KnownVulnerability(str, Enum):
     STORAGE_COLLISION = "Storage collision"
     SIGNATURE_REPLAY = "Signature replay"
     UNSAFE_OPERATION = "Unsafe operation"
+    INVALID_CODE = "Invalid code"
 
 
 class OtherVulnerability(BaseModel):
@@ -120,8 +121,16 @@ class VulnerabilityReport(AuditBase):
 class SmartContract(BaseModel):
     code: str = Field(..., title="Code", description="Solidity code of the contract")
 
+
+class TaskType(StrEnum):
+    HYBRID = "hybrid_task"
+    LLM = "task"
+    RANDOM_TEXT = "random_task"
+
+
 class ValidatorTask(AuditBase):
     contract_code: str = Field(..., title="Contract code", description="Code of vulnerable contract")
+    task_type: str = Field(..., title="Task type", description="Type of validator task")
 
 
 class AuditsSynapse(bt.Synapse):

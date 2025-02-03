@@ -52,22 +52,13 @@ Ensure that the contract code is valid and can be successfully compiled.
 
 
 VULNERABILITIES_TO_GENERATE = [
-    # KnownVulnerability.KNOWN_COMPILER_BUGS.value,  # ambiguous, skip this
-    KnownVulnerability.REENTRANCY.value,  # works
-    KnownVulnerability.GAS_GRIEFING.value,  # works good, but llama 70b don't mind about it
-    # KnownVulnerability.ORACLE_MANIPULATION.value,  # doesn't works
-    KnownVulnerability.BAD_RANDOMNESS.value,  # works
-    # KnownVulnerability.UNEXPECTED_PRIVILEGE_GRANTS.value,  # doesn't works
-    KnownVulnerability.FORCED_RECEPTION.value,  # partially works
-    # KnownVulnerability.INTEGER_OVERFLOW_UNDERFLOW.value,  # doesn't works
-    # KnownVulnerability.RACE_CONDITION.value,  # partially works
-    KnownVulnerability.UNGUARDED_FUNCTION.value,  # works
-    # KnownVulnerability.INEFFICIENT_STORAGE_KEY.value,  # doesn't works
-    # KnownVulnerability.FRONT_RUNNING_POTENTIAL.value,  # doesn't works
-    # KnownVulnerability.MINER_MANIPULATION.value,  # doesn't works
-    # KnownVulnerability.STORAGE_COLLISION.value,  # doesn't works
-    KnownVulnerability.SIGNATURE_REPLAY.value,  # works
-    # KnownVulnerability.UNSAFE_OPERATION.value,  # partially works
+    KnownVulnerability.REENTRANCY.value,
+    KnownVulnerability.GAS_GRIEFING.value,
+    KnownVulnerability.BAD_RANDOMNESS.value,
+    KnownVulnerability.FORCED_RECEPTION.value,
+    KnownVulnerability.UNGUARDED_FUNCTION.value,
+    KnownVulnerability.SIGNATURE_REPLAY.value,
+    KnownVulnerability.UNSAFE_OPERATION.value,
 ]
 
 

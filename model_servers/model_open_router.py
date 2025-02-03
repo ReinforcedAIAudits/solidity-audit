@@ -3,23 +3,21 @@ import os
 import random
 from typing import List
 
-from fastapi import FastAPI, Request, HTTPException, Response
+from fastapi import FastAPI, Request, HTTPException
 from openai import AsyncOpenAI
 from pydantic import BaseModel
-from pycryptor import PyVuln, get_vulnerability
-from markovify import Text
+from py_solidity_vuln_db import get_vulnerability
+from solc_ast_parser.models.base_ast_models import NodeType
+
 from ai_audits.contracts.contract_generator import (
     Vulnerability,
     create_contract,
     create_task,
     get_contract_nodes_from_source,
 )
-
-from solc_ast_parser.models.base_ast_models import NodeType
-from ai_audits.protocol import SmartContract, ValidatorTask, VulnerabilityReport
+from ai_audits.protocol import SmartContract, ValidatorTask, KnownVulnerability
 from ai_audits.subnet_utils import ROLES, SolcSingleton, preprocess_text
-from model_servers.model_corcel import PROMPT_VALIDATOR, VULNERABILITIES_TO_GENERATE
-from model_servers.model_open_ai import AuditResponse
+
 
 GPT_MODEL = "meta-llama/llama-3.3-70b-instruct"
 
@@ -29,9 +27,16 @@ client = AsyncOpenAI(
 )
 app = FastAPI()
 
-with open(f"{os.path.dirname(os.path.abspath(__file__))}/data/pg75244.txt", "r", encoding="utf-8") as f:
-    text = f.read()
-text_model = Text(text)
+
+VULNERABILITIES_TO_GENERATE = [
+    KnownVulnerability.REENTRANCY.value,
+    KnownVulnerability.GAS_GRIEFING.value,
+    KnownVulnerability.BAD_RANDOMNESS.value,
+    KnownVulnerability.FORCED_RECEPTION.value,
+    KnownVulnerability.UNGUARDED_FUNCTION.value,
+    KnownVulnerability.SIGNATURE_REPLAY.value
+]
+
 
 PROMPT = """
 You are an auditor reviewing smart contract source code. 
@@ -65,12 +70,35 @@ The generated audit report should not contain any extra comments or explanations
 """.strip()
 
 
-def get_prompt(functions: List[str], storages: List[str]) -> str:
+PROMPT_VALIDATOR = """
+You are a Solidity smart contract auditor. 
+Your role is to help user auditors learn about Solidity vulnerabilities by providing them with vulnerable contracts.
+Be creative when generating contracts, avoid using common names or known contract structures. 
+Do not include comments describing the vulnerabilities in the code, human auditors should identify them on their own.
+
+Aim to create more complex contracts rather than simple, typical examples. 
+Each contract should include 3-5 state variables and 3-5 functions, with at least one function MUST containing a vulnerability. 
+Ensure that the contract code is valid and can be successfully compiled.
+
+Generate response in JSON format with no extra comments or explanations. 
+Answer with only JSON, without markdown formatting.
+
+Output format:
+{
+    "fromLine": "Start line of the vulnerability", 
+    "toLine": "End line of the vulnerability",
+    "vulnerabilityClass": "Type of vulnerability (e.g., Reentrancy, Integer Overflow)",
+    "contractCode": "Code of vulnerable contract"
+}
+""".strip()
+
+
+def get_hybrid_validator_prompt(functions: List[str], storages: List[str]) -> str:
     return f"""
 You are a Solidity smart contract writer. 
 Your role is to help user writers learn Solidity smart contracts by providing them different examples of contracts.
 Be creative when generating contracts, avoid using common names or known contract structures. 
-Do not use primritive examples of contracts, human writers need to understand the complexity of the contracts.
+Do not use primitive examples of contracts, human writers need to understand the complexity of the contracts.
 
 Aim to create more complex contracts rather than simple, typical examples. 
 Each contract must include {functions} functions, {storages} storages and more 2-3 state variables and 2-3 functions. 
@@ -89,24 +117,21 @@ Output format:
 solc = SolcSingleton()
 
 
-async def generate_contract(functions: List[str], storages: List[str]) -> SmartContract:
-
+async def generate_contract(functions: List[str], storages: List[str]) -> SmartContract | None:
     completion = await client.beta.chat.completions.parse(
         model=os.getenv("OPEN_ROUTER_MODEL", GPT_MODEL),
         messages=[
-            {"role": ROLES.SYSTEM, "content": get_prompt(functions, storages)},
-            # Output format guidance is provided automatically by OpenAI SDK.
+            {"role": ROLES.SYSTEM, "content": get_hybrid_validator_prompt(functions, storages)},
             {
                 "role": ROLES.USER,
                 "content": f"Generate new valid smart contract",
             },
         ],
-        response_format=SmartContract,
         temperature=0.3,
     )
 
     if completion.choices[0].message.parsed:
-        return completion.choices[0].message.parsed
+        return try_prepare_contract(completion.choices[0].message.parsed)
     else:
         return None
 
@@ -114,6 +139,19 @@ async def generate_contract(functions: List[str], storages: List[str]) -> SmartC
 REQUIRED_KEYS = {"fromLine", "toLine", "vulnerabilityClass"}
 INT_KEYS = {"fromLine", "toLine"}
 STR_EXTRA_KEYS = {"description", "fixedLines", "testCase"}
+
+
+def try_prepare_contract(result) -> SmartContract | None:
+    if isinstance(result, str):
+        try:
+            result = json.loads(result)
+        except:
+            return None
+    if not isinstance(result, dict):
+        return None
+    if 'code' not in result:
+        return None
+    return SmartContract(code=result['code'])
 
 
 def try_prepare_audit_result(result) -> list[dict] | None:
@@ -166,7 +204,6 @@ async def generate_audit(source: str):
                 "role": ROLES.SYSTEM,
                 "content": PROMPT,
             },
-            # Output format guidance is provided automatically by OpenAI SDK.
             {"role": ROLES.USER, "content": preprocessed},
         ],
     )
@@ -189,7 +226,6 @@ async def submit(request: Request):
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
     return result
-
 
 
 class ContractInfo(BaseModel):
@@ -280,15 +316,25 @@ async def get_hybrid_task(request: Request):
     tries = int(os.getenv("MAX_TRIES", "3"))
     is_valid, result = False, None
 
-    raw_vulnerability = get_vulnerability()
+    requested_vulnerability = (await request.body()).decode("utf-8")
+    if requested_vulnerability not in VULNERABILITIES_TO_GENERATE:
+        requested_vulnerability = None
+
+    raw_vulnerability = get_vulnerability(requested_vulnerability.lower())
     raw_vulnerability = Vulnerability(vulnerabilityClass=raw_vulnerability.name, code=raw_vulnerability.code)
 
-    vulnerability_contract = create_contract(raw_vulnerability.code)
-
     while tries > 0:
+        tries -= 1
+        vulnerability_contract = create_contract(raw_vulnerability.code)
         result = await generate_contract(
-            [node.name for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)],
-            [node.name for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION)],
+            [
+                node.name for node in
+                get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)
+            ],
+            [
+                node.name for node in
+                get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION)
+            ],
         )
         print(f"Generated contract: {result}")
         try:
@@ -300,24 +346,10 @@ async def get_hybrid_task(request: Request):
         if result is not None:
             is_valid = True
             break
-        tries -= 1
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
 
     return create_task(result.code, raw_vulnerability)
-
-
-@app.post("/random_text")
-async def get_markov_sentence(_: Request):
-    text = None
-    while not text:
-        text = text_model.make_sentence(min_words=50, max_words=150)
-    return ValidatorTask(
-        contract_code=text,
-        from_line=1,
-        to_line=1,
-        vulnerability_class="Invalid Code",
-    )  # TODO
 
 
 @app.get("/healthcheck")

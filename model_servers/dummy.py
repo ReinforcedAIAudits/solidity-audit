@@ -111,6 +111,7 @@ async def contract_report(request: Request):
 
 
 @app.post("/task")
+@app.post("/hybrid_task")
 async def task_provider(request: Request):
     requested_vulnerability = (await request.body()).decode("utf-8")
     logger.info(f"Requested vulnerability: {requested_vulnerability}")
