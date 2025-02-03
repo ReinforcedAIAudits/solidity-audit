@@ -194,7 +194,6 @@ class Validator(ReinforcedValidatorNeuron):
 
         except Exception as err:
             bt.logging.error(f"Validator killed due to exception: {str(err)}")
-            self.axon.stop()
             exit(1)
 
     def set_weights(self):
