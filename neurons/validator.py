@@ -18,6 +18,7 @@
 
 
 import asyncio
+import copy
 import os
 import pickle
 import time
@@ -85,6 +86,7 @@ class Validator(ReinforcedValidatorNeuron):
         - Rewarding the miners
         - Updating the scores
         """
+        self.synchronise_state()
         miner_uids = self.metagraph.n.item()
         bt.logging.info(f"Metagraph uids: {miner_uids}")
         active_uids = [
@@ -253,6 +255,17 @@ class Validator(ReinforcedValidatorNeuron):
         return scores
 
     @classmethod
+    def _get_replaced_keys(
+        cls, old_state: list[str], new_state: list[str]
+    ) -> list[int]:
+        min_length = min(len(old_state), len(new_state))
+        return [
+            netuid
+            for netuid in range(min_length)
+            if old_state[netuid] != new_state[netuid]
+        ]
+
+    @classmethod
     def validate_reports_by_reference(
         cls,
         report: List[VulnerabilityReport] | None,
@@ -287,6 +300,20 @@ class Validator(ReinforcedValidatorNeuron):
             return 1.0
         else:
             return 0.0
+
+    def synchronise_state(self):
+        old_hotkeys = copy.deepcopy(self.hotkeys)
+        self.metagraph.sync(subtensor=self.subtensor)
+        self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
+        replaced_keys = self._get_replaced_keys(old_hotkeys, self.hotkeys)
+        for key in replaced_keys:
+            self._buffer_scores.reset(key)
+            self.scores[key] = 0
+            bt.logging.info(
+                "Synchronise state: uid f{key} was replaced: f{old_hotkeys[key]} -> f{self.hotkeys[key]}"
+            )
+        if replaced_keys:
+            self.save_state()
 
     def save_state(self):
         """Saves the state of the validator to a file."""

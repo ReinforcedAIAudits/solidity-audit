@@ -152,6 +152,10 @@ class ScoresBuffer:
         buff.append(score)
         self._items[uid] = buff
 
+    def reset(self, uid):
+        self._check_uid(uid)
+        self._items.pop(uid, None)
+
     def dump(self):
         return {k: list(v) for k, v in self._items.items()}
 
