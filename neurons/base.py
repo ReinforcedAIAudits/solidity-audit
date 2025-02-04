@@ -159,8 +159,7 @@ class ScoresBuffer:
 
     def reset(self, uid):
         self._check_uid(uid)
-        if uid in self._items:
-            del self._items[uid]
+        self._items.pop(uid, None)
 
     def dump(self):
         return {k: list(v) for k, v in self._items.items()}
