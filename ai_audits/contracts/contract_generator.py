@@ -160,6 +160,10 @@ def insert_vulnerability_to_contract(
         else:
             contract_ast = append_node_to_contract(contract_ast, function)
 
+    for struct in get_contract_nodes(vulnerability_ast, NodeType.STRUCT_DEFINITION):
+        if not check_storage_in_contract(contract_ast, struct.name):
+            contract_ast = append_node_to_contract(contract_ast, struct)
+    
     return parse_ast_to_solidity(contract_ast)
 
 
@@ -198,5 +202,5 @@ def create_task(
         from_line=vulnerability_report.from_line,
         to_line=vulnerability_report.to_line,
         vulnerability_class=vulnerability_report.vulnerability_class,
-        taskType=TaskType.HYBRID
+        taskType=TaskType.HYBRID,
     )
