@@ -23,10 +23,12 @@ def compile_contract_from_source(source: str):
     return json_compiled[list(json_compiled.keys())[0]]["ast"]
 
 
-def get_contract_nodes(ast: SourceUnit, node_type: NodeType) -> List[ast_models.ASTNode]:
+def get_contract_nodes(ast: SourceUnit, node_type: NodeType = None) -> List[ast_models.ASTNode]:
     nodes = []
     for node in ast.nodes:
         if node.node_type == NodeType.CONTRACT_DEFINITION:
+            if not node_type:
+                return node.nodes
             for contract_node in node.nodes:
                 if contract_node.node_type == node_type:
                     if contract_node.node_type == NodeType.FUNCTION_DEFINITION and contract_node.kind == "constructor":
@@ -51,23 +53,14 @@ def change_function_in_contract(ast: SourceUnit, new_function: FunctionDefinitio
     raise ValueError("Function not found in contract")
 
 
-def check_function_in_contract(ast: SourceUnit, function_name: str):
+def check_node_in_contract(ast: SourceUnit, node_type: NodeType, **kwargs):
     for node in ast.nodes:
         if node.node_type == NodeType.CONTRACT_DEFINITION:
             for contract_node in node.nodes:
-                if contract_node.node_type == NodeType.FUNCTION_DEFINITION:
-                    if contract_node.name == function_name:
-                        return True
-    return False
-
-
-def check_storage_in_contract(ast: SourceUnit, storage_name: str):
-    for node in ast.nodes:
-        if node.node_type == NodeType.CONTRACT_DEFINITION:
-            for contract_node in node.nodes:
-                if contract_node.node_type == NodeType.VARIABLE_DECLARATION:
-                    if contract_node.name == storage_name:
-                        return True
+                if contract_node.node_type == node_type:
+                    for key, value in kwargs.items():
+                        if getattr(contract_node, key) == value:
+                            return True
     return False
 
 
@@ -150,20 +143,15 @@ def insert_vulnerability_to_contract(
     contract_ast: SourceUnit,
     vulnerability_ast: SourceUnit,
 ) -> str:
-    for variable in get_contract_nodes(vulnerability_ast, NodeType.VARIABLE_DECLARATION):
-        if not check_storage_in_contract(contract_ast, variable.name):
-            contract_ast = append_node_to_contract(contract_ast, variable)
+    vuln_nodes = get_contract_nodes(vulnerability_ast)
+    for node in vuln_nodes:
+        if node.node_type == NodeType.FUNCTION_DEFINITION and node.kind == "constructor":
+            continue
+        elif node.node_type == NodeType.FUNCTION_DEFINITION and check_node_in_contract(contract_ast, NodeType.FUNCTION_DEFINITION, name=node.name):
+                change_function_in_contract(contract_ast, node)
+        elif not check_node_in_contract(contract_ast, node.node_type, name=node.name):
+            contract_ast = append_node_to_contract(contract_ast, node)
 
-    for function in get_contract_nodes(vulnerability_ast, NodeType.FUNCTION_DEFINITION):
-        if check_function_in_contract(contract_ast, function.name):
-            change_function_in_contract(contract_ast, function)
-        else:
-            contract_ast = append_node_to_contract(contract_ast, function)
-
-    for struct in get_contract_nodes(vulnerability_ast, NodeType.STRUCT_DEFINITION):
-        if not check_storage_in_contract(contract_ast, struct.name):
-            contract_ast = append_node_to_contract(contract_ast, struct)
-    
     return parse_ast_to_solidity(contract_ast)
 
 

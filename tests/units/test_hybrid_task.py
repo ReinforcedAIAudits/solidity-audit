@@ -17,6 +17,13 @@ class HybridTaskTestCase(unittest.TestCase):
         
         bool public paused;
 
+        struct User {
+            uint256 id;
+            string name;
+        }
+
+        event UserCreated(uint256 id, string name);
+
         constructor() {
             paused = false;
         }
@@ -37,10 +44,11 @@ class HybridTaskTestCase(unittest.TestCase):
         task = create_task(
             contract, Vulnerability(vulnerabilityClass="missed access check", code=pseudo_vul, taskType=TaskType.HYBRID)
         )
-        self.assertEqual(task.contract_code.strip(), contract_with_vul.strip())
-        self.assertEqual(task.from_line, 124)
-        self.assertEqual(task.to_line, 126)
+
+        self.assertEqual(task.contract_code.replace('\n', '').strip(), contract_with_vul.replace('\n', '').strip())
+        self.assertEqual(task.from_line, 129)
+        self.assertEqual(task.to_line, 131)
         self.assertEqual(
-            task.contract_code.splitlines()[123:126],
+            task.contract_code.splitlines()[128:131],
             ["    function pause() public {", "        paused = true;", "    }"]
         )

@@ -44,6 +44,11 @@ contract ComplexContract {
         }
     }
 
+    struct User {
+        uint256 id;
+        string name;
+    }
+    event UserCreated(uint256 id, string name);
     function approve(address spender, uint256 amount) public {
         require(!paused, 'Contract is paused');
         require(amount >= 0, 'Approval amount must be non-negative');
@@ -167,5 +172,4 @@ contract ComplexContract {
         balanceForUser[msg.sender] = 0;
         payable(msg.sender).transfer(amount);
     }
-
 }
