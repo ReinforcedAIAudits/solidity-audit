@@ -283,7 +283,6 @@ class Validator(ReinforcedValidatorNeuron):
             reported_lines = set()
             for r in report:
                 reported_lines |= {i for i in range(r.from_line, r.to_line + 1)}
-            reported_score = len(vuln_lines & reported_lines) / len(vuln_lines)
 
             missed_lines = len(reported_lines - vuln_lines)
             missed_ratio_to_health_code = missed_lines / health_code_lines_number
