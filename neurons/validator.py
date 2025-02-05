@@ -19,6 +19,7 @@
 
 import asyncio
 import copy
+import math
 import os
 import pickle
 from random import choices
@@ -271,13 +272,28 @@ class Validator(ReinforcedValidatorNeuron):
         # Currently, we forgive the miner for identifying additional vulnerabilities
         # due to the imperfection of LLM generation
 
+        def sigmoid(x, k=25, x0=0.225):
+            return 1 / (1 + math.exp(-k * (x - x0)))
+
         if task.task_type == TaskType.HYBRID:
+            lines_of_code = len(task.contract_code.split("\n"))
             vuln_lines = {i for i in range(task.from_line, task.to_line + 1)}
+            health_code_lines_number = lines_of_code - len(vuln_lines)
+
             reported_lines = set()
             for r in report:
                 reported_lines |= {i for i in range(r.from_line, r.to_line + 1)}
             reported_score = len(vuln_lines & reported_lines) / len(vuln_lines)
-            score = (score + reported_score) / 2
+
+            missed_lines = len(reported_lines - vuln_lines)
+            missed_ratio_to_health_code = missed_lines / health_code_lines_number
+            missed_lines_penalty = sigmoid(missed_ratio_to_health_code)
+
+            precision = len(vuln_lines & reported_lines) / len(reported_lines) if reported_lines else 0
+            recall = len(vuln_lines & reported_lines) / len(vuln_lines) if vuln_lines else 0
+            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+            score = (score + f1_score * (1 - missed_lines_penalty)) / 2
 
         return score
 
