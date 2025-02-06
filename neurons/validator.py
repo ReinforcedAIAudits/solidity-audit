@@ -263,17 +263,20 @@ class Validator(ReinforcedValidatorNeuron):
         if report is None or not task:
             return 0.0
 
-        vulnerabilities_found = [x.vulnerability_class for x in report]
-        score = 1.0 if any(is_synonyms(task.vulnerability_class, vuln) for vuln in vulnerabilities_found) else 0.0
-        # # The number of detected vulnerabilities must match the template. Otherwise, reduce scores
-        # if len(vulnerabilities_found) > 1:
-        #     score = score / len(vulnerabilities_found)
-
-        # Currently, we forgive the miner for identifying additional vulnerabilities
-        # due to the imperfection of LLM generation
-
         def sigmoid(x, k=25, x0=0.225):
             return 1 / (1 + math.exp(-k * (x - x0)))
+
+        vulnerabilities_found = {x.vulnerability_class.lower() for x in report}
+        matching_vulns = {v for v in vulnerabilities_found if is_synonyms(task.vulnerability_class, v)}
+
+        if matching_vulns:
+            excess_vulns = vulnerabilities_found - matching_vulns
+            excess_ratio = len(excess_vulns) / len(vulnerabilities_found)
+
+            excess_penalty = sigmoid(excess_ratio, k=15, x0=3 / 4)
+            score = 1 - excess_penalty
+        else:
+            score = 0.0
 
         if task.task_type == TaskType.HYBRID:
             lines_of_code = len(task.contract_code.split("\n"))

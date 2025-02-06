@@ -1,3 +1,4 @@
+import math
 import unittest
 
 from ai_audits.protocol import VulnerabilityReport, ValidatorTask, TaskType
@@ -13,7 +14,7 @@ class ValidatorTestCase(unittest.TestCase):
             [VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)],
             ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS),
         )
-        self.assertEqual(score, 1)
+        self.assertLessEqual(1 - score, 0.0015)
         score = Validator.validate_reports_by_reference(
             [VulnerabilityReport(vulnerabilityClass="Unguarded function", **DEFAULT_FIELDS)],
             ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS),
@@ -25,6 +26,14 @@ class ValidatorTestCase(unittest.TestCase):
         pass
 
     def test_extra_vulnerabilities(self):
+        perfectly_matched_score = Validator.validate_reports_by_reference(
+            [
+                VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS),
+            ],
+            ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS),
+        )
+        self.assertLessEqual(1 - perfectly_matched_score, 0.0015)
+
         score = Validator.validate_reports_by_reference(
             [
                 VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS),
@@ -32,7 +41,57 @@ class ValidatorTestCase(unittest.TestCase):
             ],
             ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS),
         )
-        self.assertEqual(score, 1)
+        self.assertLessEqual(1 - score, 0.05)
+
+        score = Validator.validate_reports_by_reference(
+            [
+                VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Outdated solidity version", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass", **DEFAULT_FIELDS),
+            ],
+            ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS),
+        )
+        self.assertLessEqual(abs(0.8 - score), 0.025)
+
+        score = Validator.validate_reports_by_reference(
+            [
+                VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Outdated solidity version", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass#1", **DEFAULT_FIELDS),
+            ],
+            ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS),
+        )
+        self.assertEqual(score, 0.5)
+
+        score = Validator.validate_reports_by_reference(
+            [
+                VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Outdated solidity version", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass#1", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass#2", **DEFAULT_FIELDS),
+            ],
+            ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS),
+        )
+        self.assertLessEqual(score, 0.35)
+
+        score = Validator.validate_reports_by_reference(
+            [
+                VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Outdated solidity version", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass#1", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass#2", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass#3", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass#4", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass#5", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass#6", **DEFAULT_FIELDS),
+                VulnerabilityReport(vulnerabilityClass="Missclass#7", **DEFAULT_FIELDS),
+            ],
+            ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS),
+        )
+        self.assertLessEqual(score, 0.1)
 
     def test_hybrid_scoring(self):
         # Healthy code: 20 lines, Vulnerable code: 5 lines
