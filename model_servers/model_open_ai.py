@@ -6,9 +6,13 @@ from pydantic import BaseModel
 from openai import AsyncOpenAI
 from py_solidity_vuln_db import get_vulnerability
 from solc_ast_parser.models.base_ast_models import NodeType
+from solc_ast_parser.ast_parser import build_function_header, parse_variable_declaration
 
 from ai_audits.contracts.contract_generator import (
-    Vulnerability, create_contract, create_task, get_contract_nodes_from_source
+    Vulnerability,
+    create_contract,
+    create_task,
+    get_contract_nodes_from_source,
 )
 from ai_audits.protocol import VulnerabilityReport, ValidatorTask, KnownVulnerability, SmartContract
 from ai_audits.subnet_utils import preprocess_text, ROLES, SolcSingleton
@@ -56,6 +60,7 @@ Aim to create more complex contracts rather than simple, typical examples.
 Each contract should include 3-5 state variables and 3-5 functions, with at least one function MUST containing a vulnerability. 
 Ensure that the contract code is valid and can be successfully compiled.
 """.strip()
+
 
 def get_hybrid_validator_prompt(functions: list[str], storages: list[str]) -> str:
     return f"""
@@ -116,9 +121,7 @@ async def generate_audit(source: str):
 
 async def generate_task(requested_vulnerability: str | None = None) -> ValidatorTask:
     possible_vulnerabilities = (
-        random.sample(
-            VULNERABILITIES_TO_GENERATE, min(3, len(VULNERABILITIES_TO_GENERATE))
-        )
+        random.sample(VULNERABILITIES_TO_GENERATE, min(3, len(VULNERABILITIES_TO_GENERATE)))
         if requested_vulnerability is None
         else [requested_vulnerability]
     )
@@ -182,7 +185,8 @@ async def generate_contract(functions: list[str], storages: list[str]) -> SmartC
         model=GPT_MODEL,
         messages=[
             {
-                "role": ROLES.SYSTEM, "content": get_hybrid_validator_prompt(functions, storages),
+                "role": ROLES.SYSTEM,
+                "content": get_hybrid_validator_prompt(functions, storages),
             },
             # Output format guidance is provided automatically by OpenAI SDK.
             {"role": ROLES.USER, "content": "Generate new valid smart contract"},
@@ -212,12 +216,12 @@ async def get_task(request: Request):
         vulnerability_contract = create_contract(raw_vulnerability.code)
         result = await generate_contract(
             [
-                node.name for node in
-                get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)
+                build_function_header(node)
+                for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)
             ],
             [
-                node.name for node in
-                get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION)
+                parse_variable_declaration(node)
+                for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION)
             ],
         )
         print(f"Generated contract: {result}")
