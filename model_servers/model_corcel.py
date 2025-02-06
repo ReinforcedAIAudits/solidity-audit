@@ -5,6 +5,7 @@ import random
 from fastapi import FastAPI, Request, HTTPException
 from py_solidity_vuln_db import get_vulnerability
 from solc_ast_parser.models.base_ast_models import NodeType
+from solc_ast_parser.ast_parser import build_function_header, parse_variable_declaration
 
 from ai_audits.protocol import KnownVulnerability, SmartContract
 from ai_audits.subnet_utils import create_session, preprocess_text, ROLES, SolcSingleton
@@ -25,7 +26,7 @@ VULNERABILITIES_TO_GENERATE = [
     KnownVulnerability.BAD_RANDOMNESS.value,
     KnownVulnerability.FORCED_RECEPTION.value,
     KnownVulnerability.UNGUARDED_FUNCTION.value,
-    KnownVulnerability.SIGNATURE_REPLAY.value
+    KnownVulnerability.SIGNATURE_REPLAY.value,
 ]
 
 
@@ -120,9 +121,7 @@ def call_corcel(messages: list):
         "Authorization": os.getenv("CORCEL_API_KEY"),
     }
 
-    response = create_session().post(
-        "https://api.corcel.io/v1/chat/completions", json=payload, headers=headers
-    )
+    response = create_session().post("https://api.corcel.io/v1/chat/completions", json=payload, headers=headers)
     if response.status_code != 200:
         detail = response.text
         try:
@@ -148,9 +147,7 @@ def generate_audit(source: str):
 
 def generate_task(requested_vulnerability: str | None = None):
     possible_vulnerabilities = (
-        random.sample(
-            VULNERABILITIES_TO_GENERATE, min(3, len(VULNERABILITIES_TO_GENERATE))
-        )
+        random.sample(VULNERABILITIES_TO_GENERATE, min(3, len(VULNERABILITIES_TO_GENERATE)))
         if requested_vulnerability is None
         else [requested_vulnerability]
     )
@@ -195,9 +192,7 @@ def try_prepare_audit_result(result) -> list[dict] | None:
             if isinstance(item.get(key, None), str):
                 cleared[key] = item[key]
         for k in INT_KEYS:
-            if isinstance(cleared[k], int) or (
-                isinstance(item[k], str) and item[k].isdigit()
-            ):
+            if isinstance(cleared[k], int) or (isinstance(item[k], str) and item[k].isdigit()):
                 cleared[k] = int(cleared[k])
             else:
                 return None
@@ -215,9 +210,7 @@ def try_prepare_task_result(result) -> dict | None:
         return None
     cleared = {k: result[k] for k in REQUIRED_KEYS}
     for k in INT_KEYS:
-        if isinstance(cleared[k], int) or (
-            isinstance(cleared[k], str) and cleared[k].isdigit()
-        ):
+        if isinstance(cleared[k], int) or (isinstance(cleared[k], str) and cleared[k].isdigit()):
             cleared[k] = int(cleared[k])
         else:
             return None
@@ -275,9 +268,9 @@ def try_prepare_contract(result) -> SmartContract | None:
             return None
     if not isinstance(result, dict):
         return None
-    if 'code' not in result:
+    if "code" not in result:
         return None
-    return SmartContract(code=result['code'])
+    return SmartContract(code=result["code"])
 
 
 def generate_contract(functions: list[str], storages: list[str]) -> SmartContract | None:
@@ -303,7 +296,7 @@ async def get_hybrid_task(request: Request):
     if requested_vulnerability not in VULNERABILITIES_TO_GENERATE:
         requested_vulnerability = None
 
-    raw_vulnerability = get_vulnerability(requested_vulnerability.lower())
+    raw_vulnerability = get_vulnerability(requested_vulnerability.lower() if requested_vulnerability else None)
     raw_vulnerability = Vulnerability(vulnerabilityClass=raw_vulnerability.name, code=raw_vulnerability.code)
 
     while tries > 0:
@@ -311,12 +304,12 @@ async def get_hybrid_task(request: Request):
         vulnerability_contract = create_contract(raw_vulnerability.code)
         result = generate_contract(
             [
-                node.name for node in
-                get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)
+                build_function_header(node)
+                for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)
             ],
             [
-                node.name for node in
-                get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION)
+                parse_variable_declaration(node)
+                for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION)
             ],
         )
         print(f"Generated contract: {result}")
@@ -331,7 +324,6 @@ async def get_hybrid_task(request: Request):
             break
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
-
     return create_task(result.code, raw_vulnerability)
 
 
