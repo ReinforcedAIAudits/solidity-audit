@@ -8,6 +8,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel
 from py_solidity_vuln_db import get_vulnerability
 from solc_ast_parser.models.base_ast_models import NodeType
+from solc_ast_parser.ast_parser import build_function_header, parse_variable_declaration
 
 from ai_audits.contracts.contract_generator import (
     Vulnerability,
@@ -34,7 +35,7 @@ VULNERABILITIES_TO_GENERATE = [
     KnownVulnerability.BAD_RANDOMNESS.value,
     KnownVulnerability.FORCED_RECEPTION.value,
     KnownVulnerability.UNGUARDED_FUNCTION.value,
-    KnownVulnerability.SIGNATURE_REPLAY.value
+    KnownVulnerability.SIGNATURE_REPLAY.value,
 ]
 
 
@@ -118,7 +119,7 @@ solc = SolcSingleton()
 
 
 async def generate_contract(functions: List[str], storages: List[str]) -> SmartContract | None:
-    completion = await client.beta.chat.completions.parse(
+    completion = await client.chat.completions.create(
         model=os.getenv("OPEN_ROUTER_MODEL", GPT_MODEL),
         messages=[
             {"role": ROLES.SYSTEM, "content": get_hybrid_validator_prompt(functions, storages)},
@@ -129,11 +130,7 @@ async def generate_contract(functions: List[str], storages: List[str]) -> SmartC
         ],
         temperature=0.3,
     )
-
-    if completion.choices[0].message.parsed:
-        return try_prepare_contract(completion.choices[0].message.parsed)
-    else:
-        return None
+    return try_prepare_contract(completion.choices[0].message.content)
 
 
 REQUIRED_KEYS = {"fromLine", "toLine", "vulnerabilityClass"}
@@ -149,9 +146,9 @@ def try_prepare_contract(result) -> SmartContract | None:
             return None
     if not isinstance(result, dict):
         return None
-    if 'code' not in result:
+    if "code" not in result:
         return None
-    return SmartContract(code=result['code'])
+    return SmartContract(code=result["code"])
 
 
 def try_prepare_audit_result(result) -> list[dict] | None:
@@ -207,7 +204,7 @@ async def generate_audit(source: str):
             {"role": ROLES.USER, "content": preprocessed},
         ],
     )
-    
+
     return completion.choices[0].message.content
 
 
@@ -328,12 +325,12 @@ async def get_hybrid_task(request: Request):
         vulnerability_contract = create_contract(raw_vulnerability.code)
         result = await generate_contract(
             [
-                node.name for node in
-                get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)
+                build_function_header(node)
+                for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)
             ],
             [
-                node.name for node in
-                get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION)
+                parse_variable_declaration(node)
+                for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION)
             ],
         )
         print(f"Generated contract: {result}")
