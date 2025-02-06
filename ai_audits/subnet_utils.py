@@ -1,8 +1,10 @@
 import requests
 import solcx
+from ai_audits.solidity_generator import SolidityGenerator
+from ai_audits.protocol import ValidatorTask, TaskType, KnownVulnerability
 
 
-__all__ = ['create_session', 'preprocess_text', 'ROLES', 'is_synonyms', 'SolcSingleton']
+__all__ = ['create_session', 'preprocess_text', 'ROLES', 'is_synonyms', 'SolcSingleton', 'get_invalid_code']
 
 
 class ROLES:
@@ -97,3 +99,13 @@ class SolcSingleton:
     def compile(self, code: str):
         suggested_version = solcx.install.select_pragma_version(code, self.all_versions)
         return solcx.compile_source(code, solc_version=suggested_version, output_values=['abi', 'bin', 'metadata'])
+
+
+def get_invalid_code():
+    code = SolidityGenerator.generate_contract()
+    return ValidatorTask(
+        contract_code=code,
+        from_line=1, to_line=len(code.splitlines()) + 1,
+        vulnerability_class=KnownVulnerability.INVALID_CODE,
+        task_type=TaskType.RANDOM_TEXT
+    )

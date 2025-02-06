@@ -1,6 +1,0 @@
-{
-  "from": 14,
-  "to": 14,
-  "vulnerabilityClass": "Bad randomness",
-  "contractCode": "pragma solidity ^0.8.0;\n\ncontract RandomNumberGenerator {\n    uint256 public randomNumber;\n    address public owner;\n    uint256 public lastRequest;\n\n    constructor() {\n        owner = msg.sender;\n    }\n\n    function requestRandomNumber() public {\n        lastRequest = block.timestamp;\n        randomNumber = uint256(keccak256(abi.encodePacked(block.difficulty, block.timestamp, msg.sender)));\n    }\n\n    function getRandomNumber() public view returns (uint256) {\n        return randomNumber;\n    }\n\n    function resetRandomNumber() public {\n        require(msg.sender == owner, \"Only owner can reset\");\n        randomNumber = 0;\n    }\n}"
-}

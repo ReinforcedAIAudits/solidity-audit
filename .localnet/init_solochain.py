@@ -31,11 +31,7 @@ class SoloChainHelper:
     def __init__(self, network_url=None):
         self.substrate = None
         self.subtensor = None
-        self.network_url = (
-            os.getenv("CHAIN_ENDPOINT", "ws://127.0.0.1:9944")
-            if network_url is None
-            else network_url
-        )
+        self.network_url = os.getenv("CHAIN_ENDPOINT", "ws://127.0.0.1:9944") if network_url is None else network_url
         self.keypair_alice = Keypair.create_from_uri("//Alice")
 
     def connect(self):
@@ -54,9 +50,7 @@ class SoloChainHelper:
     def require_connect(func):
         def wrapped(self, *args, **kwargs):
             if not self.substrate or not self.subtensor:
-                raise ConnectionError(
-                    f"Cannot connect to chain with URL: {self.network_url}!"
-                )
+                raise ConnectionError(f"Cannot connect to chain with URL: {self.network_url}!")
             return func(self, *args, **kwargs)
 
         return wrapped
@@ -71,16 +65,12 @@ class SoloChainHelper:
     ):
         keypair = self.keypair_alice if keypair is None else keypair
         return self.substrate.create_signed_extrinsic(
-            call=self.substrate.compose_call(
-                call_module=pallet, call_function=method, call_params=params
-            ),
+            call=self.substrate.compose_call(call_module=pallet, call_function=method, call_params=params),
             keypair=keypair,
         )
 
     @require_connect
-    def create_sudo_extrinsic(
-        self, pallet: str, method: str, params: dict, keypair: Keypair = None
-    ):
+    def create_sudo_extrinsic(self, pallet: str, method: str, params: dict, keypair: Keypair = None):
         keypair = self.keypair_alice if keypair is None else keypair
         return self.substrate.create_signed_extrinsic(
             call=self.substrate.compose_call(
@@ -96,9 +86,7 @@ class SoloChainHelper:
         )
 
     @require_connect
-    def submit_extrinsic(
-        self, pallet: str, method: str, params: dict, keypair: Keypair = None
-    ):
+    def submit_extrinsic(self, pallet: str, method: str, params: dict, keypair: Keypair = None):
         keypair = self.keypair_alice if keypair is None else keypair
         try:
             receipt = self.substrate.submit_extrinsic(
@@ -107,9 +95,7 @@ class SoloChainHelper:
                 wait_for_inclusion=True,
             )
             if not receipt.is_success:
-                raise ValueError(
-                    f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
-                )
+                raise ValueError(f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}")
             return receipt
         except (
             WebSocketConnectionClosedException,
@@ -126,9 +112,7 @@ class SoloChainHelper:
                 wait_for_inclusion=True,
             )
             if not receipt.is_success:
-                raise ValueError(
-                    f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}"
-                )
+                raise ValueError(f"Failed extrinsic {receipt.extrinsic_hash} with {receipt.error_message}")
         except (
             WebSocketConnectionClosedException,
             BrokenPipeError,
@@ -138,10 +122,7 @@ class SoloChainHelper:
     @classmethod
     def extract_net_id_from_events(cls, events: list) -> int:
         for event in list(map(lambda e: e.value, events)):
-            if (
-                event["module_id"] == "SubtensorModule"
-                and event["event_id"] == "NetworkAdded"
-            ):
+            if event["module_id"] == "SubtensorModule" and event["event_id"] == "NetworkAdded":
                 net_uid = event["attributes"][0]
                 dotenv.set_key(
                     dotenv_path=dotenv_file,
@@ -164,9 +145,7 @@ class SoloChainHelper:
         return keypair, wallet
 
     @require_connect
-    def transfer_funds_if_needed(
-        self, wallet: bittensor.wallet, alice_wallet: bittensor.wallet
-    ):
+    def transfer_funds_if_needed(self, wallet: bittensor.wallet, alice_wallet: bittensor.wallet):
         if self.subtensor.get_balance(wallet.coldkey.ss58_address).tao < 10000.0:
             self.submit_extrinsic(
                 "Balances",
@@ -199,9 +178,7 @@ class SoloChainHelper:
             owner_wallet.coldkey,
         )
 
-        net_uid = self.extract_net_id_from_events(
-            register_network_receipt.triggered_events
-        )
+        net_uid = self.extract_net_id_from_events(register_network_receipt.triggered_events)
 
         self.submit_extrinsic(
             "SubtensorModule",
@@ -230,23 +207,15 @@ class SoloChainHelper:
             "sudo_set_weights_set_rate_limit",
             {"netuid": self.ROOT_ID, "weights_set_rate_limit": 0},
         )
-        self.submit_sudo_extrinsic(
-            "sudo_set_target_stakes_per_interval", {"target_stakes_per_interval": 1000}
-        )
+        self.submit_sudo_extrinsic("sudo_set_target_stakes_per_interval", {"target_stakes_per_interval": 1000})
         self.submit_sudo_extrinsic(
             "sudo_set_target_registrations_per_interval",
             {"netuid": net_uid, "target_registrations_per_interval": 1000},
         )
         self.submit_sudo_extrinsic("sudo_set_tx_rate_limit", {"tx_rate_limit": 0})
-        self.submit_sudo_extrinsic(
-            "sudo_set_tempo", {"netuid": net_uid, "tempo": self.SUBNET_TEMPO}
-        )
-        self.submit_sudo_extrinsic(
-            "sudo_set_tempo", {"netuid": self.ROOT_ID, "tempo": self.SUBNET_TEMPO}
-        )
-        self.submit_sudo_extrinsic(
-            "sudo_set_hotkey_emission_tempo", {"emission_tempo": self.EMISSION_TEMPO}
-        )
+        self.submit_sudo_extrinsic("sudo_set_tempo", {"netuid": net_uid, "tempo": self.SUBNET_TEMPO})
+        self.submit_sudo_extrinsic("sudo_set_tempo", {"netuid": self.ROOT_ID, "tempo": self.SUBNET_TEMPO})
+        self.submit_sudo_extrinsic("sudo_set_hotkey_emission_tempo", {"emission_tempo": self.EMISSION_TEMPO})
 
         self.submit_extrinsic(
             "SubtensorModule",

@@ -1,6 +1,0 @@
-{
-  "from": 19,
-  "to": 19,
-  "vulnerabilityClass": "Forced reception",
-  "contractCode": "pragma solidity ^0.8.0;\n\ncontract TokenReceiver {\n    mapping(address => uint256) public balances;\n    address public owner;\n    event Received(address indexed from, uint256 amount);\n\n    constructor() {\n        owner = msg.sender;\n    }\n\n    function deposit() public payable {\n        require(msg.value > 0, \"Must send some ether\");\n        balances[msg.sender] += msg.value;\n        emit Received(msg.sender, msg.value);\n    }\n\n    function withdraw(uint256 amount) public {\n        require(balances[msg.sender] >= amount, \"Insufficient balance\");\n        balances[msg.sender] -= amount;\n        payable(msg.sender).transfer(amount);\n    }\n\n    function forcedReceiveEther() public {\n        // This function can be called without sending ether, leading to forced reception.\n        emit Received(msg.sender, 0);\n    }\n}"
-}

@@ -72,7 +72,7 @@ Example of an audit JSON object:
 
 The validator receives a completely random contract from the LLM, enriches it with vulnerabilities, ensures that the contract remains valid (by performing a full compilation via `solc`), and knows the type of the vulnerability in advance. The contract is then sent to miners for evaluation, and the types of vulnerabilities identified by miners are compared with the expected ones (accounting for synonyms).
 
-The generation of fully random templates via LLM is currently implemented using OpenAI and Corcel. An example validator for a local model is expected soon.
+The generation of fully random templates via LLM is currently implemented using OpenAI, Corcel and OpenRouter. An example validator for a local model is expected soon.
 
 ## Development Roadmap
 

@@ -1,22 +1,31 @@
 import json
 import os
 import random
+from typing import List
 
 from fastapi import FastAPI, Request, HTTPException
+from openai import AsyncOpenAI
+from pydantic import BaseModel
 from py_solidity_vuln_db import get_vulnerability
 from solc_ast_parser.models.base_ast_models import NodeType
 from solc_ast_parser.ast_parser import build_function_header, parse_variable_declaration
 
-from ai_audits.protocol import KnownVulnerability, SmartContract
-from ai_audits.subnet_utils import create_session, preprocess_text, ROLES, SolcSingleton
 from ai_audits.contracts.contract_generator import (
     Vulnerability,
     create_contract,
     create_task,
     get_contract_nodes_from_source,
 )
+from ai_audits.protocol import SmartContract, ValidatorTask, KnownVulnerability
+from ai_audits.subnet_utils import ROLES, SolcSingleton, preprocess_text
 
 
+GPT_MODEL = "meta-llama/llama-3.3-70b-instruct"
+
+client = AsyncOpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPEN_ROUTER_API_KEY"),
+)
 app = FastAPI()
 
 
@@ -44,7 +53,7 @@ Output format:
         "description": "Detailed description of the issue",
         "priorArt": "Similar vulnerabilities encountered in wild before. Type: array",
         "fixedLines": "Fixed version of the original source",
-    },
+    }
 ]
 
 If the entire code is invalid or cannot be meaningfully analyzed:
@@ -60,6 +69,7 @@ For fields `fromLine` and `toLine` use only the line number as an integer, witho
 Each report entry should describe a separate vulnerability with precise line numbers, type, and an exploit example. 
 The generated audit report should not contain any extra comments or explanations.
 """.strip()
+
 
 PROMPT_VALIDATOR = """
 You are a Solidity smart contract auditor. 
@@ -83,10 +93,8 @@ Output format:
 }
 """.strip()
 
-solc = SolcSingleton()
 
-
-def get_hybrid_validator_prompt(functions: list[str], storages: list[str]) -> str:
+def get_hybrid_validator_prompt(functions: List[str], storages: List[str]) -> str:
     return f"""
 You are a Solidity smart contract writer. 
 Your role is to help user writers learn Solidity smart contracts by providing them different examples of contracts.
@@ -107,65 +115,40 @@ Output format:
 """.strip()
 
 
-def call_corcel(messages: list):
-    payload = {
-        "model": os.getenv("CORCEL_MODEL", "llama-3-1-70b"),
-        "temperature": 0.1,
-        "max_tokens": 4 * 1024,
-        "messages": messages,
-        "stream": False,
-    }
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "Authorization": os.getenv("CORCEL_API_KEY"),
-    }
-
-    response = create_session().post("https://api.corcel.io/v1/chat/completions", json=payload, headers=headers)
-    if response.status_code != 200:
-        detail = response.text
-        try:
-            detail = response.json()
-            if "detail" in detail:
-                detail = detail["detail"]
-        except:
-            pass
-        raise HTTPException(status_code=response.status_code, detail=detail)
-    completion = response.json()
-    return completion["choices"][0]["message"]["content"]
+solc = SolcSingleton()
 
 
-def generate_audit(source: str):
-    preprocessed = preprocess_text(source)
-    return call_corcel(
-        [
-            {"role": ROLES.SYSTEM, "content": PROMPT},
-            {"role": ROLES.USER, "content": preprocessed},
-        ]
-    )
-
-
-def generate_task(requested_vulnerability: str | None = None):
-    possible_vulnerabilities = (
-        random.sample(VULNERABILITIES_TO_GENERATE, min(3, len(VULNERABILITIES_TO_GENERATE)))
-        if requested_vulnerability is None
-        else [requested_vulnerability]
-    )
-    return call_corcel(
-        [
-            {"role": ROLES.SYSTEM, "content": PROMPT_VALIDATOR},
+async def generate_contract(functions: List[str], storages: List[str]) -> SmartContract | None:
+    completion = await client.chat.completions.create(
+        model=os.getenv("OPEN_ROUTER_MODEL", GPT_MODEL),
+        messages=[
+            {"role": ROLES.SYSTEM, "content": get_hybrid_validator_prompt(functions, storages)},
             {
                 "role": ROLES.USER,
-                "content": f"Generate new vulnerable contract with one of "
-                f"vulnerabilities: {', '.join(possible_vulnerabilities)}",
+                "content": f"Generate new valid smart contract",
             },
-        ]
+        ],
+        temperature=0.3,
     )
+    return try_prepare_contract(completion.choices[0].message.content)
 
 
 REQUIRED_KEYS = {"fromLine", "toLine", "vulnerabilityClass"}
 INT_KEYS = {"fromLine", "toLine"}
 STR_EXTRA_KEYS = {"description", "fixedLines", "testCase"}
+
+
+def try_prepare_contract(result) -> SmartContract | None:
+    if isinstance(result, str):
+        try:
+            result = json.loads(result)
+        except:
+            return None
+    if not isinstance(result, dict):
+        return None
+    if "code" not in result:
+        return None
+    return SmartContract(code=result["code"])
 
 
 def try_prepare_audit_result(result) -> list[dict] | None:
@@ -200,28 +183,29 @@ def try_prepare_audit_result(result) -> list[dict] | None:
     return prepared
 
 
-def try_prepare_task_result(result) -> dict | None:
-    if isinstance(result, str):
-        try:
-            result = json.loads(result)
-        except:
-            return None
-    if not isinstance(result, dict):
-        return None
-    cleared = {k: result[k] for k in REQUIRED_KEYS}
-    for k in INT_KEYS:
-        if isinstance(cleared[k], int) or (isinstance(cleared[k], str) and cleared[k].isdigit()):
-            cleared[k] = int(cleared[k])
-        else:
-            return None
-    if not isinstance(result.get("contractCode"), str):
-        return None
-    cleared["contractCode"] = result["contractCode"]
-    try:
-        solc.compile(cleared["contractCode"])
-    except:
-        return None
-    return cleared
+async def generate_audit(source: str):
+    """
+    Here goes the magic.
+    Reference implementation simply feeds all the data to LLM and hopes something good comes out.
+
+    Good implementation should have good preprocessing, response augmentation for LLM to provide good prior art
+    descriptions, it may call external linters to provide some initial guidance to LLM, etc.
+    It also needs to verify the output, as LLM might hallucinate and produce invalid line ranges
+    and other sorts of undesired output.
+    """
+    preprocessed = preprocess_text(source)
+    completion = await client.chat.completions.create(
+        model=os.getenv("OPEN_ROUTER_MODEL", GPT_MODEL),
+        messages=[
+            {
+                "role": ROLES.SYSTEM,
+                "content": PROMPT,
+            },
+            {"role": ROLES.USER, "content": preprocessed},
+        ],
+    )
+
+    return completion.choices[0].message.content
 
 
 @app.post("/submit")
@@ -230,7 +214,7 @@ async def submit(request: Request):
     tries = int(os.getenv("MAX_TRIES", "3"))
     is_valid, result = False, None
     while tries > 0:
-        result = generate_audit(contract_code)
+        result = await generate_audit(contract_code)
         result = try_prepare_audit_result(result)
         if result is not None:
             is_valid = True
@@ -241,50 +225,87 @@ async def submit(request: Request):
     return result
 
 
-@app.post("/task")
-async def get_task(request: Request):
-    requested_vulnerability = (await request.body()).decode("utf-8")
-    if requested_vulnerability not in VULNERABILITIES_TO_GENERATE:
-        requested_vulnerability = None
+class ContractInfo(BaseModel):
+    functions: List[str]
+    storages: List[str]
+
+
+@app.post("/valid_contract")
+async def get_valid_contract(request: Request, contract_info: ContractInfo):
     tries = int(os.getenv("MAX_TRIES", "3"))
     is_valid, result = False, None
+
     while tries > 0:
-        result = generate_task(requested_vulnerability)
-        result = try_prepare_task_result(result)
+        result = await generate_contract(
+            contract_info.functions,
+            contract_info.storages,
+        )
+        print(f"Generated contract: {result}")
+        try:
+            solc.compile(result.code)
+        except Exception as e:
+            print(f"Compilation error: {e}")
+            continue
+
         if result is not None:
             is_valid = True
             break
         tries -= 1
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
-    return result
+
+    return result.code
 
 
-def try_prepare_contract(result) -> SmartContract | None:
-    if isinstance(result, str):
-        try:
-            result = json.loads(result)
-        except:
-            return None
-    if not isinstance(result, dict):
-        return None
-    if "code" not in result:
-        return None
-    return SmartContract(code=result["code"])
-
-
-def generate_contract(functions: list[str], storages: list[str]) -> SmartContract | None:
-    result = call_corcel(
-        [
-            {"role": ROLES.SYSTEM, "content": get_hybrid_validator_prompt(functions, storages)},
-            {"role": ROLES.USER, "content": f"Generate new valid smart contract"},
-        ]
+async def generate_task(requested_vulnerability: str | None = None) -> ValidatorTask:
+    possible_vulnerabilities = (
+        random.sample(VULNERABILITIES_TO_GENERATE, min(3, len(VULNERABILITIES_TO_GENERATE)))
+        if requested_vulnerability is None
+        else [requested_vulnerability]
     )
-
-    if result:
-        return try_prepare_contract(result)
+    completion = await client.beta.chat.completions.parse(
+        model=os.getenv("OPEN_ROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct"),
+        messages=[
+            {"role": ROLES.SYSTEM, "content": PROMPT_VALIDATOR},
+            # Output format guidance is provided automatically by OpenAI SDK.
+            {
+                "role": ROLES.USER,
+                "content": f"Generate new vulnerable contract with one of "
+                f"vulnerabilities: {', '.join(possible_vulnerabilities)}",
+            },
+        ],
+        response_format=ValidatorTask,
+        temperature=0.3,
+    )
+    message = completion.choices[0].message
+    if message.parsed:
+        return message.parsed
     else:
         return None
+
+
+@app.post("/task", response_model=ValidatorTask)
+async def get_task(request: Request):
+    requested_vulnerability = (await request.body()).decode("utf-8")
+    if requested_vulnerability not in VULNERABILITIES_TO_GENERATE:
+        requested_vulnerability = None
+    tries = int(os.getenv("MAX_TRIES", "3"))
+    is_valid, validator_template = False, None
+    while tries > 0:
+        tries -= 1
+        validator_template = await generate_task(requested_vulnerability)
+        if validator_template is None:
+            continue
+        try:
+            solc.compile(validator_template.contract_code)
+        except:
+            continue
+        if validator_template is not None:
+            is_valid = True
+            break
+    if not is_valid:
+        raise HTTPException(status_code=400, detail="Invalid answer from LLM")
+    return validator_template
 
 
 @app.post("/hybrid_task")
@@ -302,7 +323,7 @@ async def get_hybrid_task(request: Request):
     while tries > 0:
         tries -= 1
         vulnerability_contract = create_contract(raw_vulnerability.code)
-        result = generate_contract(
+        result = await generate_contract(
             [
                 build_function_header(node)
                 for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)
@@ -324,6 +345,7 @@ async def get_hybrid_task(request: Request):
             break
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
+
     return create_task(result.code, raw_vulnerability)
 
 
@@ -336,5 +358,4 @@ if __name__ == "__main__":
     import uvicorn
 
     solc.install_solc()
-
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("SERVER_PORT", "5000")))
