@@ -320,7 +320,7 @@ async def get_hybrid_task(request: Request):
     if requested_vulnerability not in VULNERABILITIES_TO_GENERATE:
         requested_vulnerability = None
 
-    raw_vulnerability = get_vulnerability(requested_vulnerability.lower())
+    raw_vulnerability = get_vulnerability(requested_vulnerability.lower() if requested_vulnerability else None)
     raw_vulnerability = Vulnerability(vulnerabilityClass=raw_vulnerability.name, code=raw_vulnerability.code)
 
     while tries > 0:

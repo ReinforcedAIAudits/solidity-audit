@@ -12,3 +12,4 @@ openai==1.51.0
 py-solc-x==2.0.3
 solc_ast_parser==1.0.9
 hypothesis==6.124.9
+solidity-vulnerabilities-db<1

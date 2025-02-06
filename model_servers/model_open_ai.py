@@ -4,8 +4,13 @@ import random
 from fastapi import FastAPI, Request, Response, HTTPException
 from pydantic import BaseModel
 from openai import AsyncOpenAI
+from py_solidity_vuln_db import get_vulnerability
+from solc_ast_parser.models.base_ast_models import NodeType
 
-from ai_audits.protocol import VulnerabilityReport, ValidatorTask, KnownVulnerability
+from ai_audits.contracts.contract_generator import (
+    Vulnerability, create_contract, create_task, get_contract_nodes_from_source
+)
+from ai_audits.protocol import VulnerabilityReport, ValidatorTask, KnownVulnerability, SmartContract
 from ai_audits.subnet_utils import preprocess_text, ROLES, SolcSingleton
 
 
@@ -50,6 +55,21 @@ Do not include comments describing the vulnerabilities in the code, human audito
 Aim to create more complex contracts rather than simple, typical examples. 
 Each contract should include 3-5 state variables and 3-5 functions, with at least one function MUST containing a vulnerability. 
 Ensure that the contract code is valid and can be successfully compiled.
+""".strip()
+
+def get_hybrid_validator_prompt(functions: list[str], storages: list[str]) -> str:
+    return f"""
+You are a Solidity smart contract writer. 
+Your role is to help user writers learn Solidity smart contracts by providing them different examples of contracts.
+Be creative when generating contracts, avoid using common names or known contract structures. 
+Do not use primitive examples of contracts, human writers need to understand the complexity of the contracts.
+
+Aim to create more complex contracts rather than simple, typical examples. 
+Each contract must include {functions} functions, {storages} storages and more 2-3 state variables and 2-3 functions. 
+Ensure that the contract code is valid and can be successfully compiled by solidity compiler.
+
+Generate response in JSON format with no extra comments or explanations.
+Answer with only JSON text, without markdown formatting, without any formatting.
 """.strip()
 
 
@@ -155,6 +175,65 @@ async def get_task(request: Request):
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
     return validator_template
+
+
+async def generate_contract(functions: list[str], storages: list[str]) -> SmartContract | None:
+    completion = await client.beta.chat.completions.parse(
+        model=GPT_MODEL,
+        messages=[
+            {
+                "role": ROLES.SYSTEM, "content": get_hybrid_validator_prompt(functions, storages),
+            },
+            # Output format guidance is provided automatically by OpenAI SDK.
+            {"role": ROLES.USER, "content": "Generate new valid smart contract"},
+        ],
+        response_format=SmartContract,
+    )
+    message = completion.choices[0].message
+    if message.parsed:
+        return message.parsed
+    else:
+        return None
+
+
+@app.post("/hybrid_task", response_model=ValidatorTask)
+async def get_task(request: Request):
+    requested_vulnerability = (await request.body()).decode("utf-8")
+    if requested_vulnerability not in VULNERABILITIES_TO_GENERATE:
+        requested_vulnerability = None
+    tries = int(os.getenv("MAX_TRIES", "3"))
+    is_valid, result = False, None
+
+    raw_vulnerability = get_vulnerability(requested_vulnerability.lower() if requested_vulnerability else None)
+    raw_vulnerability = Vulnerability(vulnerabilityClass=raw_vulnerability.name, code=raw_vulnerability.code)
+
+    while tries > 0:
+        tries -= 1
+        vulnerability_contract = create_contract(raw_vulnerability.code)
+        result = await generate_contract(
+            [
+                node.name for node in
+                get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)
+            ],
+            [
+                node.name for node in
+                get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION)
+            ],
+        )
+        print(f"Generated contract: {result}")
+        try:
+            solc.compile(result.code)
+        except Exception as e:
+            print(f"Compilation error: {e}")
+            continue
+
+        if result is not None:
+            is_valid = True
+            break
+    if not is_valid:
+        raise HTTPException(status_code=400, detail="Invalid answer from LLM")
+
+    return create_task(result.code, raw_vulnerability)
 
 
 @app.get("/healthcheck")
