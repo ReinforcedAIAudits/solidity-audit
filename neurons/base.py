@@ -6,7 +6,7 @@ from typing import List
 from websocket import WebSocketConnectionClosedException
 from template.base.miner import BaseMinerNeuron
 from template.base.validator import BaseValidatorNeuron
-from substrateinterface import SubstrateInterface, Keypair
+from async_substrate_interface import SubstrateInterface
 
 from template.utils.uids import check_uid_availability
 
@@ -25,7 +25,7 @@ class IdentityException(Exception):
 
 
 def set_coldkey_identity(
-    substrate: SubstrateInterface, coldkey: Keypair, name: str, description: str
+    substrate: SubstrateInterface, coldkey, name: str, description: str
 ):
     state = substrate.query(
         module="SubtensorModule",
@@ -33,7 +33,8 @@ def set_coldkey_identity(
         params=[coldkey.public_key],
     )
     if (
-        state.value is not None
+        state 
+        and state.value
         and state.value["description"] == description
         and state.value["name"] == name
     ):
