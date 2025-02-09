@@ -24,6 +24,7 @@ import os
 import pickle
 from random import choices
 import time
+import traceback
 from typing import List
 
 import bittensor as bt
@@ -129,7 +130,7 @@ class Validator(ReinforcedValidatorNeuron):
         synapse = AuditsSynapse(contract_code=task.contract_code)
         bt.logging.info(f"Axons: {self.metagraph.axons}")
 
-        responses = self.dendrite.query(
+        responses = await self.dendrite.aquery(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
             synapse=synapse,
             deserialize=False,
@@ -194,7 +195,7 @@ class Validator(ReinforcedValidatorNeuron):
             exit()
 
         except Exception as err:
-            bt.logging.error(f"Validator killed due to exception: {str(err)}")
+            bt.logging.error(f"Validator killed due to exception: {traceback.format_exception(err)}")
             exit(1)
 
     def set_weights(self):
