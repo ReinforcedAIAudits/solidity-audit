@@ -146,6 +146,8 @@ class Validator(ReinforcedValidatorNeuron):
         for num, uid in enumerate(miner_uids):
             self._buffer_scores.add_score(uid, rewards[num])
 
+        await self.dendrite.aclose_session()
+        
         self.update_scores(rewards, miner_uids)
 
     def run(self):
