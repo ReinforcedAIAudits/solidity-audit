@@ -1,4 +1,4 @@
-bittensor==9.0.0rc5
+bittensor==9.0.0rc6
 bittensor-wallet==3.0.2
 starlette==0.37.2
 pydantic==2.9.2
