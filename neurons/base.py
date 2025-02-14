@@ -6,7 +6,7 @@ from typing import List
 from websocket import WebSocketConnectionClosedException
 from template.base.miner import BaseMinerNeuron
 from template.base.validator import BaseValidatorNeuron
-from substrateinterface import SubstrateInterface, Keypair
+from async_substrate_interface import SubstrateInterface
 
 from template.utils.uids import check_uid_availability
 
@@ -24,19 +24,13 @@ class IdentityException(Exception):
     pass
 
 
-def set_coldkey_identity(
-    substrate: SubstrateInterface, coldkey: Keypair, name: str, description: str
-):
+def set_coldkey_identity(substrate: SubstrateInterface, coldkey, name: str, description: str):
     state = substrate.query(
         module="SubtensorModule",
         storage_function="Identities",
         params=[coldkey.public_key],
     )
-    if (
-        state.value is not None
-        and state.value["description"] == description
-        and state.value["name"] == name
-    ):
+    if state and state.value and state.value["description"] == description and state.value["name"] == name:
         return
     call = substrate.compose_call(
         call_module="SubtensorModule",
@@ -48,15 +42,14 @@ def set_coldkey_identity(
             "discord": b"",
             "description": description,
             "additional": b"",
+            "github_repo": b"",
         },
     )
 
     extrinsic = substrate.create_signed_extrinsic(call=call, keypair=coldkey)
     receipt = substrate.submit_extrinsic(extrinsic, wait_for_inclusion=True)
     if not receipt.is_success:
-        raise IdentityException(
-            f"extricsic for meta: {receipt.error_message}, \nblock number: {receipt.block_number}"
-        )
+        raise IdentityException(f"extricsic for meta: {receipt.error_message}, \nblock number: {receipt.block_number}")
 
 
 def set_identity_mixin(self: BaseMinerNeuron | BaseValidatorNeuron):
@@ -90,9 +83,7 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> list:
     """
     exclude = set(exclude) if exclude else set()
 
-    candidate_uids = [
-        uid for uid in range(self.metagraph.n.item()) if uid not in exclude
-    ]
+    candidate_uids = [uid for uid in range(self.metagraph.n.item()) if uid not in exclude]
 
     k = min(k, len(candidate_uids))
 

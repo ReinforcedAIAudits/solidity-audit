@@ -24,9 +24,11 @@ import os
 import pickle
 from random import choices
 import time
+import traceback
 from typing import List
 
 import bittensor as bt
+from bittensor.utils.btlogging import logging
 from dotenv import load_dotenv
 
 
@@ -71,11 +73,11 @@ class Validator(ReinforcedValidatorNeuron):
         )
 
         if result.status_code != 200:
-            bt.logging.info(f"Not successful AI response. Description: {result.text}")
+            logging.info(f"Not successful AI response. Description: {result.text}")
             raise ValueError("Unable to receive task from MODEL_SERVER!")
 
         json = result.json()
-        bt.logging.info(f"Response from model server: {json}")
+        logging.info(f"Response from model server: {json}")
         task = ValidatorTask(task_type=task_type, **json)
         return task
 
@@ -95,16 +97,16 @@ class Validator(ReinforcedValidatorNeuron):
         """
         self.synchronise_state()
         miner_uids = self.metagraph.n.item()
-        bt.logging.info(f"Metagraph uids: {miner_uids}")
+        logging.info(f"Metagraph uids: {miner_uids}")
         active_uids = [index for index, is_active in enumerate(self.metagraph.active) if is_active == 1]
-        bt.logging.info(f"Active UIDs: {active_uids}")
+        logging.info(f"Active UIDs: {active_uids}")
         axon_count = len(self.metagraph.axons) - 1
 
         miner_selection_size = min(axon_count, self.config.neuron.sample_size)
         miner_uids = get_random_uids(self, k=miner_selection_size, exclude=[self.uid])
 
-        bt.logging.info(f"Selected UIDs: {miner_uids}")
-        bt.logging.info(f"Self UID: {self.uid}")
+        logging.info(f"Selected UIDs: {miner_uids}")
+        logging.info(f"Self UID: {self.uid}")
 
         max_retries_to_get_tasks = 10
         retry_delay = 10
@@ -112,38 +114,40 @@ class Validator(ReinforcedValidatorNeuron):
         for attempt in range(max_retries_to_get_tasks):
             try:
                 task = self.get_audit_task()
-                bt.logging.info(f"task: {task}")
+                logging.info(f"task: {task}")
                 break
             except ValueError as e:
-                bt.logging.warning(f"Attempt {attempt + 1}/{max_retries_to_get_tasks} failed: {str(e)}")
+                logging.warning(f"Attempt {attempt + 1}/{max_retries_to_get_tasks} failed: {str(e)}")
                 if attempt < max_retries_to_get_tasks - 1:
-                    bt.logging.info(f"Waiting {retry_delay} seconds before next attempt...")
+                    logging.info(f"Waiting {retry_delay} seconds before next attempt...")
                     await asyncio.sleep(retry_delay)
                 else:
-                    bt.logging.error("Max retries reached. Unable to get audit task.")
+                    logging.error("Max retries reached. Unable to get audit task.")
                     return
 
         if os.getenv("RUN_LOCAL", "").lower() != "true":
             self.dendrite.external_ip = "127.0.0.1"
 
         synapse = AuditsSynapse(contract_code=task.contract_code)
-        bt.logging.info(f"Axons: {self.metagraph.axons}")
+        logging.info(f"Axons: {self.metagraph.axons}")
 
-        responses = self.dendrite.query(
+        responses = await self.dendrite.aquery(
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
             synapse=synapse,
             deserialize=False,
             timeout=600,
         )
-        bt.logging.info(f"Received responses: {responses}")
+        logging.info(f"Received responses: {responses}")
 
         rewards = self.validate_responses(responses, task)
 
-        bt.logging.info(f"Scored responses: {rewards}")
+        logging.info(f"Scored responses: {rewards}")
 
         for num, uid in enumerate(miner_uids):
             self._buffer_scores.add_score(uid, rewards[num])
 
+        await self.dendrite.aclose_session()
+        
         self.update_scores(rewards, miner_uids)
 
     def run(self):
@@ -169,12 +173,12 @@ class Validator(ReinforcedValidatorNeuron):
         # Check that validator is registered on the network.
         self.sync()
 
-        bt.logging.info(f"Validator starting at block: {self.block}")
+        logging.info(f"Validator starting at block: {self.block}")
 
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-                bt.logging.info(f"step({self.step}) block({self.block})")
+                logging.info(f"step({self.step}) block({self.block})")
 
                 # Run multiple forwards concurrently.
                 self.loop.run_until_complete(self.concurrent_forward())
@@ -190,11 +194,11 @@ class Validator(ReinforcedValidatorNeuron):
 
         except KeyboardInterrupt:
             self.axon.stop()
-            bt.logging.success("Validator killed by keyboard interrupt.")
+            logging.success("Validator killed by keyboard interrupt.")
             exit()
 
         except Exception as err:
-            bt.logging.error(f"Validator killed due to exception: {str(err)}")
+            logging.error(f"Validator killed due to exception: {traceback.format_exception(err)}")
             exit(1)
 
     def set_weights(self):
@@ -208,9 +212,9 @@ class Validator(ReinforcedValidatorNeuron):
             version_key=self.spec_version,
         )
         if result is True:
-            bt.logging.info("set_weights on chain successfully!")
+            logging.info("set_weights on chain successfully!")
         else:
-            bt.logging.error("set_weights failed", msg)
+            logging.error("set_weights failed", msg)
 
     def validate_responses(
         self,
@@ -223,16 +227,16 @@ class Validator(ReinforcedValidatorNeuron):
             for x in responses
             if x.dendrite.process_time is not None and x.axon.hotkey != axon_info.hotkey
         ]
-        bt.logging.debug(f"axons response times: {times}")
+        logging.debug(f"axons response times: {times}")
 
         min_time = min(times) if times else 0.0
 
-        bt.logging.debug(f"minimal response time: {min_time}")
+        logging.debug(f"minimal response time: {min_time}")
 
         scores: list[float] = []
 
         for synapse in responses:
-            bt.logging.debug(
+            logging.debug(
                 f"synapse: axon hotkey: {synapse.axon.hotkey} | is success: {synapse.is_success} | "
                 f"is blacklisted: {synapse.is_blacklist} | message: {synapse.axon.status_message}"
             )
@@ -316,13 +320,13 @@ class Validator(ReinforcedValidatorNeuron):
         for key in replaced_keys:
             self._buffer_scores.reset(key)
             self.scores[key] = 0
-            bt.logging.info("Synchronise state: uid f{key} was replaced: f{old_hotkeys[key]} -> f{self.hotkeys[key]}")
+            logging.info("Synchronise state: uid f{key} was replaced: f{old_hotkeys[key]} -> f{self.hotkeys[key]}")
         if replaced_keys:
             self.save_state()
 
     def save_state(self):
         """Saves the state of the validator to a file."""
-        bt.logging.info("Saving validator state.")
+        logging.info("Saving validator state.")
 
         # Save the state of the validator to file.
         state = {
@@ -337,7 +341,7 @@ class Validator(ReinforcedValidatorNeuron):
 
     def load_state(self):
         """Loads the state of the validator from a file."""
-        bt.logging.info("Loading validator state.")
+        logging.info("Loading validator state.")
         try:
             with open(self.config.neuron.full_path + "/state.pkl", "rb") as f:
                 state = pickle.load(f)
@@ -349,7 +353,7 @@ class Validator(ReinforcedValidatorNeuron):
             self._buffer_scores = buf
             self.hotkeys = state["hotkeys"]
         except FileNotFoundError:
-            bt.logging.error("State file is not found.")
+            logging.error("State file is not found.")
             self.save_state()
 
     @property
@@ -378,5 +382,5 @@ class Validator(ReinforcedValidatorNeuron):
 if __name__ == "__main__":
     with Validator() as validator:
         while True:
-            bt.logging.info(f"Validator running... {time.time()}")
+            logging.info(f"Validator running... {time.time()}")
             time.sleep(1200)

@@ -7,7 +7,8 @@ import dotenv
 from typing import Tuple
 import bittensor
 from bittensor_wallet import Wallet
-from substrateinterface import SubstrateInterface, Keypair
+from async_substrate_interface import SubstrateInterface
+from bittensor_wallet.keypair import Keypair
 from websocket import WebSocketConnectionClosedException
 
 
@@ -121,7 +122,7 @@ class SoloChainHelper:
 
     @classmethod
     def extract_net_id_from_events(cls, events: list) -> int:
-        for event in list(map(lambda e: e.value, events)):
+        for event in list(map(lambda e: e["event"], events)):
             if event["module_id"] == "SubtensorModule" and event["event_id"] == "NetworkAdded":
                 net_uid = event["attributes"][0]
                 dotenv.set_key(
