@@ -1,3 +1,4 @@
+import json
 from typing import Union, List, Optional
 
 from openai import BaseModel
@@ -14,7 +15,20 @@ import solcx
 
 from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
 
-FILE_NAME = "contract.example.sol"
+
+def create_standart_solidity_input(contract_content: str) -> dict:
+    return {
+        "language": "Solidity",
+        "sources": {
+            "example.sol": {
+                "content": contract_content,
+            },
+        },
+        "settings": {
+            "stopAfter": "parsing",
+            "outputSelection": {"*": {"": ["ast"]}},
+        },
+    }
 
 
 def compile_contract_from_source(source: str):
@@ -22,6 +36,13 @@ def compile_contract_from_source(source: str):
     json_compiled = solcx.compile_source(source, solc_version=suggested_version)
     return json_compiled[list(json_compiled.keys())[0]]["ast"]
 
+
+def compile_contract_with_standart_input(source: str):
+    suggested_version = solcx.install.select_pragma_version(source, solcx.get_installable_solc_versions())
+    json_compiled = solcx.compile_standard(create_standart_solidity_input(source), solc_version=suggested_version)["sources"]
+    with open("contract.json", "w+") as f:
+        f.write(json.dumps(json_compiled))
+    return json_compiled[list(json_compiled.keys())[0]]["ast"]
 
 def get_contract_nodes(ast: SourceUnit, node_type: NodeType = None) -> List[ast_models.ASTNode]:
     nodes = []
@@ -126,7 +147,7 @@ def find_function_boundaries(
 
 
 def create_contract(pseudocode: str) -> str:
-    return f"contract PseudoContract {{\n\n{pseudocode}\n}}"
+    return f"// SPDX-License-Identifier: MIT\npragma solidity ^0.8.28;\ncontract PseudoContract {{\n\n{pseudocode}\n}}"
 
 
 def create_ast_from_source(source: str) -> SourceUnit:
@@ -138,6 +159,14 @@ def create_ast_from_source(source: str) -> SourceUnit:
             f.write(str(e))
         raise e
 
+def create_ast_with_standart_input(source: str) -> SourceUnit:
+    ast = compile_contract_with_standart_input(source)
+    try:
+        return SourceUnit(**ast)
+    except ValidationError as e:
+        with open("contract.errors.txt", "w+") as f:
+            f.write(str(e))
+        raise e
 
 def insert_vulnerability_to_contract(
     contract_ast: SourceUnit,
@@ -147,8 +176,10 @@ def insert_vulnerability_to_contract(
     for node in vuln_nodes:
         if node.node_type == NodeType.FUNCTION_DEFINITION and node.kind == "constructor":
             continue
-        elif node.node_type == NodeType.FUNCTION_DEFINITION and check_node_in_contract(contract_ast, NodeType.FUNCTION_DEFINITION, name=node.name):
-                change_function_in_contract(contract_ast, node)
+        elif node.node_type == NodeType.FUNCTION_DEFINITION and check_node_in_contract(
+            contract_ast, NodeType.FUNCTION_DEFINITION, name=node.name
+        ):
+            change_function_in_contract(contract_ast, node)
         elif not check_node_in_contract(contract_ast, node.node_type, name=node.name):
             contract_ast = append_node_to_contract(contract_ast, node)
 
@@ -167,7 +198,7 @@ def create_task(
     ast_obj_contract = create_ast_from_source(contract_source)
 
     vulnerability_contract = create_contract(raw_vulnerability.code)
-    ast_obj_vulnerability = create_ast_from_source(vulnerability_contract)
+    ast_obj_vulnerability = create_ast_with_standart_input(vulnerability_contract)
 
     contract_source = insert_vulnerability_to_contract(ast_obj_contract, ast_obj_vulnerability)
 
