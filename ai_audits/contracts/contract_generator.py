@@ -13,6 +13,7 @@ from solc_ast_parser.models.base_ast_models import NodeType
 from solc_ast_parser.models import ast_models
 import solcx
 
+from ai_audits.contracts.contract_utils import get_contract_nodes
 from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
 
 
@@ -43,20 +44,6 @@ def compile_contract_with_standart_input(source: str):
     with open("contract.json", "w+") as f:
         f.write(json.dumps(json_compiled))
     return json_compiled[list(json_compiled.keys())[0]]["ast"]
-
-def get_contract_nodes(ast: SourceUnit, node_type: NodeType = None) -> List[ast_models.ASTNode]:
-    nodes = []
-    for node in ast.nodes:
-        if node.node_type == NodeType.CONTRACT_DEFINITION:
-            if not node_type:
-                return node.nodes
-            for contract_node in node.nodes:
-                if contract_node.node_type == node_type:
-                    if contract_node.node_type == NodeType.FUNCTION_DEFINITION and contract_node.kind == "constructor":
-                        continue
-                    nodes.append(contract_node)
-    return nodes
-
 
 def get_contract_nodes_from_source(source: str, node_type: NodeType) -> List[ast_models.ASTNode]:
     ast = create_ast_from_source(source)
