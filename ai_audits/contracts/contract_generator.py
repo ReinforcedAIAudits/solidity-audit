@@ -11,39 +11,12 @@ from solc_ast_parser.models.ast_models import (
 )
 from solc_ast_parser.models.base_ast_models import NodeType
 from solc_ast_parser.models import ast_models
+from solc_ast_parser.utils import create_ast_from_source, create_ast_with_standart_input
 import solcx
 
 from ai_audits.contracts.contract_utils import get_contract_nodes
 from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
 
-
-def create_standart_solidity_input(contract_content: str) -> dict:
-    return {
-        "language": "Solidity",
-        "sources": {
-            "example.sol": {
-                "content": contract_content,
-            },
-        },
-        "settings": {
-            "stopAfter": "parsing",
-            "outputSelection": {"*": {"": ["ast"]}},
-        },
-    }
-
-
-def compile_contract_from_source(source: str):
-    suggested_version = solcx.install.select_pragma_version(source, solcx.get_installable_solc_versions())
-    json_compiled = solcx.compile_source(source, solc_version=suggested_version)
-    return json_compiled[list(json_compiled.keys())[0]]["ast"]
-
-
-def compile_contract_with_standart_input(source: str):
-    suggested_version = solcx.install.select_pragma_version(source, solcx.get_installable_solc_versions())
-    json_compiled = solcx.compile_standard(create_standart_solidity_input(source), solc_version=suggested_version)["sources"]
-    with open("contract.json", "w+") as f:
-        f.write(json.dumps(json_compiled))
-    return json_compiled[list(json_compiled.keys())[0]]["ast"]
 
 def get_contract_nodes_from_source(source: str, node_type: NodeType) -> List[ast_models.ASTNode]:
     ast = create_ast_from_source(source)
@@ -136,24 +109,6 @@ def find_function_boundaries(
 def create_contract(pseudocode: str) -> str:
     return f"// SPDX-License-Identifier: MIT\npragma solidity ^0.8.28;\ncontract PseudoContract {{\n\n{pseudocode}\n}}"
 
-
-def create_ast_from_source(source: str) -> SourceUnit:
-    ast = compile_contract_from_source(source)
-    try:
-        return SourceUnit(**ast)
-    except ValidationError as e:
-        with open("contract.errors.txt", "w+") as f:
-            f.write(str(e))
-        raise e
-
-def create_ast_with_standart_input(source: str) -> SourceUnit:
-    ast = compile_contract_with_standart_input(source)
-    try:
-        return SourceUnit(**ast)
-    except ValidationError as e:
-        with open("contract.errors.txt", "w+") as f:
-            f.write(str(e))
-        raise e
 
 def insert_vulnerability_to_contract(
     contract_ast: SourceUnit,
