@@ -224,7 +224,7 @@ class Validator(ReinforcedValidatorNeuron):
         axon_info = self.axon.info()
         dendrites = [x.dendrite for x in responses if x.dendrite.process_time is not None and x.axon.hotkey != axon_info.hotkey]
         
-        logging.debug(f"Axons response times: {[f"Miner with UUID {x.uuid}: {x.process_time}" for x in dendrites]}")
+        logging.debug(f"Axons response times: {[{x.uuid: x.process_time} for x in dendrites]}")
         
         times = [x.process_time for x in dendrites]
 
