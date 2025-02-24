@@ -137,7 +137,7 @@ class Validator(ReinforcedValidatorNeuron):
             deserialize=False,
             timeout=600,
         )
-        logging.info(f"Received responses: {responses}")
+        logging.info(f"Received responses: {[resp.response for resp in responses]}")
 
         rewards = self.validate_responses(responses, task)
 
@@ -222,22 +222,21 @@ class Validator(ReinforcedValidatorNeuron):
         task: ValidatorTask = None,
     ) -> List[float]:
         axon_info = self.axon.info()
-        times = [
-            x.dendrite.process_time
-            for x in responses
-            if x.dendrite.process_time is not None and x.axon.hotkey != axon_info.hotkey
-        ]
-        logging.debug(f"axons response times: {times}")
+        dendrites = [x.dendrite for x in responses if x.dendrite.process_time is not None and x.axon.hotkey != axon_info.hotkey]
+        
+        logging.debug(f"Axons response times: {', '.join([f'{x.ip}:{x.port} - {x.process_time}' for x in dendrites])}")
+        
+        times = [x.process_time for x in dendrites]
 
         min_time = min(times) if times else 0.0
 
-        logging.debug(f"minimal response time: {min_time}")
+        logging.debug(f"Minimal response time: {min_time}")
 
         scores: list[float] = []
 
         for synapse in responses:
             logging.debug(
-                f"synapse: axon hotkey: {synapse.axon.hotkey} | is success: {synapse.is_success} | "
+                f"Synapse: axon hotkey: {synapse.axon.hotkey} | is success: {synapse.is_success} | "
                 f"is blacklisted: {synapse.is_blacklist} | message: {synapse.axon.status_message}"
             )
             scores_by_report = self.validate_reports_by_reference(synapse.response, task) * self.WEIGHT_SCORE
