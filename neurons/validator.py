@@ -263,19 +263,20 @@ class Validator(ReinforcedValidatorNeuron):
 
     def create_top_miners(self, responses: List[AuditsSynapse], rewards: List[float], uids: List[int]):
         top_miners = self.assign_achievements(rewards, uids)
+        achievements = {1: "Gold", 2: "Silver", 3: "Bronze"}
         result_top = []
         for place, uid in enumerate(top_miners):
             synapse = next((x for x in responses if x.axon.hotkey == self.metagraph.axons[uid].hotkey), None)
             if synapse:
-                result_top.append(
-                    UsualMintingMessage(
-                        status="NEW",
-                        medal=place + 1,
-                        miner_key=synapse.axon.hotkey,
-                        validator_key=self.wallet.hotkey.ss58_address,
-                        score=rewards[uids.index(uid)],
-                    )
+                message = UsualMintingMessage(
+                    status="NEW",
+                    medal=achievements[place + 1],
+                    miner_key=synapse.axon.hotkey,
+                    validator_key=self.wallet.hotkey.ss58_address,
+                    score=rewards[uids.index(uid)],
                 )
+                message.sign(self.wallet.coldkey)
+                result_top.append(message)
         logging.info(f"Top miners: {result_top}")
         return result_top
 

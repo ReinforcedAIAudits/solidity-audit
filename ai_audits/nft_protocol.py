@@ -46,14 +46,9 @@ class TimestampedMessage(SignedMessage):
         super().sign(keypair)
 
 
-class Medal(Enum.str):
-    1 = "Gold"
-    2 = "Silver"
-    3 = "Bronze"
-
 class UsualMintingMessage(TimestampedMessage):
     status: str
-    medal: Medal
+    medal: str
     miner_key: str
     validator_key: str
     score: float
