@@ -32,6 +32,7 @@ from bittensor.utils.btlogging import logging
 from dotenv import load_dotenv
 
 
+from ai_audits.nft_protocol import UsualMintingMessage
 from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ValidatorTask, TaskType
 from ai_audits.subnet_utils import create_session, is_synonyms, get_invalid_code
 from neurons.base import ReinforcedValidatorNeuron, get_random_uids, ScoresBuffer
@@ -143,11 +144,13 @@ class Validator(ReinforcedValidatorNeuron):
 
         logging.info(f"Scored responses: {rewards}")
 
+        self.send_top_miners(responses, rewards, miner_uids)
+
         for num, uid in enumerate(miner_uids):
             self._buffer_scores.add_score(uid, rewards[num])
 
         await self.dendrite.aclose_session()
-        
+
         self.update_scores(rewards, miner_uids)
 
     def run(self):
@@ -222,10 +225,12 @@ class Validator(ReinforcedValidatorNeuron):
         task: ValidatorTask = None,
     ) -> List[float]:
         axon_info = self.axon.info()
-        dendrites = [x.dendrite for x in responses if x.dendrite.process_time is not None and x.axon.hotkey != axon_info.hotkey]
-        
+        dendrites = [
+            x.dendrite for x in responses if x.dendrite.process_time is not None and x.axon.hotkey != axon_info.hotkey
+        ]
+
         logging.debug(f"Axons response times: {', '.join([f'{x.ip}:{x.port} - {x.process_time}' for x in dendrites])}")
-        
+
         times = [x.process_time for x in dendrites]
 
         min_time = min(times) if times else 0.0
@@ -251,6 +256,40 @@ class Validator(ReinforcedValidatorNeuron):
             )
             scores.append(scores_by_report + scores_by_time)
         return scores
+
+    def assign_achievements(self, rewards: List[float], uids: List[int], achievement_count: int = 3):
+        top_scores = sorted(enumerate(rewards), key=lambda x: x[1], reverse=True)[:achievement_count]
+        return [uids[index] for index, _ in top_scores]
+
+    def create_top_miners(self, responses: List[AuditsSynapse], rewards: List[float], uids: List[int]):
+        top_miners = self.assign_achievements(rewards, uids)
+        result_top = []
+        for place, uid in enumerate(top_miners):
+            synapse = next((x for x in responses if x.axon.hotkey == self.metagraph.axons[uid].hotkey), None)
+            if synapse:
+                result_top.append(
+                    UsualMintingMessage(
+                        status="NEW",
+                        medal=place + 1,
+                        miner_key=synapse.axon.hotkey,
+                        validator_key=self.wallet.hotkey.ss58_address,
+                        score=rewards[uids.index(uid)],
+                    )
+                )
+        logging.info(f"Top miners: {result_top}")
+        return result_top
+
+    def send_top_miners(self, responses: List[AuditsSynapse], rewards: List[float], uids: List[int]):
+        top_miners = self.create_top_miners(responses, rewards, uids)
+        for miner in top_miners:
+            result = create_session().post(
+                f"{os.getenv('WEBSITE_URL')}/send_usual_minting",
+                json=miner.model_dump(),
+                headers={"Content-Type": "application/json"},
+            )
+            if result.status_code != 200:
+                logging.info(f"Not successful setting top miners. Description: {result.text}")
+                raise ValueError("Unable to set top miners!")
 
     @classmethod
     def _get_replaced_keys(cls, old_state: list[str], new_state: list[str]) -> list[int]:

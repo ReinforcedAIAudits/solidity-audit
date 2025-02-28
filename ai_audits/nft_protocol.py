@@ -1,3 +1,4 @@
+from enum import Enum
 import time
 from pydantic import BaseModel, Field
 from typing import Optional, Union
@@ -45,9 +46,17 @@ class TimestampedMessage(SignedMessage):
         super().sign(keypair)
 
 
+class Medal(Enum.str):
+    1 = "Gold"
+    2 = "Silver"
+    3 = "Bronze"
+
 class UsualMintingMessage(TimestampedMessage):
-    synapse: AuditsSynapse
     status: str
+    medal: Medal
+    miner_key: str
+    validator_key: str
+    score: float
 
 
 class TestMessage(TimestampedMessage):
