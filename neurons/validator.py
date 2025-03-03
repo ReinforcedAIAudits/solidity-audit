@@ -284,15 +284,14 @@ class Validator(ReinforcedValidatorNeuron):
 
     def send_top_miners(self, responses: List[AuditsSynapse], rewards: List[float], uids: List[int]):
         top_miners = self.create_top_miners(responses, rewards, uids)
-        for miner in top_miners:
-            result = create_session().post(
-                f"{os.getenv('WEBSITE_URL')}/api/mint_medals",
-                json=miner.model_dump(),
-                headers={"Content-Type": "application/json"},
-            )
-            if result.status_code != 200:
-                logging.info(f"Not successful setting top miners. Description: {result.text}")
-                raise ValueError("Unable to set top miners!")
+        result = create_session().post(
+            f"{os.getenv('WEBSITE_URL')}/api/mint_medals",
+            json=[miner.model_dump() for miner in top_miners],
+            headers={"Content-Type": "application/json"},
+        )
+        if result.status_code != 200:
+            logging.info(f"Not successful setting top miners. Description: {result.text}")
+            raise ValueError("Unable to set top miners!")
 
     @classmethod
     def _get_replaced_keys(cls, old_state: list[str], new_state: list[str]) -> list[int]:
