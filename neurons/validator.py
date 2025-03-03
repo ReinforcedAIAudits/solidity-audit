@@ -274,7 +274,7 @@ class Validator(ReinforcedValidatorNeuron):
                 message = MedalRequestsMessage(
                     status="NEW",
                     medal=achievements[place + 1],
-                    miner_key=synapse.axon.hotkey,
+                    miner_ss58_hotkey=synapse.axon.hotkey,
                     score=rewards[uids.index(uid)],
                 )
                 message.sign(self.wallet.coldkey)
