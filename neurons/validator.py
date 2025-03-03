@@ -32,7 +32,7 @@ from bittensor.utils.btlogging import logging
 from dotenv import load_dotenv
 
 
-from ai_audits.nft_protocol import UsualMintingMessage
+from ai_audits.nft_protocol import MedalRequestsMessage
 from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ValidatorTask, TaskType
 from ai_audits.subnet_utils import create_session, is_synonyms, get_invalid_code
 from neurons.base import ReinforcedValidatorNeuron, get_random_uids, ScoresBuffer
@@ -144,7 +144,10 @@ class Validator(ReinforcedValidatorNeuron):
 
         logging.info(f"Scored responses: {rewards}")
 
-        self.send_top_miners(responses, rewards, miner_uids)
+        try:
+            self.send_top_miners(responses, rewards, miner_uids)
+        except Exception as e:
+            logging.error(f"Unable to send top miners: {str(e)}")
 
         for num, uid in enumerate(miner_uids):
             self._buffer_scores.add_score(uid, rewards[num])
@@ -268,11 +271,10 @@ class Validator(ReinforcedValidatorNeuron):
         for place, uid in enumerate(top_miners):
             synapse = next((x for x in responses if x.axon.hotkey == self.metagraph.axons[uid].hotkey), None)
             if synapse:
-                message = UsualMintingMessage(
+                message = MedalRequestsMessage(
                     status="NEW",
                     medal=achievements[place + 1],
                     miner_key=synapse.axon.hotkey,
-                    validator_key=self.wallet.hotkey.ss58_address,
                     score=rewards[uids.index(uid)],
                 )
                 message.sign(self.wallet.coldkey)
@@ -284,7 +286,7 @@ class Validator(ReinforcedValidatorNeuron):
         top_miners = self.create_top_miners(responses, rewards, uids)
         for miner in top_miners:
             result = create_session().post(
-                f"{os.getenv('WEBSITE_URL')}/send_usual_minting",
+                f"{os.getenv('WEBSITE_URL')}/api/mint_medals",
                 json=miner.model_dump(),
                 headers={"Content-Type": "application/json"},
             )

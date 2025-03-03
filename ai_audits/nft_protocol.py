@@ -46,11 +46,10 @@ class TimestampedMessage(SignedMessage):
         super().sign(keypair)
 
 
-class UsualMintingMessage(TimestampedMessage):
+class MedalRequestsMessage(TimestampedMessage):
     status: str
     medal: str
     miner_key: str
-    validator_key: str
     score: float
 
 
