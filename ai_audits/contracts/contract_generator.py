@@ -3,6 +3,7 @@ from typing import Tuple, Union, List, Optional
 
 from openai import BaseModel
 from solc_ast_parser import parse_ast_to_solidity
+from solc_ast_parser.utils import create_ast_with_standart_input, create_ast_from_source
 from solc_ast_parser.models.ast_models import (
     SourceUnit,
     VariableDeclaration,
@@ -14,6 +15,7 @@ from solc_ast_parser.models import ast_models
 from solc_ast_parser.utils import create_ast_from_source, create_ast_with_standart_input, get_contract_nodes
 from solc_ast_parser.enrichment import restore_function_definitions, restore_storages
 from solc_ast_parser.comments import insert_comments_into_ast
+from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
 
 
 from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
