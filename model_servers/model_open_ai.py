@@ -13,6 +13,7 @@ from ai_audits.contracts.contract_generator import (
     create_contract,
     create_task,
     get_contract_nodes_from_source,
+    prepare_vulnerability,
 )
 from ai_audits.protocol import VulnerabilityReport, ValidatorTask, KnownVulnerability, SmartContract
 from ai_audits.subnet_utils import preprocess_text, ROLES, SolcSingleton
@@ -214,16 +215,9 @@ async def get_task(request: Request):
     while tries > 0:
         tries -= 1
         vulnerability_contract = create_contract(raw_vulnerability.code)
-        result = await generate_contract(
-            [
-                build_function_header(node)
-                for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.FUNCTION_DEFINITION)
-            ],
-            [
-                parse_variable_declaration(node)
-                for node in get_contract_nodes_from_source(vulnerability_contract, NodeType.VARIABLE_DECLARATION)
-            ],
-        )
+        storages, functions = prepare_vulnerability(vulnerability_contract)
+        result = await generate_contract(storages, functions)
+
         print(f"Generated contract: {result}")
         try:
             solc.compile(result.code)

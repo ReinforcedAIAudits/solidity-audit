@@ -1,18 +1,20 @@
 import json
-from typing import Union, List, Optional
+from typing import Tuple, Union, List, Optional
 
 from openai import BaseModel
-from pydantic import ValidationError
 from solc_ast_parser import parse_ast_to_solidity
 from solc_ast_parser.models.ast_models import (
     SourceUnit,
     VariableDeclaration,
     FunctionDefinition,
 )
+from solc_ast_parser.ast_parser import build_function_header, parse_variable_declaration
 from solc_ast_parser.models.base_ast_models import NodeType
 from solc_ast_parser.models import ast_models
 from solc_ast_parser.utils import create_ast_from_source, create_ast_with_standart_input
 import solcx
+from solc_ast_parser.enrichment import restore_function_definitions, restore_storages
+from solc_ast_parser.comments import insert_comments_into_ast
 
 from ai_audits.contracts.contract_utils import get_contract_nodes
 from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
@@ -116,7 +118,11 @@ def insert_vulnerability_to_contract(
 ) -> str:
     vuln_nodes = get_contract_nodes(vulnerability_ast)
     for node in vuln_nodes:
-        if node.node_type == NodeType.FUNCTION_DEFINITION and node.kind == "constructor":
+        if (
+            node.node_type == NodeType.FUNCTION_DEFINITION
+            and node.kind == "constructor"
+            or node.node_type in (NodeType.COMMENT, NodeType.MULTILINE_COMMENT)
+        ):
             continue
         elif node.node_type == NodeType.FUNCTION_DEFINITION and check_node_in_contract(
             contract_ast, NodeType.FUNCTION_DEFINITION, name=node.name
@@ -133,6 +139,15 @@ class Vulnerability(BaseModel):
     code: str
 
 
+def prepare_vulnerability(vulnerability_source: str) -> Tuple[List[str], List[str]]:
+    ast_obj_vulnerability = restore_storages(create_ast_with_standart_input(vulnerability_source))
+
+    return [
+        parse_variable_declaration(node)
+        for node in get_contract_nodes(ast_obj_vulnerability, node_type=NodeType.VARIABLE_DECLARATION)
+    ], [build_function_header(function) for function in restore_function_definitions(ast_obj_vulnerability)]
+
+
 def create_task(
     contract_source: str,
     raw_vulnerability: Vulnerability,
@@ -141,6 +156,8 @@ def create_task(
 
     vulnerability_contract = create_contract(raw_vulnerability.code)
     ast_obj_vulnerability = create_ast_with_standart_input(vulnerability_contract)
+
+    ast_contract_with_vul = insert_comments_into_ast(vulnerability_contract, ast_obj_vulnerability)
 
     contract_source = insert_vulnerability_to_contract(ast_obj_contract, ast_obj_vulnerability)
 
