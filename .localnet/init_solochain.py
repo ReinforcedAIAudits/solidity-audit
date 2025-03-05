@@ -7,7 +7,7 @@ import dotenv
 from typing import Tuple
 import bittensor
 from bittensor_wallet import Wallet
-from async_substrate_interface import SubstrateInterface
+from substrateinterface import SubstrateInterface
 from bittensor_wallet.keypair import Keypair
 from websocket import WebSocketConnectionClosedException
 
@@ -175,7 +175,7 @@ class SoloChainHelper:
         register_network_receipt = self.submit_extrinsic(
             "SubtensorModule",
             "register_network",
-            {"immunity_period": 0, "reg_allowed": True},
+            {"immunity_period": 0, "reg_allowed": True, "hotkey": owner_wallet.hotkey.ss58_address},
             owner_wallet.coldkey,
         )
 

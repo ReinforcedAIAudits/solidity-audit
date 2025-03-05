@@ -1,7 +1,7 @@
-from typing import Union, List, Optional
+import json
+from typing import Tuple, Union, List, Optional
 
 from openai import BaseModel
-from pydantic import ValidationError
 from solc_ast_parser import parse_ast_to_solidity
 from solc_ast_parser.utils import create_ast_with_standart_input, create_ast_from_source
 from solc_ast_parser.models.ast_models import (
@@ -9,24 +9,16 @@ from solc_ast_parser.models.ast_models import (
     VariableDeclaration,
     FunctionDefinition,
 )
+from solc_ast_parser.ast_parser import build_function_header, parse_variable_declaration
 from solc_ast_parser.models.base_ast_models import NodeType
 from solc_ast_parser.models import ast_models
-
+from solc_ast_parser.utils import create_ast_from_source, create_ast_with_standart_input, get_contract_nodes
+from solc_ast_parser.enrichment import restore_function_definitions, restore_storages
+from solc_ast_parser.comments import insert_comments_into_ast
 from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
 
 
-def get_contract_nodes(ast: SourceUnit, node_type: NodeType = None) -> List[ast_models.ASTNode]:
-    nodes = []
-    for node in ast.nodes:
-        if node.node_type == NodeType.CONTRACT_DEFINITION:
-            if not node_type:
-                return node.nodes
-            for contract_node in node.nodes:
-                if contract_node.node_type == node_type:
-                    if contract_node.node_type == NodeType.FUNCTION_DEFINITION and contract_node.kind == "constructor":
-                        continue
-                    nodes.append(contract_node)
-    return nodes
+from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
 
 
 def get_contract_nodes_from_source(source: str, node_type: NodeType) -> List[ast_models.ASTNode]:
@@ -118,7 +110,7 @@ def find_function_boundaries(
 
 
 def create_contract(pseudocode: str) -> str:
-    return f"contract PseudoContract {{\n\n{pseudocode}\n}}"
+    return f"// SPDX-License-Identifier: MIT\npragma solidity ^0.8.28;\ncontract PseudoContract {{\n\n{pseudocode}\n}}"
 
 
 def insert_vulnerability_to_contract(
@@ -127,7 +119,11 @@ def insert_vulnerability_to_contract(
 ) -> str:
     vuln_nodes = get_contract_nodes(vulnerability_ast)
     for node in vuln_nodes:
-        if node.node_type == NodeType.FUNCTION_DEFINITION and node.kind == "constructor":
+        if (
+            node.node_type == NodeType.FUNCTION_DEFINITION
+            and node.kind == "constructor"
+            or node.node_type in (NodeType.COMMENT, NodeType.MULTILINE_COMMENT)
+        ):
             continue
         elif node.node_type == NodeType.FUNCTION_DEFINITION and check_node_in_contract(
             contract_ast, NodeType.FUNCTION_DEFINITION, name=node.name
@@ -144,6 +140,15 @@ class Vulnerability(BaseModel):
     code: str
 
 
+def extract_storages_functions(vulnerability_source: str) -> Tuple[List[str], List[str]]:
+    ast_with_restored_storages = restore_storages(create_ast_with_standart_input(vulnerability_source))
+
+    return [
+        parse_variable_declaration(node)
+        for node in get_contract_nodes(ast_with_restored_storages, node_type=NodeType.VARIABLE_DECLARATION)
+    ], [build_function_header(function) for function in restore_function_definitions(ast_with_restored_storages)]
+
+
 def create_task(
     contract_source: str,
     raw_vulnerability: Vulnerability,
@@ -151,8 +156,9 @@ def create_task(
     ast_obj_contract = create_ast_from_source(contract_source)
 
     vulnerability_contract = create_contract(raw_vulnerability.code)
-
     ast_obj_vulnerability = create_ast_with_standart_input(vulnerability_contract)
+
+    ast_contract_with_vul = insert_comments_into_ast(vulnerability_contract, ast_obj_vulnerability)
 
     contract_source = insert_vulnerability_to_contract(ast_obj_contract, ast_obj_vulnerability)
 
