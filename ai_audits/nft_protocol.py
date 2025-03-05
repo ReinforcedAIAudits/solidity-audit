@@ -47,7 +47,6 @@ class TimestampedMessage(SignedMessage):
 
 
 class MedalRequestsMessage(TimestampedMessage):
-    status: str
     medal: str
     miner_ss58_hotkey: str
     score: float

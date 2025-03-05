@@ -285,7 +285,6 @@ class Validator(ReinforcedValidatorNeuron):
             synapse = next((x for x in responses if x.axon.hotkey == self.metagraph.axons[uid].hotkey), None)
             if synapse:
                 message = MedalRequestsMessage(
-                    status="NEW",
                     medal=achievements[place + 1],
                     miner_ss58_hotkey=synapse.axon.hotkey,
                     score=rewards[uids.index(uid)],
