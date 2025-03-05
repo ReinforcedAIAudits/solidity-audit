@@ -140,13 +140,13 @@ class Vulnerability(BaseModel):
     code: str
 
 
-def prepare_vulnerability(vulnerability_source: str) -> Tuple[List[str], List[str]]:
-    ast_obj_vulnerability = restore_storages(create_ast_with_standart_input(vulnerability_source))
+def extract_storages_functions(vulnerability_source: str) -> Tuple[List[str], List[str]]:
+    ast_with_restored_storages = restore_storages(create_ast_with_standart_input(vulnerability_source))
 
     return [
         parse_variable_declaration(node)
-        for node in get_contract_nodes(ast_obj_vulnerability, node_type=NodeType.VARIABLE_DECLARATION)
-    ], [build_function_header(function) for function in restore_function_definitions(ast_obj_vulnerability)]
+        for node in get_contract_nodes(ast_with_restored_storages, node_type=NodeType.VARIABLE_DECLARATION)
+    ], [build_function_header(function) for function in restore_function_definitions(ast_with_restored_storages)]
 
 
 def create_task(

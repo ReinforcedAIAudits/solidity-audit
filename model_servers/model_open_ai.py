@@ -5,15 +5,12 @@ from fastapi import FastAPI, Request, Response, HTTPException
 from pydantic import BaseModel
 from openai import AsyncOpenAI
 from py_solidity_vuln_db import get_vulnerability
-from solc_ast_parser.models.base_ast_models import NodeType
-from solc_ast_parser.ast_parser import build_function_header, parse_variable_declaration
 
 from ai_audits.contracts.contract_generator import (
     Vulnerability,
     create_contract,
     create_task,
-    get_contract_nodes_from_source,
-    prepare_vulnerability,
+    extract_storages_functions,
 )
 from ai_audits.protocol import VulnerabilityReport, ValidatorTask, KnownVulnerability, SmartContract
 from ai_audits.subnet_utils import preprocess_text, ROLES, SolcSingleton
@@ -215,7 +212,7 @@ async def get_task(request: Request):
     while tries > 0:
         tries -= 1
         vulnerability_contract = create_contract(raw_vulnerability.code)
-        storages, functions = prepare_vulnerability(vulnerability_contract)
+        storages, functions = extract_storages_functions(vulnerability_contract)
         result = await generate_contract(storages, functions)
 
         print(f"Generated contract: {result}")
