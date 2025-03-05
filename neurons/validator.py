@@ -304,6 +304,7 @@ class Validator(ReinforcedValidatorNeuron):
         if result.status_code != 200:
             logging.info(f"Not successful setting top miners. Description: {result.text}")
             raise ValueError("Unable to set top miners!")
+        logging.info(f"Top miners set successfully.")
 
     @classmethod
     def _get_replaced_keys(cls, old_state: list[str], new_state: list[str]) -> list[int]:
