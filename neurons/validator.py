@@ -44,8 +44,6 @@ CYCLE_TIME = int(os.getenv("VALIDATOR_SEND_REQUESTS_EVERY_X_SECS", "3600"))
 class Validator(ReinforcedValidatorNeuron):
     WEIGHT_TIME = 0.1
     WEIGHT_ONLY_SCORE = 0.9
-    WEIGHT_LINES = 0.45
-    WEIGHT_SCORE = 0.45
 
     MAX_BUFFER = int(os.getenv("VALIDATOR_BUFFER", "100"))
 
@@ -140,7 +138,7 @@ class Validator(ReinforcedValidatorNeuron):
         )
         logging.info(f"Received responses: {[resp.response for resp in responses]}")
 
-        rewards = self.validate_responses(responses, task)
+        rewards = self.validate_responses(responses, task, self.axon.info().hotkey)
 
         logging.info(f"Scored responses: {rewards}")
 
@@ -222,42 +220,57 @@ class Validator(ReinforcedValidatorNeuron):
         else:
             logging.error("set_weights failed", msg)
 
+    @classmethod
+    def _get_min_response_time(cls, responses: List[AuditsSynapse], self_hotkey: str = "") -> float:
+        """Helper method to get minimum response time from valid dendrites."""
+        valid_times = [
+            x.dendrite.process_time
+            for x in responses
+            if x.dendrite.process_time is not None and x.axon.hotkey != self_hotkey
+        ]
+        return min(valid_times) if valid_times else 0.0
+
+    @classmethod
+    def _calculate_time_score(cls, synapse: AuditsSynapse, min_time: float, self_hotkey: str = "") -> float:
+        """Calculate score based on response time."""
+        if not synapse.dendrite.process_time or synapse.axon.hotkey == self_hotkey:
+            return 0
+        return min_time / synapse.dendrite.process_time
+
+    @classmethod
     def validate_responses(
-        self,
+        cls,
         responses: List[AuditsSynapse],
         task: ValidatorTask = None,
+        self_hotkey: str = "",
     ) -> List[float]:
-        axon_info = self.axon.info()
-        dendrites = [
-            x.dendrite for x in responses if x.dendrite.process_time is not None and x.axon.hotkey != axon_info.hotkey
-        ]
-
-        logging.debug(f"Axons response times: {', '.join([f'{x.ip}:{x.port} - {x.process_time}' for x in dendrites])}")
-
-        times = [x.process_time for x in dendrites]
-
-        min_time = min(times) if times else 0.0
-
-        logging.debug(f"Minimal response time: {min_time}")
-
-        scores: list[float] = []
+        min_time = cls._get_min_response_time(responses, self_hotkey)
+        scores = []
 
         for synapse in responses:
             logging.debug(
                 f"Synapse: axon hotkey: {synapse.axon.hotkey} | is success: {synapse.is_success} | "
                 f"is blacklisted: {synapse.is_blacklist} | message: {synapse.axon.status_message}"
             )
-            scores_by_report = self.validate_reports_by_reference(synapse.response, task) * self.WEIGHT_SCORE
-            scores_by_time = (
-                (
-                    (min_time / synapse.dendrite.process_time)
-                    if synapse.dendrite.process_time and synapse.axon.hotkey != axon_info.hotkey
-                    else 0
-                )
-                * (scores_by_report / self.WEIGHT_SCORE)
-                * self.WEIGHT_TIME
+
+            report_score = cls.validate_reports_by_reference(synapse.response, task) * cls.WEIGHT_ONLY_SCORE
+            time_score = (
+                cls._calculate_time_score(synapse, min_time, self_hotkey)
+                * (report_score / cls.WEIGHT_ONLY_SCORE)
+                * cls.WEIGHT_TIME
             )
-            scores.append(scores_by_report + scores_by_time)
+            logging.debug(f"Process time: {synapse.dendrite.process_time}")
+            logging.debug(f"Report score: {report_score}, Time score: {time_score}")
+            scores.append(report_score + time_score)
+
+        logging.debug(f"Final scores: {scores}")
+        return scores
+
+    @classmethod
+    def validate_times(cls, responses: List[AuditsSynapse], self_hotkey: str = "") -> List[float]:
+        min_time = cls._get_min_response_time(responses, self_hotkey)
+        scores = [cls._calculate_time_score(synapse, min_time, self_hotkey) for synapse in responses]
+        logging.debug(f"Time scores: {scores}")
         return scores
 
     def assign_achievements(self, rewards: List[float], uids: List[int], achievement_count: int = 3):
@@ -272,7 +285,6 @@ class Validator(ReinforcedValidatorNeuron):
             synapse = next((x for x in responses if x.axon.hotkey == self.metagraph.axons[uid].hotkey), None)
             if synapse:
                 message = MedalRequestsMessage(
-                    status="NEW",
                     medal=achievements[place + 1],
                     miner_ss58_hotkey=synapse.axon.hotkey,
                     score=rewards[uids.index(uid)],
@@ -292,6 +304,7 @@ class Validator(ReinforcedValidatorNeuron):
         if result.status_code != 200:
             logging.info(f"Not successful setting top miners. Description: {result.text}")
             raise ValueError("Unable to set top miners!")
+        logging.info(f"Top miners set successfully.")
 
     @classmethod
     def _get_replaced_keys(cls, old_state: list[str], new_state: list[str]) -> list[int]:

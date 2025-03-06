@@ -1,7 +1,6 @@
-import math
 import unittest
 
-from ai_audits.protocol import VulnerabilityReport, ValidatorTask, TaskType
+from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ValidatorTask, TaskType
 from neurons.validator import Validator
 
 DEFAULT_FIELDS = {"from": 1, "to": 1}
@@ -123,6 +122,136 @@ class ValidatorTestCase(unittest.TestCase):
         print(score)
         self.assertGreater(score, 0)
         self.assertLess(score, 1)
+
+    def test_validate_responses(self):
+        responses = [
+            AuditsSynapse(
+                axon={"hotkey": "hotkey1", "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                dendrite={"process_time": 1.0, "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)],
+                is_success=True,
+                is_blacklist=False,
+                contract_code="contract code",
+            ),
+            AuditsSynapse(
+                axon={"hotkey": "hotkey2", "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                dendrite={"process_time": 2.0, "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                response=[VulnerabilityReport(vulnerabilityClass="Outdated solidity version", **DEFAULT_FIELDS)],
+                is_success=True,
+                is_blacklist=False,
+                contract_code="contract code",
+            ),
+            AuditsSynapse(
+                axon={"hotkey": "hotkey3", "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                dendrite={"process_time": 0.5, "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)],
+                is_success=True,
+                is_blacklist=False,
+                contract_code="contract code",
+            ),
+        ]
+
+        task = ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS)
+
+        scores = Validator.validate_responses(responses, task)
+
+        self.assertEqual(len(scores), 3)
+        self.assertGreater(scores[0], scores[1])
+        self.assertGreater(scores[2], scores[0])
+
+        self.assertLessEqual(1 - scores[0], 0.06)
+        self.assertEqual(scores[1], 0)
+        self.assertLessEqual(1 - scores[2], 0.0015)
+
+    def test_validate_responses_with_no_responses(self):
+        responses = []
+        task = ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS)
+
+        scores = Validator.validate_responses(responses, task)
+
+        self.assertEqual(scores, [])
+
+    def test_validate_responses_with_no_success_responses(self):
+        responses = [
+            AuditsSynapse(
+                axon={"hotkey": "hotkey1", "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                dendrite={"process_time": 1.0, "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)],
+                is_success=False,
+                is_blacklist=False,
+                contract_code="contract code",
+            ),
+            AuditsSynapse(
+                axon={"hotkey": "hotkey2", "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                dendrite={"process_time": 2.0, "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)],
+                is_success=False,
+                is_blacklist=False,
+                contract_code="contract code",
+            ),
+        ]
+        task = ValidatorTask(vulnerabilityClass="integer overflow", **DEFAULT_TASK_FIELDS)
+
+        scores = Validator.validate_responses(responses, task)
+
+        self.assertEqual(scores, [0.0, 0.0])
+
+    def test_validate_responses_with_same_time(self):
+        responses = [
+            AuditsSynapse(
+                axon={"hotkey": "hotkey1", "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                dendrite={"process_time": 1.0, "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)],
+                is_success=True,
+                is_blacklist=False,
+                contract_code="contract code",
+            ),
+            AuditsSynapse(
+                axon={"hotkey": "hotkey2", "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                dendrite={"process_time": 1.0, "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)],
+                is_success=True,
+                is_blacklist=False,
+                contract_code="contract code",
+            ),
+        ]
+        task = ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS)
+
+        scores = Validator.validate_responses(responses, task)
+
+        self.assertEqual(len(scores), 2)
+        self.assertEqual(scores[0], scores[1])
+        self.assertLessEqual(1 - scores[0], 0.0015)
+
+    def test_validate_responses_with_multiple_reports(self):
+        responses = [
+            AuditsSynapse(
+                axon={"hotkey": "hotkey1", "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                dendrite={"process_time": 1.0, "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                response=[
+                    VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS),
+                    VulnerabilityReport(vulnerabilityClass="Outdated solidity version", **DEFAULT_FIELDS),
+                ],
+                is_success=True,
+                is_blacklist=False,
+                contract_code="contract code",
+            ),
+            AuditsSynapse(
+                axon={"hotkey": "hotkey2", "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                dendrite={"process_time": 1.0, "ip": "0.0.0.0", "port": 0, "protocol": "http", "version": 1},
+                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)],
+                is_success=True,
+                is_blacklist=False,
+                contract_code="contract code",
+            ),
+        ]
+        task = ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS)
+
+        scores = Validator.validate_responses(responses, task)
+
+        self.assertEqual(len(scores), 2)
+        self.assertLessEqual(1 - scores[0], 0.05)  # Multiple reports should have slightly lower score
+        self.assertLessEqual(1 - scores[1], 0.0015)  # Single correct report should have high score
 
 
 if __name__ == "__main__":
