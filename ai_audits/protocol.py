@@ -12,6 +12,8 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel, to_snake
 
+from ai_audits.nft_protocol import ContractTask, ReportMessage
+
 
 __all__ = ["VulnerabilityReport", "AuditsSynapse", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType"]
 
@@ -82,8 +84,8 @@ class AuditBase(BaseModel):
         ...,
         title="Vulnerability Class",
         description="The category of the vulnerability. "
-                    "E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, "
-                    "Unchecked call, Gas griefing, Unguarded function, Invalid Code, et cetera.",
+        "E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, "
+        "Unchecked call, Gas griefing, Unguarded function, Invalid Code, et cetera.",
     )
 
     # @field_validator("vulnerability_class", mode="before")
@@ -116,6 +118,7 @@ class VulnerabilityReport(AuditBase):
         title="Fixed Lines",
         description="Fixed version of the original source.",
     )
+    is_suggestion: bool = Field(False, title="Is Suggestion", description="Whether the fix is a suggestion or not")
 
 
 class SmartContract(BaseModel):
@@ -147,3 +150,14 @@ class AuditsSynapse(bt.Synapse):
         - List[dict]: The deserialized response, which is a list of dictionaries containing the extracted data.
         """
         return self.response
+
+
+class TaskMessage(BaseModel):
+    code: ContractTask
+    validator_ss58_hotkey: str
+
+
+class ResultMessage(BaseModel):
+    result: ReportMessage
+    miner_ss58_hotkey: str
+    response_time: float

@@ -33,9 +33,9 @@ from dotenv import load_dotenv
 
 
 from ai_audits.nft_protocol import MedalRequestsMessage
-from ai_audits.protocol import AuditsSynapse, VulnerabilityReport, ValidatorTask, TaskType
+from ai_audits.protocol import AuditsSynapse, ResultMessage, TaskMessage, VulnerabilityReport, ValidatorTask, TaskType
 from ai_audits.subnet_utils import create_session, is_synonyms, get_invalid_code
-from neurons.base import ReinforcedValidatorNeuron, get_random_uids, ScoresBuffer
+from neurons.base import ReinforcedValidatorNeuron, get_random_uids, ScoresBuffer, miners_hotkeys
 
 load_dotenv()
 CYCLE_TIME = int(os.getenv("VALIDATOR_SEND_REQUESTS_EVERY_X_SECS", "3600"))
@@ -130,15 +130,22 @@ class Validator(ReinforcedValidatorNeuron):
         synapse = AuditsSynapse(contract_code=task.contract_code)
         logging.info(f"Axons: {self.metagraph.axons}")
 
-        responses = await self.dendrite.aquery(
-            axons=[self.metagraph.axons[uid] for uid in miner_uids],
-            synapse=synapse,
-            deserialize=False,
-            timeout=600,
-        )
-        logging.info(f"Received responses: {[resp.response for resp in responses]}")
+        # responses = await self.dendrite.aquery(
+        #     axons=[self.metagraph.axons[uid] for uid in miner_uids],
+        #     synapse=synapse,
+        #     deserialize=False,
+        #     timeout=600,
+        # )
 
-        rewards = self.validate_responses(responses, task, self.axon.info().hotkey)
+        responses: List[AuditsSynapse] = []
+        for resp in self.send_to_relayer(None, task.contract_code):
+            synapse.response = resp
+            synapse.dendrite.process_time = self.check_response_time(resp)
+            responses.append(synapse)
+
+        logging.info(f"Received responses: {[resp.response for resp in responses]}")
+        miners = miners_hotkeys(self)
+        rewards = self.validate_responses(responses, task, self.axon.info().hotkey, miner_uids, miners)
 
         logging.info(f"Scored responses: {rewards}")
 
@@ -153,6 +160,21 @@ class Validator(ReinforcedValidatorNeuron):
         await self.dendrite.aclose_session()
 
         self.update_scores(rewards, miner_uids)
+
+    # TODO
+    def get_relayer_addresses(self) -> List[str]:
+        pass
+
+    def send_to_relayer(self, relayer_address: str, contract_code: str):
+        task = TaskMessage(contract_code=contract_code, validator_ss58_hotkey=self.wallet.hotkey)
+        task.sign(self.wallet.coldkey)
+
+        # TODO send to relayer
+        pass
+
+    # TODO response time choice
+    def check_response_time(self, response: ResultMessage) -> float:
+        return response.response_time
 
     def run(self):
         """
@@ -220,6 +242,13 @@ class Validator(ReinforcedValidatorNeuron):
         else:
             logging.error("set_weights failed", msg)
 
+    def verify_response(self, response: ResultMessage, miners) -> bool:
+        return (
+            response.result.verify()
+            and response.miner_ss58_hotkey in miners
+            and response.result.ss58_address == response.miner_ss58_hotkey
+        )
+
     @classmethod
     def _get_min_response_time(cls, responses: List[AuditsSynapse], self_hotkey: str = "") -> float:
         """Helper method to get minimum response time from valid dendrites."""
@@ -243,11 +272,19 @@ class Validator(ReinforcedValidatorNeuron):
         responses: List[AuditsSynapse],
         task: ValidatorTask = None,
         self_hotkey: str = "",
+        miner_uids: List[int] = [],
+        miner_hotkeys: List[str] = [],
     ) -> List[float]:
         min_time = cls._get_min_response_time(responses, self_hotkey)
         scores = []
 
         for synapse in responses:
+
+            if not cls.verify_response(synapse.response, miner_hotkeys):
+                logging.debug(f"Response verification failed: {synapse.response}")
+                scores.append(0)
+                continue
+
             logging.debug(
                 f"Synapse: axon hotkey: {synapse.axon.hotkey} | is success: {synapse.is_success} | "
                 f"is blacklisted: {synapse.is_blacklist} | message: {synapse.axon.status_message}"
@@ -259,8 +296,10 @@ class Validator(ReinforcedValidatorNeuron):
                 * (report_score / cls.WEIGHT_ONLY_SCORE)
                 * cls.WEIGHT_TIME
             )
-            logging.debug(f"Process time: {synapse.dendrite.process_time}")
-            logging.debug(f"Report score: {report_score}, Time score: {time_score}")
+            if synapse.is_success and len(miner_uids) == len(responses):
+                logging.debug(f"Miner uid: {miner_uids[responses.index(synapse)]}, hotkey: {synapse.axon.hotkey}")
+                logging.debug(f"Process time: {synapse.dendrite.process_time}")
+                logging.debug(f"Report score: {report_score}, Time score: {time_score}")
             scores.append(report_score + time_score)
 
         logging.debug(f"Final scores: {scores}")

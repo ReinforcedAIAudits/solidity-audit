@@ -10,7 +10,7 @@ setuptools==70
 python-dotenv==1.0.1
 openai==1.51.0
 py-solc-x==2.0.3
-solc_ast_parser==1.2.2
+solc_ast_parser>1.2
 hypothesis==6.124.9
 solidity-vulnerabilities-db<1
 websocket-client==1.8.0

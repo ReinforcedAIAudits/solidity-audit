@@ -92,6 +92,16 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> list:
     return uids
 
 
+def miners_hotkeys(validator: BaseValidatorNeuron):
+    validator.metagraph.sync(subtensor=validator.subtensor)
+
+    return [
+        neuron_info.axon_info.hotkey
+        for neuron_info in validator.subtensor.neurons(validator.metagraph.netuid)
+        if neuron_info.rank > 0 and neuron_info.axon_info
+    ]
+
+
 class ScoresBuffer:
     DEFAULT = object()
     U16_MAX = 65535
