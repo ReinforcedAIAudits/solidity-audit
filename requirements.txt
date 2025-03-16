@@ -1,5 +1,5 @@
-bittensor==9.0.0
-bittensor-wallet==3.0.3
+bittensor==9.1.0
+bittensor-wallet==3.0.4
 starlette==0.37.2
 pydantic==2.9.2
 rich==13.8.1
@@ -14,5 +14,5 @@ solc_ast_parser==1.2.2
 hypothesis==6.124.9
 solidity-vulnerabilities-db<1
 websocket-client==1.8.0
-async-substrate-interface==1.0.0
+async-substrate-interface>=1.0.0
 substrate-interface==1.7.11

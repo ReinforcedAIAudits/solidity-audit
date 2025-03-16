@@ -2,7 +2,6 @@ import json
 from typing import Tuple, Union, List, Optional
 
 from openai import BaseModel
-from solc_ast_parser import parse_ast_to_solidity
 from solc_ast_parser.utils import create_ast_with_standart_input, create_ast_from_source
 from solc_ast_parser.models.ast_models import (
     SourceUnit,
@@ -132,7 +131,7 @@ def insert_vulnerability_to_contract(
         elif not check_node_in_contract(contract_ast, node.node_type, name=node.name):
             contract_ast = append_node_to_contract(contract_ast, node)
 
-    return parse_ast_to_solidity(contract_ast)
+    return contract_ast.to_solidity()
 
 
 class Vulnerability(BaseModel):

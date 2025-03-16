@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y git curl
 WORKDIR /app
 
 COPY requirements.txt .
+RUN pip install bittensor-cli
 RUN pip install -r requirements.txt 
 COPY . /app
 RUN pip install -e .
