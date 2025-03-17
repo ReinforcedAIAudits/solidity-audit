@@ -37,6 +37,7 @@ class MinerResult:
     time: float
     response: list[VulnerabilityReport] | None
 
+# TODO is active in validate()
 
 class Validator(ReinforcedNeuron):
     MODE_RAW = 'raw'
@@ -108,7 +109,8 @@ class Validator(ReinforcedNeuron):
         axons = [x for x in axons if x.hotkey != self.hotkey.ss58_address]
         to_check = [(x.uid, x.ip, x.port) for x in axons]
         with ThreadPoolExecutor() as executor:
-            results = list(executor.map(self.is_miner_alive, to_check))
+            futures = [executor.submit(self.is_miner_alive, *args) for args in to_check]
+            results = [future.result() for future in futures]
         valid_miner_uids = [uid for uid, is_valid in results if is_valid]
         self.log.info(f'Active miner uids: {valid_miner_uids}')
         return [x for x in axons if x.uid in valid_miner_uids]
@@ -140,7 +142,7 @@ class Validator(ReinforcedNeuron):
             task_json = miner_task.model_dump()
 
             result = requests.post(
-                f'http://{miner.ip}{miner.port}/forward', json=task_json, timeout=self.MINER_RESPONSE_TIMEOUT
+                f'http://{miner.ip}:{miner.port}/forward', json=task_json, timeout=self.MINER_RESPONSE_TIMEOUT
             ).json()
             if not isinstance(result, list):
                 self.log.warning(f'Got unexpected result from miner: {result}')
@@ -153,7 +155,8 @@ class Validator(ReinforcedNeuron):
     def ask_miners_raw(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
         to_check = [(x, task) for x in miners]
         with ThreadPoolExecutor() as executor:
-            results = list(executor.map(self.ask_miner, to_check))
+            futures = [executor.submit(self.ask_miner, *args) for args in to_check]
+            results = [future.result() for future in futures]
         return results
 
     def ask_miners_relay(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
@@ -166,7 +169,7 @@ class Validator(ReinforcedNeuron):
 
     def clear_scores_for_old_hotkeys(self):
         old_hotkeys = self.hotkeys.copy()
-        new_hotkeys = {uid: axon['hotkey'] for uid, axon in self.get_axons()}
+        new_hotkeys = {uid: axon['hotkey'] for uid, axon in enumerate(self.get_axons())}
         for uid, key in old_hotkeys.items():
             if key != new_hotkeys[uid]:
                 self._buffer_scores.reset(uid)

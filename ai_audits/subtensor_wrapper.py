@@ -139,7 +139,7 @@ class SubtensorWrapper(object):
         if diff < min_diff:
             return False, {'name': 'RateLimit', 'blocks': abs(diff - min_diff)}
 
-        max_score = max(scores.values())
+        max_score = max(scores.values()) or 1
         normalized_scores = {k: int((v / max_score) * self.U16_MAX) for k, v in scores.items()}
         call = self.api.compose_call("SubtensorModule", "set_weights", {
             "dests": list(normalized_scores.keys()),
@@ -156,7 +156,7 @@ class SubtensorWrapper(object):
             wait_for_finalization=False
     ):
         state = self.api.query("SubtensorModule", "IdentitiesV2", [signer.ss58_address])
-        if state and state.value and state.value["description"] == description and state.value["name"] == name:
+        if state and state["description"] == description and state["name"] == name:
             return
         call = self.api.compose_call("SubtensorModule", "set_identity", {
             "name": name,
