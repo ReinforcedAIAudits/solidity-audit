@@ -5,6 +5,7 @@ WORKDIR /app
 
 COPY requirements.version.txt .
 COPY requirements.txt .
+RUN pip install bittensor-cli
 RUN pip install -r requirements.txt 
 COPY . /app
 RUN pip install -e .
