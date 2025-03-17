@@ -23,7 +23,7 @@ services:
     environment:
       SERVER_PORT: 5000
       CORCEL_API_KEY: ${CORCEL_API_KEY}
-      CORCEL_MODEL: 'llama-3-1-70b'
+      CORCEL_MODEL: '${CORCEL_MODEL}'
       MAX_TRIES: 3
     restart: unless-stopped
     networks:
@@ -39,12 +39,11 @@ services:
     environment:
       SERVER_PORT: 5000
       OPEN_ROUTER_API_KEY: ${OPEN_ROUTER_API_KEY}
-      OPEN_ROUTER_MODEL: 'meta-llama/llama-3.3-70b-instruct'
+      OPEN_ROUTER_MODEL: '${OPEN_ROUTER_MODEL}'
       MAX_TRIES: 3
     restart: unless-stopped
     networks:
       - solidity-audit
-
 
   miner:
     build:
@@ -53,12 +52,9 @@ services:
     image: miner
     container_name: miner
     environment:
-      MNEMONIC_COLDKEY: ${MINER_COLDKEY_MNEMONIC}
       MNEMONIC_HOTKEY: ${MINER_HOTKEY_MNEMONIC}
-      WALLET_NAME: miner
-      WALLET_HOTKEY: default
+      MNEMONIC_COLDKEY: ${MINER_COLDKEY_MNEMONIC}
       NETWORK_UID: ${NETWORK_UID}
-      NETWORK_TYPE: ${NETWORK_TYPE}
       CHAIN_ENDPOINT: ${CHAIN_ENDPOINT}
       WORKER_TYPE: 'miner'
       EXTERNAL_IP: ${EXTERNAL_IP}
@@ -80,13 +76,9 @@ services:
     environment:
       MNEMONIC_COLDKEY: ${VALIDATOR_COLDKEY_MNEMONIC}
       MNEMONIC_HOTKEY: ${VALIDATOR_HOTKEY_MNEMONIC}
-      WALLET_NAME: validator
-      WALLET_HOTKEY: default
       NETWORK_UID: ${NETWORK_UID}
-      NETWORK_TYPE: ${NETWORK_TYPE}
       CHAIN_ENDPOINT: ${CHAIN_ENDPOINT}
       WORKER_TYPE: 'validator'
-      BT_AXON_PORT: 8100
       COLDKEY_DESCRIPTION: ''
       VALIDATOR_TIME: ${VALIDATOR_TIME}
       MODEL_SERVER: 'http://model_server_openai:5000'

@@ -1,13 +1,12 @@
 import os
 import time
-import typing
 
 import fastapi
 
 from ai_audits.subnet_utils import create_session
 from neurons.base import ReinforcedNeuron, ReinforcedConfig
 from ai_audits.protocol import VulnerabilityReport, ContractTask
-from ai_audits.mesaging import SignedMessage
+from ai_audits.messaging import SignedMessage
 
 
 __all__ = ['Miner']
@@ -63,7 +62,7 @@ class Miner(ReinforcedNeuron):
         ]
         return vulnerabilities
 
-    def check_blacklist(self, request: SignedMessage) -> typing.Tuple[bool, dict | None]:
+    def check_blacklist(self, request: SignedMessage) -> tuple[bool, dict | None]:
         if request.ss58_address is None:
             self.log.warning("Received a request without signature.")
             return True, {'name': 'NoSignature'}

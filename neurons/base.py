@@ -92,7 +92,7 @@ class ScoresBuffer:
 
 
 @dataclasses.dataclass
-class ReinforcedConfig(object):
+class ReinforcedConfig:
     ws_endpoint: str
     net_uid: int
 
@@ -101,7 +101,7 @@ class ReinforcedError(Exception):
     pass
 
 
-class ReinforcedNeuron(object):
+class ReinforcedNeuron:
     NEURON_TYPE = 'Base'
     AXONS_CACHE_INVALIDATION = 5 * 60
     UID_CACHE_INVALIDATION = 5 * 60

@@ -1,5 +1,4 @@
 from enum import Enum, StrEnum
-from typing import Optional, Union
 from pydantic import (
     AliasChoices,
     AliasGenerator,
@@ -11,7 +10,7 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel, to_snake
 
-from ai_audits.mesaging import SignedMessage
+from ai_audits.messaging import SignedMessage
 
 
 __all__ = [
@@ -48,7 +47,7 @@ class OtherVulnerability(BaseModel):
 
 
 class VulnerabilityClass(BaseModel):
-    type: Union[KnownVulnerability, OtherVulnerability]
+    type: KnownVulnerability | OtherVulnerability
 
     @field_validator("type", mode="before")
     def validate_type(cls, v):
@@ -100,12 +99,12 @@ class AuditBase(BaseModel):
 
 
 class VulnerabilityReport(AuditBase):
-    test_case: Optional[str] = Field(
+    test_case: str | None = Field(
         None,
         title="Test Case",
         description="A code example that exploits the vulnerability.",
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         None,
         title="Description",
         description="Human-readable vulnerability description, in markdown",
@@ -115,7 +114,7 @@ class VulnerabilityReport(AuditBase):
         title="Prior Art",
         description="Similar vulnerabilities encountered in wild before",
     )
-    fixed_lines: Optional[str] = Field(
+    fixed_lines: str | None = Field(
         None,
         title="Fixed Lines",
         description="Fixed version of the original source.",

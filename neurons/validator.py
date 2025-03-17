@@ -6,7 +6,6 @@ import os
 import pickle
 from random import choices
 import time
-from typing import List
 
 from dotenv import load_dotenv
 import requests
@@ -209,6 +208,7 @@ class Validator(ReinforcedNeuron):
                 self.log.info(f'Validator will sleep {sleep_time} secs until next loop. Zzz...')
                 time.sleep(sleep_time)
             self.clear_scores_for_old_hotkeys()
+            self.check_axon_alive()
             self.validate()
             self._last_validation = time.time()
             self.save_state()
@@ -224,7 +224,7 @@ class Validator(ReinforcedNeuron):
             self.log.error(f"set_weights failed: {error}")
 
     @classmethod
-    def _get_min_response_time(cls, responses: List[MinerResult]) -> float:
+    def _get_min_response_time(cls, responses: list[MinerResult]) -> float:
         """Helper method to get minimum response time from valid dendrites."""
         valid_times = [
             x.time
@@ -244,7 +244,7 @@ class Validator(ReinforcedNeuron):
     def validate_responses(
         cls, results: list[MinerResult], task: ValidatorTask, miners: list[MinerInfo],
         log: logging.Logger = logging.getLogger('empty')
-    ) -> List[float]:
+    ) -> list[float]:
         min_time = cls._get_min_response_time(results)
         scores = []
         results_by_uid = {x.uid: x for x in results}
@@ -308,7 +308,7 @@ class Validator(ReinforcedNeuron):
     @classmethod
     def validate_reports_by_reference(
         cls,
-        report: List[VulnerabilityReport] | None,
+        report: list[VulnerabilityReport] | None,
         task: ValidatorTask,
     ) -> float:
         if report is None or not task:

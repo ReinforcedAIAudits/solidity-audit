@@ -1,15 +1,14 @@
 import time
 from pydantic import Field
-from typing import Optional
 
-from ai_audits.mesaging import SignedMessage, KeypairType
+from ai_audits.messaging import SignedMessage, KeypairType
 
 
 __all__ = ["TimestampedMessage", "MedalRequestsMessage"]
 
 
 class TimestampedMessage(SignedMessage):
-    timestamp: Optional[int] = Field(default=None)
+    timestamp: int | None = Field(default=None)
 
     def sign(self, keypair: KeypairType):
         self.timestamp = int(time.time())

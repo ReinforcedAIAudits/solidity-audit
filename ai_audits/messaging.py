@@ -1,18 +1,17 @@
 import json
-import typing
 
 from bittensor import Keypair as BTKeypair  # Bittensor
-from substrateinterface import Keypair as SubstrateKeypair
+from async_substrate_interface.sync_substrate import Keypair as SubstrateKeypair
 from pydantic import BaseModel, Field
 
 
 __all__ = ['KeypairType', 'sign', 'verify', 'SignedMessage']
 
 
-KeypairType = typing.Union[BTKeypair, SubstrateKeypair]
+KeypairType = BTKeypair | SubstrateKeypair
 
 
-def sign(data: bytes, keypair: KeypairType) -> typing.Tuple[str, str]:
+def sign(data: bytes, keypair: KeypairType) -> tuple[str, str]:
     return "0x" + keypair.sign(data).hex(), keypair.ss58_address
 
 
@@ -27,10 +26,10 @@ def verify(data: bytes, signature: str, ss58_address: str) -> bool | Exception:
 
 
 class SignedMessage(BaseModel):
-    signature: typing.Optional[str] = Field(
+    signature: str | None = Field(
         default=None,
     )
-    ss58_address: typing.Optional[str] = Field(
+    ss58_address: str | None = Field(
         default=None,
     )
 

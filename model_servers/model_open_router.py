@@ -1,7 +1,6 @@
 import json
 import os
 import random
-from typing import List
 
 from fastapi import FastAPI, Request, HTTPException
 from openai import AsyncOpenAI
@@ -92,7 +91,7 @@ Output format:
 """.strip()
 
 
-def get_hybrid_validator_prompt(functions: List[str], storages: List[str]) -> str:
+def get_hybrid_validator_prompt(functions: list[str], storages: list[str]) -> str:
     return f"""
 You are a Solidity smart contract writer. 
 Your role is to help user writers learn Solidity smart contracts by providing them different examples of contracts.
@@ -116,7 +115,7 @@ Output format:
 solc = SolcSingleton()
 
 
-async def generate_contract(functions: List[str], storages: List[str]) -> SmartContract | None:
+async def generate_contract(functions: list[str], storages: list[str]) -> SmartContract | None:
     completion = await client.chat.completions.create(
         model=os.getenv("OPEN_ROUTER_MODEL", GPT_MODEL),
         messages=[
@@ -224,8 +223,8 @@ async def submit(request: Request):
 
 
 class ContractInfo(BaseModel):
-    functions: List[str]
-    storages: List[str]
+    functions: list[str]
+    storages: list[str]
 
 
 @app.post("/valid_contract")

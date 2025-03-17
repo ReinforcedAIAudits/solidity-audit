@@ -1,5 +1,3 @@
-from typing import Tuple, Union, List, Optional
-
 from openai import BaseModel
 from solc_ast_parser.models.ast_models import (
     SourceUnit,
@@ -17,7 +15,7 @@ from solc_ast_parser.comments import insert_comments_into_ast
 from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
 
 
-def get_contract_nodes_from_source(source: str, node_type: NodeType) -> List[ast_models.ASTNode]:
+def get_contract_nodes_from_source(source: str, node_type: NodeType) -> list[ast_models.ASTNode]:
     ast = create_ast_from_source(source)
     return get_contract_nodes(ast, node_type)
 
@@ -44,7 +42,7 @@ def check_node_in_contract(ast: SourceUnit, node_type: NodeType, **kwargs):
     return False
 
 
-def append_node_to_contract(ast: SourceUnit, node: Union[FunctionDefinition, VariableDeclaration]):
+def append_node_to_contract(ast: SourceUnit, node: FunctionDefinition | VariableDeclaration):
     for ast_node in ast.nodes:
         if ast_node.node_type == NodeType.CONTRACT_DEFINITION:
             if node.node_type == NodeType.FUNCTION_DEFINITION:
@@ -72,7 +70,7 @@ def append_node_to_contract(ast: SourceUnit, node: Union[FunctionDefinition, Var
     return ast
 
 
-def find_function_in_contract(contract_ast: SourceUnit, function_name: str) -> Optional[FunctionDefinition]:
+def find_function_in_contract(contract_ast: SourceUnit, function_name: str) -> FunctionDefinition | None:
     for node in contract_ast.nodes:
         if node.node_type == NodeType.CONTRACT_DEFINITION:
             for contract_node in node.nodes:
@@ -85,7 +83,7 @@ def find_function_in_contract(contract_ast: SourceUnit, function_name: str) -> O
 def find_function_boundaries(
     contract_ast: SourceUnit,
     contract_code: str,
-    function_names: List[str],
+    function_names: list[str],
 ) -> tuple[int, int]:
     for function_name in function_names:
         total_length = int(find_function_in_contract(contract_ast, function_name).src.split(":")[1])
@@ -136,7 +134,7 @@ class Vulnerability(BaseModel):
     code: str
 
 
-def extract_storages_functions(vulnerability_source: str) -> Tuple[List[str], List[str]]:
+def extract_storages_functions(vulnerability_source: str) -> tuple[list[str], list[str]]:
     ast_with_restored_storages = restore_storages(create_ast_with_standart_input(vulnerability_source))
 
     return [

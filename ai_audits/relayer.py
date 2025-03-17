@@ -1,5 +1,4 @@
 import time
-from typing import List
 import aiohttp
 from bt_decode import AxonInfo, NeuronInfo
 from fastapi import FastAPI
@@ -10,7 +9,7 @@ from ai_audits.protocol import ResultMessage, TaskMessage, VulnerabilityReport, 
 app = FastAPI()
 
 
-async def get_miners() -> List[NeuronInfo]:
+async def get_miners() -> list[NeuronInfo]:
     # TODO get miner addresses from site
     pass
 

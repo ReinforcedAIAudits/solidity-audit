@@ -8,7 +8,7 @@ from scalecodec.types import GenericCall
 __all__ = ['SubtensorWrapper']
 
 
-class SubtensorWrapper(object):
+class SubtensorWrapper:
     U16_MAX = 65535
     AXON_FIELDS = (
         'alpha_stake', 'block_at_registration',
