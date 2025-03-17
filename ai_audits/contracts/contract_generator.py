@@ -1,9 +1,6 @@
-import json
 from typing import Tuple, Union, List, Optional
 
 from openai import BaseModel
-from solc_ast_parser import parse_ast_to_solidity
-from solc_ast_parser.utils import create_ast_with_standart_input, create_ast_from_source
 from solc_ast_parser.models.ast_models import (
     SourceUnit,
     VariableDeclaration,
@@ -15,7 +12,6 @@ from solc_ast_parser.models import ast_models
 from solc_ast_parser.utils import create_ast_from_source, create_ast_with_standart_input, get_contract_nodes
 from solc_ast_parser.enrichment import restore_function_definitions, restore_storages
 from solc_ast_parser.comments import insert_comments_into_ast
-from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
 
 
 from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
@@ -132,7 +128,7 @@ def insert_vulnerability_to_contract(
         elif not check_node_in_contract(contract_ast, node.node_type, name=node.name):
             contract_ast = append_node_to_contract(contract_ast, node)
 
-    return parse_ast_to_solidity(contract_ast)
+    return contract_ast.to_solidity()
 
 
 class Vulnerability(BaseModel):
@@ -158,6 +154,7 @@ def create_task(
     vulnerability_contract = create_contract(raw_vulnerability.code)
     ast_obj_vulnerability = create_ast_with_standart_input(vulnerability_contract)
 
+    # TODO: WTF?
     ast_contract_with_vul = insert_comments_into_ast(vulnerability_contract, ast_obj_vulnerability)
 
     contract_source = insert_vulnerability_to_contract(ast_obj_contract, ast_obj_vulnerability)

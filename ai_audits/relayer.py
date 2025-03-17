@@ -4,8 +4,7 @@ import aiohttp
 from bt_decode import AxonInfo, NeuronInfo
 from fastapi import FastAPI
 
-from ai_audits.nft_protocol import ReportMessage
-from ai_audits.protocol import ResultMessage, TaskMessage, VulnerabilityReport
+from ai_audits.protocol import ResultMessage, TaskMessage, VulnerabilityReport, ReportMessage
 
 
 app = FastAPI()

@@ -1,6 +1,5 @@
 from enum import Enum, StrEnum
 from typing import Optional, Union
-import bittensor as bt
 from pydantic import (
     AliasChoices,
     AliasGenerator,
@@ -12,10 +11,13 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel, to_snake
 
-from ai_audits.nft_protocol import ContractTask, ReportMessage
+from ai_audits.mesaging import SignedMessage
 
 
-__all__ = ["VulnerabilityReport", "AuditsSynapse", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType"]
+__all__ = [
+    "VulnerabilityReport", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType",
+    "ContractTask", "ReportMessage", "ResultMessage", "TaskMessage"
+]
 
 
 class KnownVulnerability(str, Enum):
@@ -136,20 +138,17 @@ class ValidatorTask(AuditBase):
     task_type: str = Field(..., title="Task type", description="Type of validator task")
 
 
-class AuditsSynapse(bt.Synapse):
-
+class ContractTask(SignedMessage):
     contract_code: str
 
-    response: Optional[list[VulnerabilityReport]] = None
 
-    def deserialize(self) -> Optional[list[VulnerabilityReport]]:
-        """
-        Deserialize the miner response.
+class ReportMessage(SignedMessage):
+    report: list[VulnerabilityReport]
 
-        Returns:
-        - List[dict]: The deserialized response, which is a list of dictionaries containing the extracted data.
-        """
-        return self.response
+
+class RelayerContainer(SignedMessage):
+    content: str
+    content_type: str
 
 
 class TaskMessage(BaseModel):

@@ -1,105 +1,18 @@
 import collections
+import dataclasses
+import logging
 import os
-import random
-from typing import List
+import sys
+import time
 
-from websocket import WebSocketConnectionClosedException
-from template.base.miner import BaseMinerNeuron
-from template.base.validator import BaseValidatorNeuron
-from async_substrate_interface import SubstrateInterface
+from async_substrate_interface.sync_substrate import Keypair
+from bittensor.utils import networking as net
+import uvicorn
 
-from template.utils.uids import check_uid_availability
-
-
-__all__ = [
-    "IdentityException",
-    "ReinforcedMinerNeuron",
-    "ReinforcedValidatorNeuron",
-    "ScoresBuffer",
-    "get_random_uids",
-]
+from ai_audits.subtensor_wrapper import SubtensorWrapper
 
 
-class IdentityException(Exception):
-    pass
-
-
-def set_coldkey_identity(substrate: SubstrateInterface, coldkey, name: str, description: str):
-    state = substrate.query(
-        module="SubtensorModule",
-        storage_function="Identities",
-        params=[coldkey.public_key],
-    )
-    if state and state.value and state.value["description"] == description and state.value["name"] == name:
-        return
-    call = substrate.compose_call(
-        call_module="SubtensorModule",
-        call_function="set_identity",
-        call_params={
-            "name": name,
-            "url": b"",
-            "image": b"",
-            "discord": b"",
-            "description": description,
-            "additional": b"",
-            "github_repo": b"",
-        },
-    )
-
-    extrinsic = substrate.create_signed_extrinsic(call=call, keypair=coldkey)
-    receipt = substrate.submit_extrinsic(extrinsic, wait_for_inclusion=True)
-    if not receipt.is_success:
-        raise IdentityException(f"extricsic for meta: {receipt.error_message}, \nblock number: {receipt.block_number}")
-
-
-def set_identity_mixin(self: BaseMinerNeuron | BaseValidatorNeuron):
-    description = os.getenv("COLDKEY_DESCRIPTION")
-    if not description:
-        return
-    try:
-        set_coldkey_identity(
-            self.subtensor.substrate,
-            self.wallet.coldkey,
-            name=self.neuron_type,
-            description=description,
-        )
-
-    except (
-        WebSocketConnectionClosedException,
-        BrokenPipeError,
-    ):
-        self.subtensor.substrate.connect_websocket()
-
-
-def get_random_uids(self, k: int, exclude: List[int] = None) -> list:
-    """Returns k available random uids from the metagraph.
-    Args:
-        k (int): Number of uids to return.
-        exclude (List[int]): List of uids to exclude from the random sampling.
-    Returns:
-        uids (np.ndarray): Randomly sampled available uids.
-    Notes:
-        If `k` is larger than the number of available `uids`, set `k` to the number of available `uids`.
-    """
-    exclude = set(exclude) if exclude else set()
-
-    candidate_uids = [uid for uid in range(self.metagraph.n.item()) if uid not in exclude]
-
-    k = min(k, len(candidate_uids))
-
-    uids = random.sample(candidate_uids, k)
-
-    return uids
-
-
-def miners_hotkeys(validator: BaseValidatorNeuron):
-    validator.metagraph.sync(subtensor=validator.subtensor)
-
-    return [
-        neuron_info.axon_info.hotkey
-        for neuron_info in validator.subtensor.neurons(validator.metagraph.netuid)
-        if neuron_info.rank > 0 and neuron_info.axon_info
-    ]
+__all__ = ["ReinforcedNeuron", "ReinforcedConfig", "ScoresBuffer", "ReinforcedError"]
 
 
 class ScoresBuffer:
@@ -178,11 +91,97 @@ class ScoresBuffer:
         return prepared_scores
 
 
-class ReinforcedMinerNeuron(BaseMinerNeuron):
-    def set_identity(self):
-        set_identity_mixin(self)
+@dataclasses.dataclass
+class ReinforcedConfig(object):
+    ws_endpoint: str
+    net_uid: int
 
 
-class ReinforcedValidatorNeuron(BaseValidatorNeuron):
+class ReinforcedError(Exception):
+    pass
+
+
+class ReinforcedNeuron(object):
+    NEURON_TYPE = 'Base'
+    AXONS_CACHE_INVALIDATION = 5 * 60
+    UID_CACHE_INVALIDATION = 5 * 60
+
+    def __init__(self, config: ReinforcedConfig):
+        self.log = logging.getLogger(f'reinforced.{self.NEURON_TYPE}')
+        self.config = config
+        self.hotkey = Keypair.create_from_uri(os.getenv('MNEMONIC_HOTKEY', '//Alice'))
+        self.coldkey = Keypair.create_from_uri(os.getenv('MNEMONIC_COLDKEY', '//Alice'))
+        self._axons_cache = None
+        self._axons_cache_time = 0
+        self.uid = None
+        self._uid_check_time = 0
+        self.log_handler = None
+        self.init_logging()
+
+    def init_logging(self):
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s'))
+        self.log.addHandler(handler)
+        self.log.setLevel(logging.DEBUG)
+
+    def get_axons(self):
+        now = time.time()
+        if (now - self._axons_cache_time) > self.AXONS_CACHE_INVALIDATION:
+            with SubtensorWrapper(self.config.ws_endpoint) as client:
+                self._axons_cache = client.get_axons(self.config.net_uid)
+            self._axons_cache_time = now
+        return self._axons_cache
+
     def set_identity(self):
-        set_identity_mixin(self)
+        description = os.getenv("COLDKEY_DESCRIPTION")
+        if not description:
+            return
+        with SubtensorWrapper(self.config.ws_endpoint) as client:
+            client.set_identity(self.coldkey, self.NEURON_TYPE, description)
+
+    def get_current_uid(self):
+        with SubtensorWrapper(self.config.ws_endpoint) as client:
+            self.log.info('Checking current uid')
+            old_uid = self.uid
+            self.uid = client.get_uid(self.config.net_uid, self.hotkey.ss58_address)
+            self._uid_check_time = time.time()
+            if old_uid != self.uid:
+                self.log.info(f'uid changed from {old_uid} to {self.uid}')
+
+    def check_axon_alive(self):
+        now = time.time()
+        if (now - self._uid_check_time) > self.UID_CACHE_INVALIDATION:
+            self.get_current_uid()
+
+        if self.uid is None:
+            self.log.error(
+                f'Axon for hotkey {self.hotkey.ss58_address} not registered in net uid: {self.config.net_uid}'
+            )
+            raise ReinforcedError('Axon not registered')
+
+    def serve_axon(self):
+        while True:
+            with SubtensorWrapper(self.config.ws_endpoint) as client:
+                uid = client.get_uid(self.config.net_uid, self.hotkey.ss58_address)
+                if uid is None:
+                    self.log.error(
+                        f'Axon for hotkey {self.hotkey.ss58_address} not registered in net uid: {self.config.net_uid}'
+                    )
+                    raise ReinforcedError('Axon not registered')
+                self.uid = uid
+                self._uid_check_time = time.time()
+                result, error = client.serve_axon(
+                    self.hotkey, self.config.net_uid, ip=os.getenv('EXTERNAL_IP', net.get_external_ip()),
+                    port=int(os.getenv('BT_AXON_PORT', '8091'))
+                )
+                if result:
+                    self.log.info(f'Axon serving, net uid: {self.config.net_uid}, uid: {uid}')
+                    break
+                self.log.warning(f'Unable to perform serve_axon. Need to wait {error["blocks"]} blocks')
+            time.sleep(error['blocks'] * 6)
+
+    @classmethod
+    def serve_uvicorn(cls, app):
+        uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('BT_AXON_PORT', '8091')), log_level='error')
+
