@@ -86,7 +86,7 @@ class SubtensorWrapper:
         result = self.api.query(
             "SubtensorModule", "Uids", [net_uid, axon_hotkey], block_hash=block_hash
         )
-        if result:
+        if result is not None:
             return result.value
         return None
 
