@@ -152,8 +152,7 @@ def create_task(
     vulnerability_contract = create_contract(raw_vulnerability.code)
     ast_obj_vulnerability = create_ast_with_standart_input(vulnerability_contract)
 
-    # TODO: WTF?
-    ast_contract_with_vul = insert_comments_into_ast(vulnerability_contract, ast_obj_vulnerability)
+    ast_obj_vulnerability = insert_comments_into_ast(vulnerability_contract, ast_obj_vulnerability)
 
     contract_source = insert_vulnerability_to_contract(ast_obj_contract, ast_obj_vulnerability)
 

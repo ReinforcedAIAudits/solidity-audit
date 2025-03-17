@@ -7,7 +7,7 @@ import random
 import re
 
 import dotenv
-from fastapi import Body, FastAPI, Request
+from fastapi import FastAPI, Request
 
 from ai_audits.protocol import VulnerabilityReport
 
