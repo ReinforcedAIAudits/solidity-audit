@@ -23,7 +23,7 @@ services:
     environment:
       SERVER_PORT: 5000
       CORCEL_API_KEY: ${CORCEL_API_KEY}
-      CORCEL_MODEL: '${CORCEL_MODEL}'
+      CORCEL_MODEL: 'llama-3-1-70b'
       MAX_TRIES: 3
     restart: unless-stopped
     networks:
@@ -39,7 +39,7 @@ services:
     environment:
       SERVER_PORT: 5000
       OPEN_ROUTER_API_KEY: ${OPEN_ROUTER_API_KEY}
-      OPEN_ROUTER_MODEL: '${OPEN_ROUTER_MODEL}'
+      OPEN_ROUTER_MODEL: 'meta-llama/llama-3.1-70b-instruct'
       MAX_TRIES: 3
     restart: unless-stopped
     networks:
@@ -81,6 +81,7 @@ services:
       WORKER_TYPE: 'validator'
       COLDKEY_DESCRIPTION: ''
       VALIDATOR_TIME: ${VALIDATOR_TIME}
+      BT_AXON_PORT: 8100
       MODEL_SERVER: 'http://model_server_openai:5000'
     restart: unless-stopped
     networks:
