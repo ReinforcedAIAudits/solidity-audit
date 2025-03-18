@@ -13,21 +13,25 @@ from ai_audits.contracts.contract_generator import (
     create_task,
     extract_storages_functions,
 )
-from ai_audits.protocol import OpenAIVulnerabilityReport, VulnerabilityReport, ValidatorTask, KnownVulnerability, SmartContract
+from ai_audits.protocol import (
+    OpenAIVulnerabilityReport,
+    VulnerabilityReport,
+    ValidatorTask,
+    KnownVulnerability,
+    SmartContract,
+)
 from ai_audits.subnet_utils import preprocess_text, ROLES, SolcSingleton
 
 
 # OpenAI wants response top-level entity to be an object.
 class AuditResponse(BaseModel):
-    result: list[VulnerabilityReport]
-
-class OpenAIAuditResponse(BaseModel):
     result: list[OpenAIVulnerabilityReport]
+
 
 solc = SolcSingleton()
 
 client = AsyncOpenAI(
-    base_url=os.getenv("OPENAI_API_URL", "https://api.openai.com"),
+    base_url=os.getenv("OPENAI_API_URL", "https://api.openai.com/v1"),
 )
 app = FastAPI()
 
@@ -100,7 +104,7 @@ async def generate_audit(source: str):
             # Output format guidance is provided automatically by OpenAI SDK.
             {"role": ROLES.USER, "content": preprocessed},
         ],
-        response_format=OpenAIAuditResponse,
+        response_format=AuditResponse,
     )
     return completion.choices[0].message.content
 
