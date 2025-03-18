@@ -19,7 +19,7 @@ from neurons.base import ReinforcedNeuron, ScoresBuffer, ReinforcedConfig, Reinf
 load_dotenv()
 
 
-__all__ = ['Validator', 'MinerInfo', 'MinerResult']
+__all__ = ["Validator", "MinerInfo", "MinerResult"]
 
 
 @dataclasses.dataclass
@@ -36,11 +36,10 @@ class MinerResult:
     time: float
     response: list[VulnerabilityReport] | None
 
-# TODO is active in validate()
 
 class Validator(ReinforcedNeuron):
-    MODE_RAW = 'raw'
-    MODE_RELAYER = 'relayer'
+    MODE_RAW = "raw"
+    MODE_RELAYER = "relayer"
 
     WEIGHT_TIME = 0.1
     WEIGHT_ONLY_SCORE = 0.9
@@ -64,7 +63,7 @@ class Validator(ReinforcedNeuron):
         self.hotkeys = {}
         self.load_state()
         self.mode = self.MODE_RAW
-        self.log.info(f'Validator running in {self.mode} mode')
+        self.log.info(f"Validator running in {self.mode} mode")
 
     def get_audit_task(self, vulnerability_type: str | None = None) -> ValidatorTask:
         task_type = choices(list(TaskType), [70, 25, 5])[0]
@@ -102,7 +101,7 @@ class Validator(ReinforcedNeuron):
 
     def get_miners_raw(self) -> list[MinerInfo]:
         axons = [
-            MinerInfo(uid=uid, hotkey=axon['hotkey'], ip=axon['info']['ip'], port=axon['info']['port'])
+            MinerInfo(uid=uid, hotkey=axon["hotkey"], ip=axon["info"]["ip"], port=axon["info"]["port"])
             for uid, axon in enumerate(self.get_axons())
         ]
         axons = [x for x in axons if x.hotkey != self.hotkey.ss58_address]
@@ -111,7 +110,7 @@ class Validator(ReinforcedNeuron):
             futures = [executor.submit(self.is_miner_alive, *args) for args in to_check]
             results = [future.result() for future in futures]
         valid_miner_uids = [uid for uid, is_valid in results if is_valid]
-        self.log.info(f'Active miner uids: {valid_miner_uids}')
+        self.log.info(f"Active miner uids: {valid_miner_uids}")
         return [x for x in axons if x.uid in valid_miner_uids]
 
     def get_miners_from_relayer(self) -> list[MinerInfo]:
@@ -124,8 +123,8 @@ class Validator(ReinforcedNeuron):
 
     def is_miner_alive(self, uid: int, ip_address: str, port: int) -> tuple[int, bool]:
         try:
-            response = requests.get(f'http://{ip_address}:{port}/miner_running', timeout=self.MINER_CHECK_TIMEOUT)
-            return uid, response.status_code == 200 and response.json()['status'] == 'OK'
+            response = requests.get(f"http://{ip_address}:{port}/miner_running", timeout=self.MINER_CHECK_TIMEOUT)
+            return uid, response.status_code == 200 and response.json()["status"] == "OK"
         except Exception as e:
             self.log.info(f"Error checking uid {uid}: {e}")
             return uid, False
@@ -134,21 +133,21 @@ class Validator(ReinforcedNeuron):
         start_time = time.time()
         response = None
         try:
-            miner_task = ContractTask(contract_code=task.contract_code)
+            miner_task = ContractTask(uid=miner.uid, contract_code=task.contract_code)
 
             miner_task.sign(self.hotkey)
 
             task_json = miner_task.model_dump()
 
             result = requests.post(
-                f'http://{miner.ip}:{miner.port}/forward', json=task_json, timeout=self.MINER_RESPONSE_TIMEOUT
+                f"http://{miner.ip}:{miner.port}/forward", json=task_json, timeout=self.MINER_RESPONSE_TIMEOUT
             ).json()
             if not isinstance(result, list):
-                self.log.warning(f'Got unexpected result from miner: {result}')
+                self.log.warning(f"Got unexpected result from miner: {result}")
             else:
                 response = [VulnerabilityReport(**vuln) for vuln in result]
         except Exception as e:
-            self.log.info(f'Error asking miner {miner.uid} ({miner.ip}:{miner.port}): {e}')
+            self.log.info(f"Error asking miner {miner.uid} ({miner.ip}:{miner.port}): {e}")
         return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=response)
 
     def ask_miners_raw(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
@@ -168,23 +167,33 @@ class Validator(ReinforcedNeuron):
 
     def clear_scores_for_old_hotkeys(self):
         old_hotkeys = self.hotkeys.copy()
-        new_hotkeys = {uid: axon['hotkey'] for uid, axon in enumerate(self.get_axons())}
+        new_hotkeys = {uid: axon["hotkey"] for uid, axon in enumerate(self.get_axons())}
         for uid, key in old_hotkeys.items():
             if key != new_hotkeys[uid]:
                 self._buffer_scores.reset(uid)
         self.hotkeys = new_hotkeys
 
+    def remove_suggestions(self, miner_answer: MinerResult):
+        if miner_answer.response is None:
+            return miner_answer
+        return MinerResult(
+            uid=miner_answer.uid,
+            time=miner_answer.time,
+            response=[x for x in miner_answer.response if not x.is_suggestion],
+        )
+
     def validate(self):
         miners = self.get_miners()
         if not miners:
-            self.log.warning('No active miners, validator would skip this loop')
+            self.log.warning("No active miners, validator would skip this loop")
             return
         task = self.try_get_task()
         if task is None:
-            self.log.error('Unable to get task. Check your settings')
-            raise ReinforcedError('Unable to get task')
-        self.log.info(f'Validator task:\n{task}')
+            self.log.error("Unable to get task. Check your settings")
+            raise ReinforcedError("Unable to get task")
+        self.log.info(f"Validator task:\n{task}")
         responses = self.ask_miners(miners, task)
+        responses = [self.remove_suggestions(x) for x in responses]
 
         rewards = self.validate_responses(responses, task, miners)
 
@@ -202,10 +211,10 @@ class Validator(ReinforcedNeuron):
 
     def run(self):
         while True:
-            self.log.info('Validator loop is running')
+            self.log.info("Validator loop is running")
             sleep_time = self.get_sleep_time()
             if sleep_time:
-                self.log.info(f'Validator will sleep {sleep_time} secs until next loop. Zzz...')
+                self.log.info(f"Validator will sleep {sleep_time} secs until next loop. Zzz...")
                 time.sleep(sleep_time)
             self.clear_scores_for_old_hotkeys()
             self.check_axon_alive()
@@ -226,11 +235,7 @@ class Validator(ReinforcedNeuron):
     @classmethod
     def _get_min_response_time(cls, responses: list[MinerResult]) -> float:
         """Helper method to get minimum response time from valid dendrites."""
-        valid_times = [
-            x.time
-            for x in responses
-            if x.response is not None
-        ]
+        valid_times = [x.time for x in responses if x.response is not None]
         return min(valid_times) if valid_times else 0.0
 
     @classmethod
@@ -242,8 +247,11 @@ class Validator(ReinforcedNeuron):
 
     @classmethod
     def validate_responses(
-        cls, results: list[MinerResult], task: ValidatorTask, miners: list[MinerInfo],
-        log: logging.Logger = logging.getLogger('empty')
+        cls,
+        results: list[MinerResult],
+        task: ValidatorTask,
+        miners: list[MinerInfo],
+        log: logging.Logger = logging.getLogger("empty"),
     ) -> list[float]:
         min_time = cls._get_min_response_time(results)
         scores = []
@@ -251,15 +259,13 @@ class Validator(ReinforcedNeuron):
         for miner in miners:
             result = results_by_uid[miner.uid]
             if result.response is None:
-                log.debug(f'Invalid response from uid {miner.uid}')
+                log.debug(f"Invalid response from uid {miner.uid}")
                 scores.append(0)
                 continue
 
             report_score = cls.validate_reports_by_reference(result.response, task) * cls.WEIGHT_ONLY_SCORE
             time_score = (
-                cls._calculate_time_score(result, min_time)
-                * (report_score / cls.WEIGHT_ONLY_SCORE)
-                * cls.WEIGHT_TIME
+                cls._calculate_time_score(result, min_time) * (report_score / cls.WEIGHT_ONLY_SCORE) * cls.WEIGHT_TIME
             )
             log.debug(f"Miner uid: {miner.uid}, hotkey: {miner.hotkey}")
             log.debug(f"Process time: {result.time}")
@@ -270,7 +276,7 @@ class Validator(ReinforcedNeuron):
         return scores
 
     def assign_achievements(
-            self, rewards: list[float], miners: list[MinerInfo], achievement_count: int = 3
+        self, rewards: list[float], miners: list[MinerInfo], achievement_count: int = 3
     ) -> list[MinerInfo]:
         top_scores = sorted(enumerate(rewards), key=lambda x: x[1], reverse=True)[:achievement_count]
         return [miners[index] for index, _ in top_scores]
@@ -294,7 +300,7 @@ class Validator(ReinforcedNeuron):
     def send_top_miners(self, rewards: list[float], miners: list[MinerInfo]):
         top_miners = self.create_top_miners(rewards, miners)
         if not top_miners:
-            self.log.warning('No top miners during this validation')
+            self.log.warning("No top miners during this validation")
         result = create_session().post(
             f"{os.getenv('WEBSITE_URL')}/api/mint_medals",
             json=[miner.model_dump() for miner in top_miners],
@@ -371,7 +377,7 @@ class Validator(ReinforcedNeuron):
             buf = ScoresBuffer(self.MAX_BUFFER)
             buf.load(state.get("buffer_scores", {}))
             self._buffer_scores = buf
-            self._last_validation = state.get('last_validation', 0)
+            self._last_validation = state.get("last_validation", 0)
             self.hotkeys = state["hotkeys"]
         except FileNotFoundError:
             self.log.error("State file is not found.")
@@ -394,8 +400,8 @@ class Validator(ReinforcedNeuron):
 
 if __name__ == "__main__":
     config = ReinforcedConfig(
-        ws_endpoint=os.getenv('CHAIN_ENDPOINT', 'wss://test.finney.opentensor.ai:443'),
-        net_uid=int(os.getenv('NETWORK_UID', '222'))
+        ws_endpoint=os.getenv("CHAIN_ENDPOINT", "wss://test.finney.opentensor.ai:443"),
+        net_uid=int(os.getenv("NETWORK_UID", "222")),
     )
     validator = Validator(config)
     validator.serve_axon()

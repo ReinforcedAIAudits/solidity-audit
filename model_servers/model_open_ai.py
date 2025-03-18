@@ -1,3 +1,4 @@
+import json
 import os
 import random
 
@@ -12,7 +13,7 @@ from ai_audits.contracts.contract_generator import (
     create_task,
     extract_storages_functions,
 )
-from ai_audits.protocol import VulnerabilityReport, ValidatorTask, KnownVulnerability, SmartContract
+from ai_audits.protocol import OpenAIVulnerabilityReport, VulnerabilityReport, ValidatorTask, KnownVulnerability, SmartContract
 from ai_audits.subnet_utils import preprocess_text, ROLES, SolcSingleton
 
 
@@ -20,6 +21,8 @@ from ai_audits.subnet_utils import preprocess_text, ROLES, SolcSingleton
 class AuditResponse(BaseModel):
     result: list[VulnerabilityReport]
 
+class OpenAIAuditResponse(BaseModel):
+    result: list[OpenAIVulnerabilityReport]
 
 solc = SolcSingleton()
 
@@ -35,17 +38,6 @@ GPT_MODEL = os.getenv("GPT_MODEL", "gpt-4o-mini-2024-07-18")
 PROMPT = """
 You are a Solidity smart contract auditor. 
 Given the source code of a contract with explicitly specified line numbers in comments, your task is to provide an audit report.
-
-- If the source code is not valid Solidity code (only if it cannot be compiled), generate a single vulnerability report entry with the following details:
- - from_line: 1 (start of the code)
- - to_line: the total number of lines in the code
- - vulnerability_class: "Invalid Code"
- - description: A message indicating that the entire code is considered invalid for audit processing.
-- If the source code is valid, analyze and report specific vulnerabilities, providing:
- - The line range (from_line and to_line) of each vulnerability.
- - A brief description of the vulnerability.
- - Suggestions for fixes.
-- If no vulnerabilities are found in the source code, generate an audit report without any entries.
 """.strip()
 
 PROMPT_VALIDATOR = """
@@ -108,13 +100,9 @@ async def generate_audit(source: str):
             # Output format guidance is provided automatically by OpenAI SDK.
             {"role": ROLES.USER, "content": preprocessed},
         ],
-        response_format=AuditResponse,
+        response_format=OpenAIAuditResponse,
     )
-    message = completion.choices[0].message
-    if message.parsed:
-        return message.parsed.result
-    else:
-        return None
+    return completion.choices[0].message.content
 
 
 async def generate_task(requested_vulnerability: str | None = None) -> ValidatorTask:
@@ -151,7 +139,8 @@ async def submit(request: Request, response: Response):
     if diagnostics is None:
         response.status_code = 503
         return "LLM is unavailable"
-    return diagnostics
+
+    return [VulnerabilityReport(**report) for report in json.loads(diagnostics)["result"]]
 
 
 @app.post("/task", response_model=ValidatorTask)

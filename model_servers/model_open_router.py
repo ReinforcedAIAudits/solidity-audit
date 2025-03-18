@@ -50,6 +50,7 @@ Output format:
         "description": "Detailed description of the issue",
         "priorArt": "Similar vulnerabilities encountered in wild before. Type: array",
         "fixedLines": "Fixed version of the original source",
+        "isSuggestion": "Boolean value indicating if the fix is a suggestion or a requirement"
     }
 ]
 

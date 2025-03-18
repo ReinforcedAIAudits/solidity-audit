@@ -86,6 +86,11 @@ class Miner(ReinforcedNeuron):
         is_blacklisted, error = self.check_blacklist(task)
         if is_blacklisted:
             return {"status": "ERROR", "reason": error}
+        
+        if task.uid != self.uid:
+            self.log.error(f"Task is not for this miner. Task uid: {task.uid}, miner uid: {self.uid}")
+            return {"status": "ERROR", "reason": "Task is not for this miner"}
+        
         self.log.info(f'Task is valid, contract code:\n{task.contract_code}')
         return self.do_audit_code(task.contract_code)
 

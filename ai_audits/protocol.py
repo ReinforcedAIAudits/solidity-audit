@@ -15,7 +15,7 @@ from ai_audits.messaging import SignedMessage
 
 __all__ = [
     "VulnerabilityReport", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType",
-    "ContractTask", "ReportMessage", "ResultMessage", "TaskMessage"
+    "ContractTask", "ReportMessage", "ResultMessage", "TaskMessage", "OpenAIVulnerabilityReport"
 ]
 
 
@@ -98,7 +98,7 @@ class AuditBase(BaseModel):
     #     return v
 
 
-class VulnerabilityReport(AuditBase):
+class OpenAIVulnerabilityReport(AuditBase):
     test_case: str | None = Field(
         None,
         title="Test Case",
@@ -119,6 +119,8 @@ class VulnerabilityReport(AuditBase):
         title="Fixed Lines",
         description="Fixed version of the original source.",
     )
+
+class VulnerabilityReport(OpenAIVulnerabilityReport):
     is_suggestion: bool = Field(False, title="Is Suggestion", description="Whether the fix is a suggestion or not")
 
 
@@ -134,10 +136,11 @@ class TaskType(StrEnum):
 
 class ValidatorTask(AuditBase):
     contract_code: str = Field(..., title="Contract code", description="Code of vulnerable contract")
-    task_type: str = Field(..., title="Task type", description="Type of validator task")
+    task_type: str | None = Field(..., title="Task type", description="Type of validator task")
 
 
 class ContractTask(SignedMessage):
+    uid: int
     contract_code: str
 
 
