@@ -136,7 +136,7 @@ class TaskType(StrEnum):
 
 class ValidatorTask(AuditBase):
     contract_code: str = Field(..., title="Contract code", description="Code of vulnerable contract")
-    task_type: str | None = Field(..., title="Task type", description="Type of validator task")
+    task_type: str | None = Field(default=None, title="Task type", description="Type of validator task")
 
 
 class ContractTask(SignedMessage):
