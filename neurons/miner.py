@@ -3,17 +3,16 @@ import time
 
 import fastapi
 
+from ai_audits.messaging import SignedMessage
+from ai_audits.protocol import VulnerabilityReport, ContractTask
 from ai_audits.subnet_utils import create_session
 from neurons.base import ReinforcedNeuron, ReinforcedConfig
-from ai_audits.protocol import VulnerabilityReport, ContractTask
-from ai_audits.messaging import SignedMessage
 
-
-__all__ = ['Miner']
+__all__ = ["Miner"]
 
 
 class Miner(ReinforcedNeuron):
-    NEURON_TYPE = 'miner'
+    NEURON_TYPE = "miner"
     REQUEST_PERIOD = int(os.getenv("MINER_ACCEPT_REQUESTS_EVERY_X_SECS", 20 * 60))
     _last_call: dict[str, float]
     _callers_whitelist: list[str]
@@ -21,9 +20,7 @@ class Miner(ReinforcedNeuron):
     def __init__(self, config: ReinforcedConfig):
         super().__init__(config)
         self._last_call = {}
-        self._callers_whitelist = [
-            key.strip() for key in os.getenv("", "").split(",") if key.strip()
-        ]
+        self._callers_whitelist = [key.strip() for key in os.getenv("", "").split(",") if key.strip()]
         self.load_website_keys()
         self.set_identity()
 
@@ -65,41 +62,54 @@ class Miner(ReinforcedNeuron):
     def check_blacklist(self, request: SignedMessage) -> tuple[bool, dict | None]:
         if request.ss58_address is None:
             self.log.warning("Received a request without signature.")
-            return True, {'name': 'NoSignature'}
+            return True, {"name": "NoSignature"}
 
         if not request.verify():
             self.log.warning("Received a request with bad signature.")
-            return True, {'name': 'InvalidSignature'}
+            return True, {"name": "InvalidSignature"}
+
+        if (
+            request.ss58_address in self._last_call
+            and time.time() - self._last_call[request.ss58_address] < self.REQUEST_PERIOD
+        ):
+            self.log.warning("Received a request too often.")
+            return True, {"name": "TooOften"}
 
         axons = self.get_axons()
         # TODO: check relayer and validators and site
-        allowed_keys = list(set([x['hotkey'] for x in axons]) | set(self._callers_whitelist))
+        allowed_keys = list(set([x["hotkey"] for x in axons]) | set(self._callers_whitelist))
         if request.ss58_address not in allowed_keys:
             self.log.warning("Received a request not from metagraph.")
-            return True, {'name': 'NotFromMetagraph'}
+            return True, {"name": "NotFromMetagraph"}
+
+        for axon in axons:
+            if request.ss58_address == axon["hotkey"] and axon["rank"] != 0:
+                self.log.warning("Received a request from not a validator.")
+                return True, {"name": "NotValidator"}
+
         self._last_call[request.ss58_address] = time.time()
         return False, None
 
     def forward(self, task: ContractTask):
         self.check_axon_alive()
-        self.log.info(f'Got task from {task.ss58_address}')
+        self.log.info(f"Got task from {task.ss58_address}")
         is_blacklisted, error = self.check_blacklist(task)
         if is_blacklisted:
             return {"status": "ERROR", "reason": error}
-        
+
         if task.uid != self.uid:
             self.log.error(f"Task is not for this miner. Task uid: {task.uid}, miner uid: {self.uid}")
             return {"status": "ERROR", "reason": "Task is not for this miner"}
-        
-        self.log.info(f'Task is valid, contract code:\n{task.contract_code}')
+
+        self.log.info(f"Task is valid, contract code:\n{task.contract_code}")
         return self.do_audit_code(task.contract_code)
 
 
 app = fastapi.FastAPI()
 
 config = ReinforcedConfig(
-    ws_endpoint=os.getenv('CHAIN_ENDPOINT', 'wss://test.finney.opentensor.ai:443'),
-    net_uid=int(os.getenv('NETWORK_UID', '222'))
+    ws_endpoint=os.getenv("CHAIN_ENDPOINT", "wss://test.finney.opentensor.ai:443"),
+    net_uid=int(os.getenv("NETWORK_UID", "222")),
 )
 miner = Miner(config)
 
@@ -109,7 +119,7 @@ async def healthchecker():
     return {"status": "OK"}
 
 
-@app.post('/forward')
+@app.post("/forward")
 async def forward(task: ContractTask):
     # TODO: unwrap relayer here
     result = miner.forward(task)

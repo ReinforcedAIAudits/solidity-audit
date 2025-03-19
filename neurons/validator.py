@@ -1,14 +1,14 @@
 import dataclasses
+import json
 import logging
-from concurrent.futures import ThreadPoolExecutor
 import math
 import os
-import pickle
-from random import choices
 import time
+from concurrent.futures import ThreadPoolExecutor
+from random import choices
 
-from dotenv import load_dotenv
 import requests
+from dotenv import load_dotenv
 
 from ai_audits.nft_protocol import MedalRequestsMessage
 from ai_audits.protocol import VulnerabilityReport, ValidatorTask, TaskType, ContractTask
@@ -227,8 +227,12 @@ class Validator(ReinforcedNeuron):
             result, error = client.set_weights(
                 self.hotkey, self.config.net_uid, dict(zip(self._buffer_scores.uids(), self._buffer_scores.scores()))
             )
-        if result is True:
+        if result:
             self.log.info("set_weights on chain successfully!")
+        elif error["name"] == "RateLimit":
+            self.log.warning("set_weights failed due to rate limit, will retry later.")
+            time.sleep(12 * error["blocks"])
+            self.set_weights()
         else:
             self.log.error(f"set_weights failed: {error}")
 
@@ -365,14 +369,14 @@ class Validator(ReinforcedNeuron):
             "hotkeys": self.hotkeys,
         }
 
-        with open("state.pkl", "wb") as f:
-            pickle.dump(state, f)
+        with open("state.json", "w") as f:
+            json.dump(state, f, indent=2)
 
     def load_state(self):
         self.log.info("Loading validator state.")
         try:
-            with open("state.pkl", "rb") as f:
-                state = pickle.load(f)
+            with open("state.json", "rb") as f:
+                state = json.load(f)
 
             buf = ScoresBuffer(self.MAX_BUFFER)
             buf.load(state.get("buffer_scores", {}))
