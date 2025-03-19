@@ -376,7 +376,10 @@ class Validator(ReinforcedNeuron):
         self.log.info("Loading validator state.")
         try:
             with open("state.json", "rb") as f:
-                state = json.load(f)
+                state_file = f.read()
+                if not state_file:
+                    raise FileNotFoundError
+                state = json.loads(state_file)
 
             buf = ScoresBuffer(self.MAX_BUFFER)
             buf.load(state.get("buffer_scores", {}))
