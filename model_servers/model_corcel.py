@@ -5,15 +5,14 @@ import random
 from fastapi import FastAPI, Request, HTTPException
 from py_solidity_vuln_db import get_vulnerability
 
-from ai_audits.protocol import KnownVulnerability, SmartContract
-from ai_audits.subnet_utils import create_session, preprocess_text, ROLES, SolcSingleton
 from ai_audits.contracts.contract_generator import (
     Vulnerability,
     create_contract,
     create_task,
     extract_storages_functions,
 )
-
+from ai_audits.protocol import KnownVulnerability, SmartContract
+from ai_audits.subnet_utils import create_session, preprocess_text, ROLES, SolcSingleton
 
 app = FastAPI()
 
@@ -41,7 +40,7 @@ Output format:
         "testCase": "Example code that could trigger the vulnerability",
         "description": "Detailed description of the issue",
         "priorArt": "Similar vulnerabilities encountered in wild before. Type: array",
-        "fixedLines": "Fixed version of the original source",
+        "fixedLines": "Fixed version of the original source"
     },
 ]
 
@@ -301,7 +300,7 @@ async def get_hybrid_task(request: Request):
         tries -= 1
         vulnerability_contract = create_contract(raw_vulnerability.code)
         storages, functions = extract_storages_functions(vulnerability_contract)
-        result = await generate_contract(storages, functions)
+        result = generate_contract(storages, functions)
 
         print(f"Generated contract: {result}")
         try:

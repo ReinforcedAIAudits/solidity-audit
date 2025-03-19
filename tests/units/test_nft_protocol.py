@@ -1,7 +1,6 @@
 import unittest
 from ai_audits.nft_protocol import TestMessage
 from bittensor import Keypair as BTKeypair
-from substrateinterface import Keypair as SubstrateKeypair
 from hypothesis import given, strategies as st
 
 

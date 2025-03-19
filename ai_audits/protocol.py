@@ -1,6 +1,4 @@
 from enum import Enum, StrEnum
-from typing import Optional, Union
-import bittensor as bt
 from pydantic import (
     AliasChoices,
     AliasGenerator,
@@ -12,8 +10,13 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel, to_snake
 
+from ai_audits.messaging import SignedMessage
 
-__all__ = ["VulnerabilityReport", "AuditsSynapse", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType"]
+
+__all__ = [
+    "VulnerabilityReport", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType",
+    "ContractTask", "ReportMessage", "ResultMessage", "TaskMessage", "OpenAIVulnerabilityReport"
+]
 
 
 class KnownVulnerability(str, Enum):
@@ -44,7 +47,7 @@ class OtherVulnerability(BaseModel):
 
 
 class VulnerabilityClass(BaseModel):
-    type: Union[KnownVulnerability, OtherVulnerability]
+    type: KnownVulnerability | OtherVulnerability
 
     @field_validator("type", mode="before")
     def validate_type(cls, v):
@@ -82,8 +85,8 @@ class AuditBase(BaseModel):
         ...,
         title="Vulnerability Class",
         description="The category of the vulnerability. "
-                    "E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, "
-                    "Unchecked call, Gas griefing, Unguarded function, Invalid Code, et cetera.",
+        "E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, "
+        "Unchecked call, Gas griefing, Unguarded function, Invalid Code, et cetera.",
     )
 
     # @field_validator("vulnerability_class", mode="before")
@@ -95,13 +98,13 @@ class AuditBase(BaseModel):
     #     return v
 
 
-class VulnerabilityReport(AuditBase):
-    test_case: Optional[str] = Field(
+class OpenAIVulnerabilityReport(AuditBase):
+    test_case: str | None = Field(
         None,
         title="Test Case",
         description="A code example that exploits the vulnerability.",
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         None,
         title="Description",
         description="Human-readable vulnerability description, in markdown",
@@ -111,11 +114,14 @@ class VulnerabilityReport(AuditBase):
         title="Prior Art",
         description="Similar vulnerabilities encountered in wild before",
     )
-    fixed_lines: Optional[str] = Field(
+    fixed_lines: str | None = Field(
         None,
         title="Fixed Lines",
         description="Fixed version of the original source.",
     )
+
+class VulnerabilityReport(OpenAIVulnerabilityReport):
+    is_suggestion: bool = Field(False, title="Is Suggestion", description="Whether the fix is a suggestion or not")
 
 
 class SmartContract(BaseModel):
@@ -130,20 +136,29 @@ class TaskType(StrEnum):
 
 class ValidatorTask(AuditBase):
     contract_code: str = Field(..., title="Contract code", description="Code of vulnerable contract")
-    task_type: str = Field(..., title="Task type", description="Type of validator task")
+    task_type: str | None = Field(default=None, title="Task type", description="Type of validator task")
 
 
-class AuditsSynapse(bt.Synapse):
-
+class ContractTask(SignedMessage):
+    uid: int
     contract_code: str
 
-    response: Optional[list[VulnerabilityReport]] = None
 
-    def deserialize(self) -> Optional[list[VulnerabilityReport]]:
-        """
-        Deserialize the miner response.
+class ReportMessage(SignedMessage):
+    report: list[VulnerabilityReport]
 
-        Returns:
-        - List[dict]: The deserialized response, which is a list of dictionaries containing the extracted data.
-        """
-        return self.response
+
+class RelayerContainer(SignedMessage):
+    content: str
+    content_type: str
+
+
+class TaskMessage(BaseModel):
+    code: ContractTask
+    validator_ss58_hotkey: str
+
+
+class ResultMessage(BaseModel):
+    result: ReportMessage
+    miner_ss58_hotkey: str
+    response_time: float

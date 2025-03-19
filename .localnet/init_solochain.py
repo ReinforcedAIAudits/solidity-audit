@@ -1,13 +1,11 @@
 import os
 import shutil
 import time
-import typing
 
 import dotenv
-from typing import Tuple
 import bittensor
 from bittensor_wallet import Wallet
-from substrateinterface import SubstrateInterface
+from async_substrate_interface.sync_substrate import SubstrateInterface
 from bittensor_wallet.keypair import Keypair
 from websocket import WebSocketConnectionClosedException
 
@@ -62,7 +60,7 @@ class SoloChainHelper:
         pallet: str,
         method: str,
         params: dict,
-        keypair: typing.Optional[Keypair] = None,
+        keypair: Keypair | None = None,
     ):
         keypair = self.keypair_alice if keypair is None else keypair
         return self.substrate.create_signed_extrinsic(
@@ -134,7 +132,7 @@ class SoloChainHelper:
         raise ValueError(f"Not found network creation in {events}")
 
     @classmethod
-    def setup_wallet(cls, uri: str) -> Tuple[bittensor.Keypair, bittensor.wallet]:
+    def setup_wallet(cls, uri: str) -> tuple[bittensor.Keypair, bittensor.wallet]:
         keypair = bittensor.Keypair.create_from_uri(uri)
         wallet_path = f"/tmp/btcli-wallet-{uri.strip('/')}"
         wallet = bittensor.wallet(path=wallet_path)

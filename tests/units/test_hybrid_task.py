@@ -3,12 +3,14 @@ import unittest
 
 from ai_audits.contracts.contract_generator import Vulnerability, create_task
 from ai_audits.protocol import TaskType
+from ai_audits.subnet_utils import SolcSingleton
 
 
 class HybridTaskTestCase(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        SolcSingleton().install_solc()
         self.maxDiff = None
 
     def test_hybrid_task(self):
