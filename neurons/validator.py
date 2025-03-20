@@ -385,7 +385,7 @@ class Validator(ReinforcedNeuron):
             buf.load(state.get("buffer_scores", {}))
             self._buffer_scores = buf
             self._last_validation = state.get("last_validation", 0)
-            self.hotkeys = state["hotkeys"]
+            self.hotkeys = {int(uid): hotkey for uid, hotkey in state["hotkeys"].items()}
         except FileNotFoundError:
             self.log.error("State file is not found.")
             self.save_state()
