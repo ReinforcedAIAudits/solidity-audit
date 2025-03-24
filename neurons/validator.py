@@ -9,9 +9,10 @@ from random import choices
 
 import requests
 from dotenv import load_dotenv
+from unique_playgrounds import UniqueHelper
 
 from ai_audits.nft_protocol import MedalRequestsMessage
-from ai_audits.protocol import VulnerabilityReport, ValidatorTask, TaskType, ContractTask
+from ai_audits.protocol import VulnerabilityReport, ValidatorTask, TaskType, ContractTask, ReportMessage
 from ai_audits.subnet_utils import create_session, is_synonyms, get_invalid_code
 from ai_audits.subtensor_wrapper import SubtensorWrapper
 from neurons.base import ReinforcedNeuron, ScoresBuffer, ReinforcedConfig, ReinforcedError
@@ -142,13 +143,18 @@ class Validator(ReinforcedNeuron):
             result = requests.post(
                 f"http://{miner.ip}:{miner.port}/forward", json=task_json, timeout=self.MINER_RESPONSE_TIMEOUT
             ).json()
-            if not isinstance(result, list):
-                self.log.warning(f"Got unexpected result from miner: {result}")
-            else:
-                response = [VulnerabilityReport(**vuln) for vuln in result]
+
+            response: ReportMessage = ReportMessage(**result)
+
+            with UniqueHelper(os.getenv('UNIQUE_WS_ENDPOINT', 'ws://127.0.0.1:9944')) as helper:
+                token = helper.nft.get_token_info(response.collection_id, response.token_id)
+                if token is None:
+                    self.log.error(f"Could not get token for miner {miner.uid}")
+                    return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=None)
+
         except Exception as e:
             self.log.info(f"Error asking miner {miner.uid} ({miner.ip}:{miner.port}): {e}")
-        return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=response)
+        return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=response.report)
 
     def ask_miners_raw(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
         to_check = [(x, task) for x in miners]

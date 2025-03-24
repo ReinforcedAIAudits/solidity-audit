@@ -58,7 +58,7 @@ class Miner(ReinforcedNeuron):
                 },
             ],
         }
-        with UniqueHelper(self.config.ws_endpoint) as helper:
+        with UniqueHelper(os.getenv('UNIQUE_WS_ENDPOINT', 'ws://127.0.0.1:9944')) as helper:
             collection = helper.nft.create_collection(self.hotkey, collection)
 
         return collection
@@ -99,18 +99,19 @@ class Miner(ReinforcedNeuron):
             contract_code,
             headers={"Content-Type": "text/plain"},
         )
-        # TODO: Remove the error and allow sending a result with an empty response + log this event
-        if result.status_code != 200:
-            self.log.info(f"Not successful AI response. Description: {result.text}")
-            raise ValueError("Contract audit is not successful!")
 
-        json = result.json()
-        self.log.info(f"Response from model server: {json}")
+        if result.status_code != 200:
+            self.log.error(f"Not successful AI response. Description: {result.text}")
+            self.log.info("Miner will return an empty response.")
+            return []
+
+        reports = result.json()
+        self.log.info(f"Response from model server: {reports}")
         vulnerabilities = [
             VulnerabilityReport(
                 **vuln,
             )
-            for vuln in json
+            for vuln in reports
         ]
         return vulnerabilities
 
