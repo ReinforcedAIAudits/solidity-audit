@@ -6,9 +6,9 @@ import time
 import fastapi
 from substrateinterface import Keypair
 from unique_playgrounds import UniqueHelper
-from unique_playgrounds.types_system import SignParams
 from unique_playgrounds.types_unique import CrossAccountId, Property
-from unique_playgrounds.unique import NFTToken, NFTCollection
+from unique_playgrounds.types_system import SignParams
+from unique_playgrounds.unique import NFTToken
 from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask
 
 from ai_audits.subnet_utils import create_session
