@@ -80,6 +80,7 @@ class Validator(ReinforcedNeuron):
             raise ValueError("Unable to receive task from MODEL_SERVER!")
 
         json = result.json()
+        self.log.debug("Task received from model server.")
         self.log.info(f"Response from model server: {json}")
         task = ValidatorTask(task_type=task_type, **json)
         return task
@@ -98,6 +99,7 @@ class Validator(ReinforcedNeuron):
                 else:
                     self.log.error("Max retries reached. Unable to get audit task.")
                     return None
+        return None
 
     def get_miners_raw(self) -> list[MinerInfo]:
         axons = [
@@ -124,6 +126,7 @@ class Validator(ReinforcedNeuron):
     def is_miner_alive(self, uid: int, ip_address: str, port: int) -> tuple[int, bool]:
         try:
             response = requests.get(f"http://{ip_address}:{port}/miner_running", timeout=self.MINER_CHECK_TIMEOUT)
+            self.log.info(f"Miner {uid} ({ip_address}:{port}): {response.json()}")
             return uid, response.status_code == 200 and response.json()["status"] == "OK"
         except Exception as e:
             self.log.info(f"Error checking uid {uid}: {e}")
@@ -148,6 +151,7 @@ class Validator(ReinforcedNeuron):
                 response = [VulnerabilityReport(**vuln) for vuln in result]
         except Exception as e:
             self.log.info(f"Error asking miner {miner.uid} ({miner.ip}:{miner.port}): {e}")
+        self.log.debug(f"Miner {miner.uid} successfully processed in {abs(time.time() - start_time)} seconds")
         return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=response)
 
     def ask_miners_raw(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
@@ -184,16 +188,19 @@ class Validator(ReinforcedNeuron):
 
     def validate(self):
         miners = self.get_miners()
+        self.log.debug("Miners list received")
         if not miners:
             self.log.warning("No active miners, validator would skip this loop")
             return
         task = self.try_get_task()
+        self.log.info("Task for miners received")
         if task is None:
             self.log.error("Unable to get task. Check your settings")
             raise ReinforcedError("Unable to get task")
-        self.log.info(f"Validator task:\n{task}")
+        self.log.debug(f"Validator task:\n{task}")
         responses = self.ask_miners(miners, task)
         responses = [self.remove_suggestions(x) for x in responses]
+        self.log.info("Miners responses received")
 
         rewards = self.validate_responses(responses, task, miners)
 

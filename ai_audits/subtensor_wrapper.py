@@ -1,9 +1,10 @@
+import logging
+
 from async_substrate_interface.sync_substrate import SubstrateInterface, Keypair
 from bittensor.core.chain_data import MetagraphInfo
 from bittensor.core.settings import version_as_int, SS58_FORMAT, TYPE_REGISTRY
 from bittensor.utils import networking as net
 from scalecodec.types import GenericCall
-
 
 __all__ = ['SubtensorWrapper']
 
@@ -26,9 +27,11 @@ class SubtensorWrapper:
             use_remote_preset=True,
             chain_name="Bittensor"
         )
+        self.log = logging.getLogger('SubtensorWrapper')
 
     def __enter__(self):
         self.api.initialize()
+        self.log.debug(f"SubtensorWrapper connected to {self.api.url}")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -43,10 +46,13 @@ class SubtensorWrapper:
         )
         if wait_for_inclusion or wait_for_finalization:
             if response.is_success:
+                self.log.debug(f"Extrinsic {response.extrinsic_hash} is included in block {response.block_hash}")
                 return True, None
 
+            self.log.error(f"Extrinsic {response.extrinsic_hash} failed: {response.error_message}")
             return False, response.error_message
 
+        self.log.debug(f"Extrinsic {response.extrinsic_hash} is submitted")
         return True, None
 
     def get_metagraph(self, net_uid: int, block_hash=None):
@@ -57,7 +63,9 @@ class SubtensorWrapper:
             block_hash=block_hash,
         )
         if query.value is None:
+            self.log.error(f"Metagraph for net_uid {net_uid} not found")
             return None
+        self.log.debug(f"Metagraph for net_uid {net_uid} found")
         return MetagraphInfo.from_dict(query.value)
 
     def get_axons(self, net_uid: int, block_hash=None):
@@ -73,6 +81,7 @@ class SubtensorWrapper:
                     axon_key = key
                 axon[axon_key] = getattr(metagraph, key)[i]
             axons.append(axon)
+        self.log.debug(f"Axons for net_uid {net_uid} suссessfully received")
         return axons
 
     def get_served_axon(self, net_uid: int, axon_hotkey: str) -> dict | None:
@@ -80,6 +89,7 @@ class SubtensorWrapper:
         if axon is None:
             return None
         axon['ip'] = net.int_to_ip(axon['ip'])
+        self.log.debug(f"Axon for net_uid {net_uid} and hotkey {axon_hotkey} suссessfully received")
         return axon
 
     def get_uid(self, net_uid: int, axon_hotkey: str, block_hash: str | None = None) -> int | None:
@@ -102,6 +112,7 @@ class SubtensorWrapper:
         already_serving = self.get_served_axon(net_uid, signer.ss58_address)
         if already_serving is not None:
             if already_serving['ip'] == ip and already_serving['port'] == port:
+                self.log.debug(f"Axon for net_uid {net_uid} and hotkey {signer.ss58_address} already serving")
                 return True, None
             current_block = self.api.get_block_number(self.api.get_chain_finalised_head())
             min_diff = self.api.query("SubtensorModule", "ServingRateLimit", [net_uid]).value
@@ -130,6 +141,7 @@ class SubtensorWrapper:
     ) -> tuple[bool, dict | None]:
         uid = self.get_uid(net_uid, signer.ss58_address)
         if uid is None:
+            self.log.error(f"No uid {uid} found for net_uid {net_uid}")
             return False, {'name': 'UnregisteredAxon'}
         last_update = self.get_last_update(net_uid)
         last_set_weights_block = last_update[uid]
