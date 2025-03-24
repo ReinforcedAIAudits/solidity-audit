@@ -12,3 +12,4 @@ hypothesis==6.124.9
 solidity-vulnerabilities-db<1
 websocket-client==1.8.0
 async-substrate-interface>=1.0.0
+unique-playgrounds-py==0.0.1

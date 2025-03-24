@@ -1,10 +1,15 @@
+import json
 import os
 import time
 
 import fastapi
+from substrateinterface import Keypair
+from unique_playgrounds import UniqueHelper
+from unique_playgrounds.types_unique import CrossAccountId, Property
+from unique_playgrounds.unique import NFTToken
 
 from ai_audits.messaging import SignedMessage
-from ai_audits.protocol import VulnerabilityReport, ContractTask
+from ai_audits.protocol import VulnerabilityReport, ContractTask, ReportMessage
 from ai_audits.subnet_utils import create_session
 from neurons.base import ReinforcedNeuron, ReinforcedConfig
 
@@ -23,6 +28,56 @@ class Miner(ReinforcedNeuron):
         self._callers_whitelist = [key.strip() for key in os.getenv("", "").split(",") if key.strip()]
         self.load_website_keys()
         self.set_identity()
+        self.collection = self.create_collection()
+
+    def create_collection(self):
+        collection = {
+            "name": "Miner Contract Audits",
+            "description": "Collection of contract audits performed by miner",
+            # "token_prefix": "AUD",
+            "properties": [
+                {"key": "schemaName", "value": "unique"},
+                {"key": "schemaVersion", "value": "2.0.0"},
+            ],
+            "token_property_permissions": [
+                {
+                    "key": "validator",
+                    "permission": {"mutable": False, "token_owner": False, "collection_admin": True},
+                },
+                {
+                    "key": "tokenData",
+                    "permission": {"mutable": False, "token_owner": False, "collection_admin": True},
+                },
+                {
+                    "key": "schemaName",
+                    "permission": {"mutable": False, "token_owner": False, "collection_admin": True},
+                },
+                {
+                    "key": "schemaVersion",
+                    "permission": {"mutable": False, "token_owner": False, "collection_admin": True},
+                },
+            ],
+        }
+        with UniqueHelper(self.config.ws_endpoint) as helper:
+            collection = helper.nft.create_collection(self.hotkey, collection)
+
+        return collection
+
+    def prepare_nft_result(self, reports: list[VulnerabilityReport], validator_hotkey_ss58: str) -> NFTToken:
+        properties = [
+            Property(key="validator", value=validator_hotkey_ss58),
+            Property(key="tokenData", value=json.dumps([report.model_dump() for report in reports])),
+            Property(key="schemaName", value="unique"),
+            Property(key="schemaVersion", value="2.0.0"),
+        ]
+
+        with UniqueHelper(self.config.ws_endpoint) as helper:
+            return helper.nft.mint_token(
+                self.hotkey,
+                self.collection.collection_id,
+                owner=CrossAccountId(Substrate=self.hotkey.ss58_address),
+                properties=properties
+            )
 
     def load_website_keys(self):
         try:
@@ -102,7 +157,18 @@ class Miner(ReinforcedNeuron):
             return {"status": "ERROR", "reason": "Task is not for this miner"}
 
         self.log.info(f"Task is valid, contract code:\n{task.contract_code}")
-        return self.do_audit_code(task.contract_code)
+        reports = self.do_audit_code(task.contract_code)
+        self.log.info(f"Created audit reports: {reports}")
+        nft_token = self.prepare_nft_result(reports, task.ss58_address)
+        self.log.info(f"Token minted: {nft_token}")
+        message = ReportMessage(
+            collection_id=self.collection.collection_id,
+            token_id=nft_token.token_id,
+            report=reports,
+        )
+        message.sign(Keypair(ss58_address=self.hotkey.ss58_address))
+
+        return message
 
 
 app = fastapi.FastAPI()

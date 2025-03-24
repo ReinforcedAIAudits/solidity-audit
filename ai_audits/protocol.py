@@ -1,4 +1,5 @@
 from enum import Enum, StrEnum
+
 from pydantic import (
     AliasChoices,
     AliasGenerator,
@@ -11,7 +12,6 @@ from pydantic import (
 from pydantic.alias_generators import to_camel, to_snake
 
 from ai_audits.messaging import SignedMessage
-
 
 __all__ = [
     "VulnerabilityReport", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType",
@@ -145,6 +145,8 @@ class ContractTask(SignedMessage):
 
 
 class ReportMessage(SignedMessage):
+    collection_id: str
+    token_id: int
     report: list[VulnerabilityReport]
 
 
