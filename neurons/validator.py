@@ -9,11 +9,11 @@ from random import choices
 
 import requests
 from dotenv import load_dotenv
+from solidity_audit_lib import SubtensorWrapper
 
 from ai_audits.nft_protocol import MedalRequestsMessage
 from ai_audits.protocol import VulnerabilityReport, ValidatorTask, TaskType, ContractTask
 from ai_audits.subnet_utils import create_session, is_synonyms, get_invalid_code
-from ai_audits.subtensor_wrapper import SubtensorWrapper
 from neurons.base import ReinforcedNeuron, ScoresBuffer, ReinforcedConfig, ReinforcedError
 
 load_dotenv()

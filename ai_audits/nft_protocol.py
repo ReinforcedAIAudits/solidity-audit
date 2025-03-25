@@ -1,8 +1,8 @@
 import time
+
 from pydantic import Field
-
-from ai_audits.messaging import SignedMessage, KeypairType
-
+from solidity_audit_lib import SignedMessage
+from solidity_audit_lib.messaging import KeypairType
 
 __all__ = ["TimestampedMessage", "MedalRequestsMessage"]
 

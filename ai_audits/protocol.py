@@ -10,8 +10,7 @@ from pydantic import (
     field_validator,
 )
 from pydantic.alias_generators import to_camel, to_snake
-
-from ai_audits.messaging import SignedMessage
+from solidity_audit_lib import SignedMessage
 
 __all__ = [
     "VulnerabilityReport", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType",

@@ -8,8 +8,7 @@ import time
 import uvicorn
 from async_substrate_interface.sync_substrate import Keypair
 from bittensor.utils import networking as net
-
-from ai_audits.subtensor_wrapper import SubtensorWrapper
+from solidity_audit_lib import SubtensorWrapper
 
 __all__ = ["ReinforcedNeuron", "ReinforcedConfig", "ScoresBuffer", "ReinforcedError"]
 
