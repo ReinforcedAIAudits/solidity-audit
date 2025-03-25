@@ -59,7 +59,7 @@ class Miner(ReinforcedNeuron):
         ]
         return vulnerabilities
 
-    def check_blacklist(self, request: SignedMessage) -> tuple[bool, dict | None]:
+    def check_blacklist(self, request: ContractTask) -> tuple[bool, dict | None]:
         if request.ss58_address is None:
             self.log.warning("Received a request without signature.")
             return True, {"name": "NoSignature"}
@@ -67,6 +67,10 @@ class Miner(ReinforcedNeuron):
         if not request.verify():
             self.log.warning("Received a request with bad signature.")
             return True, {"name": "InvalidSignature"}
+
+        if request.uid != self.uid:
+            self.log.error(f"Task is not for this miner. Task uid: {request.uid}, miner uid: {self.uid}")
+            return True, {"name": "NotForThisMiner"}
 
         if (
             request.ss58_address in self._last_call
@@ -96,10 +100,6 @@ class Miner(ReinforcedNeuron):
         is_blacklisted, error = self.check_blacklist(task)
         if is_blacklisted:
             return {"status": "ERROR", "reason": error}
-
-        if task.uid != self.uid:
-            self.log.error(f"Task is not for this miner. Task uid: {task.uid}, miner uid: {self.uid}")
-            return {"status": "ERROR", "reason": "Task is not for this miner"}
 
         self.log.info(f"Task is valid, contract code:\n{task.contract_code}")
         return self.do_audit_code(task.contract_code)
