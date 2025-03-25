@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import time
@@ -5,8 +6,9 @@ import time
 import fastapi
 from substrateinterface import Keypair
 from unique_playgrounds import UniqueHelper
+from unique_playgrounds.types_system import SignParams
 from unique_playgrounds.types_unique import CrossAccountId, Property
-from unique_playgrounds.unique import NFTToken
+from unique_playgrounds.unique import NFTToken, NFTCollection
 
 from ai_audits.messaging import SignedMessage
 from ai_audits.protocol import VulnerabilityReport, ContractTask, ReportMessage
@@ -29,6 +31,8 @@ class Miner(ReinforcedNeuron):
         self.load_website_keys()
         self.set_identity()
         self.collection = self.create_collection()
+        with UniqueHelper(os.getenv("UNIQUE_WS_ENDPOINT", "ws://127.0.0.1:9944")) as helper:
+            self.nonce = helper.call_query("System", "Account", [self.hotkey.ss58_address]).value["nonce"]
 
     def create_collection(self):
         collection = {
@@ -58,10 +62,30 @@ class Miner(ReinforcedNeuron):
                 },
             ],
         }
-        with UniqueHelper(os.getenv('UNIQUE_WS_ENDPOINT', 'ws://127.0.0.1:9944')) as helper:
+        with UniqueHelper(os.getenv("UNIQUE_WS_ENDPOINT", "ws://127.0.0.1:9944")) as helper:
             collection = helper.nft.create_collection(self.hotkey, collection)
 
         return collection
+
+    def mint_token_with_nonce(self, collection_id: str, nonce: int, properties: list[Property]) -> NFTToken:
+        with UniqueHelper(os.getenv("UNIQUE_WS_ENDPOINT", "ws://127.0.0.1:9944")) as helper:
+            async with asyncio.Lock():
+                receipt = helper.execute_extrinsic(
+                    self.hotkey,
+                    "Unique.create_item",
+                    {
+                        "collection_id": collection_id,
+                        "owner": CrossAccountId(Substrate=self.hotkey.ss58_address),
+                        "data": {"NFT": {"properties": [[] if properties is None else properties]}},
+                    },
+                    sign_params=SignParams(nonce=nonce),
+                )
+                nonce += 1
+
+            event = helper.find_event("Common.ItemCreated", receipt["events"])
+
+        collection_id, token_id, owner, collection_type = event["attributes"]
+        return NFTToken(NFTCollection(helper, collection_id), token_id)
 
     def prepare_nft_result(self, reports: list[VulnerabilityReport], validator_hotkey_ss58: str) -> NFTToken:
         properties = [
@@ -71,13 +95,7 @@ class Miner(ReinforcedNeuron):
             Property(key="schemaVersion", value="2.0.0"),
         ]
 
-        with UniqueHelper(self.config.ws_endpoint) as helper:
-            return helper.nft.mint_token(
-                self.hotkey,
-                self.collection.collection_id,
-                owner=CrossAccountId(Substrate=self.hotkey.ss58_address),
-                properties=properties
-            )
+        return self.mint_token_with_nonce(self.collection.collection_id, self.nonce, properties)
 
     def load_website_keys(self):
         try:
