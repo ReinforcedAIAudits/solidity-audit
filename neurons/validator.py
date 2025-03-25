@@ -188,7 +188,7 @@ class Validator(ReinforcedNeuron):
 
     def validate(self):
         miners = self.get_miners()
-        self.log.debug("Miners list received")
+        self.log.info("Miners list received")
         if not miners:
             self.log.warning("No active miners, validator would skip this loop")
             return
