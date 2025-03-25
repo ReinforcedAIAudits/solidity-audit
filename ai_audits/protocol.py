@@ -1,4 +1,5 @@
 from enum import Enum, StrEnum
+
 from pydantic import (
     AliasChoices,
     AliasGenerator,
@@ -12,10 +13,9 @@ from pydantic.alias_generators import to_camel, to_snake
 
 from ai_audits.messaging import SignedMessage
 
-
 __all__ = [
     "VulnerabilityReport", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType",
-    "ContractTask", "ReportMessage", "ResultMessage", "TaskMessage", "OpenAIVulnerabilityReport"
+    "ContractTask", "ReportMessage", "MinerResponseMessage", "TaskMessage", "OpenAIVulnerabilityReport"
 ]
 
 
@@ -158,7 +158,7 @@ class TaskMessage(BaseModel):
     validator_ss58_hotkey: str
 
 
-class ResultMessage(BaseModel):
+class MinerResponseMessage(BaseModel):
     result: ReportMessage
     miner_ss58_hotkey: str
     response_time: float
