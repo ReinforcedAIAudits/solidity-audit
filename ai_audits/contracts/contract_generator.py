@@ -1,18 +1,18 @@
 from openai import BaseModel
+from solc_ast_parser.ast_parser import build_function_header, parse_variable_declaration
+from solc_ast_parser.comments import insert_comments_into_ast
+from solc_ast_parser.enrichment import restore_function_definitions, restore_storages
+from solc_ast_parser.models import ast_models
 from solc_ast_parser.models.ast_models import (
     SourceUnit,
     VariableDeclaration,
     FunctionDefinition,
 )
-from solc_ast_parser.ast_parser import build_function_header, parse_variable_declaration
 from solc_ast_parser.models.base_ast_models import NodeType
-from solc_ast_parser.models import ast_models
 from solc_ast_parser.utils import create_ast_from_source, create_ast_with_standart_input, get_contract_nodes
-from solc_ast_parser.enrichment import restore_function_definitions, restore_storages
-from solc_ast_parser.comments import insert_comments_into_ast
+from solidity_audit_lib.messaging import VulnerabilityReport
 
-
-from ai_audits.protocol import ValidatorTask, VulnerabilityReport, TaskType
+from ai_audits.protocol import ValidatorTask, TaskType
 
 
 def get_contract_nodes_from_source(source: str, node_type: NodeType) -> list[ast_models.ASTNode]:

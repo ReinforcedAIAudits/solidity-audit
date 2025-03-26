@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request, Response, HTTPException
 from pydantic import BaseModel
 from openai import AsyncOpenAI
 from py_solidity_vuln_db import get_vulnerability
+from solidity_audit_lib.messaging import OpenAIVulnerabilityReport, VulnerabilityReport
 
 from ai_audits.contracts.contract_generator import (
     Vulnerability,
@@ -14,8 +15,6 @@ from ai_audits.contracts.contract_generator import (
     extract_storages_functions,
 )
 from ai_audits.protocol import (
-    OpenAIVulnerabilityReport,
-    VulnerabilityReport,
     ValidatorTask,
     KnownVulnerability,
     SmartContract,

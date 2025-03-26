@@ -1,6 +1,8 @@
 import unittest
 
-from ai_audits.protocol import VulnerabilityReport, ValidatorTask, TaskType
+from solidity_audit_lib.messaging import VulnerabilityReport
+
+from ai_audits.protocol import ValidatorTask, TaskType
 from neurons.validator import Validator, MinerResult, MinerInfo
 
 DEFAULT_FIELDS = {"from": 1, "to": 1}

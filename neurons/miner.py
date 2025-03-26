@@ -2,9 +2,8 @@ import os
 import time
 
 import fastapi
+from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask
 
-from ai_audits.messaging import SignedMessage
-from ai_audits.protocol import VulnerabilityReport, ContractTask
 from ai_audits.subnet_utils import create_session
 from neurons.base import ReinforcedNeuron, ReinforcedConfig
 

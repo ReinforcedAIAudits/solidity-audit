@@ -1,15 +1,14 @@
-import json
 import hashlib
+import json
 import logging
 import os
-import time
 import random
 import re
+import time
 
 import dotenv
 from fastapi import FastAPI, Request
-
-from ai_audits.protocol import VulnerabilityReport
+from solidity_audit_lib.messaging import VulnerabilityReport
 
 app = FastAPI()
 
