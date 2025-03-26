@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from random import choices
 
 import requests
+from bittensor_wallet import Keypair
 from dotenv import load_dotenv
 from solidity_audit_lib import SubtensorWrapper
 from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask
@@ -83,7 +84,6 @@ class Validator(ReinforcedNeuron):
             raise ValueError("Unable to receive task from MODEL_SERVER!")
 
         json = result.json()
-        self.log.debug("Task received from model server.")
         self.log.info(f"Response from model server: {json}")
         task = ValidatorTask(task_type=task_type, **json)
         return task
@@ -104,22 +104,28 @@ class Validator(ReinforcedNeuron):
                     return None
         return None
 
+    def remove_dead_miners(self, miners: list[MinerInfo]) -> list[MinerInfo]:
+        to_check = [(x.uid, x.ip, x.port) for x in miners]
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(self.is_miner_alive, *args) for args in to_check]
+            results = [future.result() for future in futures]
+        valid_miner_uids = [uid for uid, is_valid in results if is_valid]
+        self.log.info(f"Active miner uids: {valid_miner_uids}")
+        return [x for x in miners if x.uid in valid_miner_uids]
+
+
     def get_miners_raw(self) -> list[MinerInfo]:
         axons = [
             MinerInfo(uid=uid, hotkey=axon["hotkey"], ip=axon["info"]["ip"], port=axon["info"]["port"])
             for uid, axon in enumerate(self.get_axons())
         ]
         axons = [x for x in axons if x.hotkey != self.hotkey.ss58_address]
-        to_check = [(x.uid, x.ip, x.port) for x in axons]
-        with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(self.is_miner_alive, *args) for args in to_check]
-            results = [future.result() for future in futures]
-        valid_miner_uids = [uid for uid, is_valid in results if is_valid]
-        self.log.info(f"Active miner uids: {valid_miner_uids}")
-        return [x for x in axons if x.uid in valid_miner_uids]
+        return self.remove_dead_miners(axons)
 
     def get_miners_from_relayer(self) -> list[MinerInfo]:
-        return []
+        relayer_client = RelayerClient(relayer_url=os.getenv("RELAYER_URL"), network_id=1, subnet_uid=self.config.net_uid) # TODO network_id
+        miners = [MinerInfo(**miner) for miner in relayer_client.get_miners(Keypair.create_from_private_key(self.coldkey))]
+        return self.remove_dead_miners(miners)
 
     def get_miners(self) -> list[MinerInfo]:
         if self.mode == self.MODE_RAW:
@@ -158,7 +164,6 @@ class Validator(ReinforcedNeuron):
 
         except Exception as e:
             self.log.info(f"Error asking miner {miner.uid} ({miner.ip}:{miner.port}): {e}")
-        self.log.debug(f"Miner {miner.uid} successfully processed in {abs(time.time() - start_time)} seconds")
         return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=response.report)
 
     def ask_miners_raw(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
@@ -169,7 +174,20 @@ class Validator(ReinforcedNeuron):
         return results
 
     def ask_miners_relay(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
-        return []
+        relayer_client = RelayerClient(relayer_url=os.getenv("RELAYER_URL"), network_id=1, subnet_uid=self.config.net_uid) # TODO network_id
+        results = []
+        for miner in miners:
+            start = time.time()
+            result = relayer_client.perform_audit(Keypair.create_from_private_key(self.coldkey), miner.uid, task.contract_code)
+            end = time.time()
+            if not result["success"]:
+                self.log.error(f"Error asking miner {miner.uid}: {result['error']}")
+                results.append(MinerResult(uid=miner.uid, time=abs(end - start), response=None))
+            else:
+                response = ReportMessage(**result)
+                results.append(MinerResult(uid=miner.uid, time=abs(end - start), response=response.report))
+
+        return results
 
     def ask_miners(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
         if self.mode == self.MODE_RAW:
@@ -195,19 +213,16 @@ class Validator(ReinforcedNeuron):
 
     def validate(self):
         miners = self.get_miners()
-        self.log.info("Miners list received")
         if not miners:
             self.log.warning("No active miners, validator would skip this loop")
             return
         task = self.try_get_task()
-        self.log.info("Task for miners received")
         if task is None:
             self.log.error("Unable to get task. Check your settings")
             raise ReinforcedError("Unable to get task")
-        self.log.debug(f"Validator task:\n{task}")
+        self.log.info(f"Validator task:\n{task}")
         responses = self.ask_miners(miners, task)
         responses = [self.remove_suggestions(x) for x in responses]
-        self.log.info("Miners responses received")
 
         rewards = self.validate_responses(responses, task, miners)
 
