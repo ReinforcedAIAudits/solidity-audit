@@ -1,22 +1,19 @@
 from enum import Enum, StrEnum
+
 from pydantic import (
-    AliasChoices,
-    AliasGenerator,
     BaseModel,
-    ConfigDict,
     Field,
     constr,
     field_validator,
 )
-from pydantic.alias_generators import to_camel, to_snake
-
-from ai_audits.messaging import SignedMessage
-
+from solidity_audit_lib import SignedMessage
 
 __all__ = [
     "VulnerabilityReport", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType",
-    "ContractTask", "ReportMessage", "ResultMessage", "TaskMessage", "OpenAIVulnerabilityReport"
+    "ContractTask", "ReportMessage", "MinerResponseMessage", "TaskMessage", "OpenAIVulnerabilityReport"
 ]
+
+from solidity_audit_lib.messaging import VulnerabilityReport, AuditBase, ContractTask
 
 
 class KnownVulnerability(str, Enum):
@@ -56,74 +53,6 @@ class VulnerabilityClass(BaseModel):
             return OtherVulnerability(description=v)
         return v
 
-
-class AuditBase(BaseModel):
-    model_config = ConfigDict(
-        alias_generator=AliasGenerator(
-            validation_alias=lambda field_name: AliasChoices(
-                to_camel(field_name),
-                to_snake(field_name),
-            ),
-            serialization_alias=to_camel,
-        )
-    )
-    from_line: int = Field(
-        ...,
-        title="From Line",
-        description="The starting line number of the vulnerability in the source code. The line numbers start from one.",
-        serialization_alias="from",
-        validation_alias=AliasChoices("from", "from_line", "fromLine"),
-    )
-    to_line: int = Field(
-        ...,
-        title="To Line",
-        description="The ending line number of the vulnerability in the source code (inclusive).",
-        serialization_alias="to",
-        validation_alias=AliasChoices("to", "to_line", "toLine"),
-    )
-    vulnerability_class: str = Field(
-        ...,
-        title="Vulnerability Class",
-        description="The category of the vulnerability. "
-        "E.g. Reentrancy, Bad randomness, Forced reception, Integer overflow, Race condition, "
-        "Unchecked call, Gas griefing, Unguarded function, Invalid Code, et cetera.",
-    )
-
-    # @field_validator("vulnerability_class", mode="before")
-    # def validate_vulnerability_class(cls, v):
-    #     if isinstance(v, str):
-    #         if v not in KnownVulnerability._value2member_map_:
-    #             return VulnerabilityClass(type=OtherVulnerability(description=v))
-    #         return VulnerabilityClass(type=KnownVulnerability(v))
-    #     return v
-
-
-class OpenAIVulnerabilityReport(AuditBase):
-    test_case: str | None = Field(
-        None,
-        title="Test Case",
-        description="A code example that exploits the vulnerability.",
-    )
-    description: str | None = Field(
-        None,
-        title="Description",
-        description="Human-readable vulnerability description, in markdown",
-    )
-    prior_art: list[str] = Field(
-        default_factory=list,
-        title="Prior Art",
-        description="Similar vulnerabilities encountered in wild before",
-    )
-    fixed_lines: str | None = Field(
-        None,
-        title="Fixed Lines",
-        description="Fixed version of the original source.",
-    )
-
-class VulnerabilityReport(OpenAIVulnerabilityReport):
-    is_suggestion: bool = Field(False, title="Is Suggestion", description="Whether the fix is a suggestion or not")
-
-
 class SmartContract(BaseModel):
     code: str = Field(..., title="Code", description="Solidity code of the contract")
 
@@ -137,11 +66,6 @@ class TaskType(StrEnum):
 class ValidatorTask(AuditBase):
     contract_code: str = Field(..., title="Contract code", description="Code of vulnerable contract")
     task_type: str | None = Field(default=None, title="Task type", description="Type of validator task")
-
-
-class ContractTask(SignedMessage):
-    uid: int
-    contract_code: str
 
 
 class ReportMessage(SignedMessage):
@@ -158,7 +82,7 @@ class TaskMessage(BaseModel):
     validator_ss58_hotkey: str
 
 
-class ResultMessage(BaseModel):
+class MinerResponseMessage(BaseModel):
     result: ReportMessage
     miner_ss58_hotkey: str
     response_time: float

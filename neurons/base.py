@@ -5,12 +5,10 @@ import os
 import sys
 import time
 
+import uvicorn
 from async_substrate_interface.sync_substrate import Keypair
 from bittensor.utils import networking as net
-import uvicorn
-
-from ai_audits.subtensor_wrapper import SubtensorWrapper
-
+from solidity_audit_lib import SubtensorWrapper
 
 __all__ = ["ReinforcedNeuron", "ReinforcedConfig", "ScoresBuffer", "ReinforcedError"]
 
@@ -131,6 +129,7 @@ class ReinforcedNeuron:
             with SubtensorWrapper(self.config.ws_endpoint) as client:
                 self._axons_cache = client.get_axons(self.config.net_uid)
             self._axons_cache_time = now
+            self.log.debug("Axons cache updated")
         return self._axons_cache
 
     def set_identity(self):
@@ -139,6 +138,7 @@ class ReinforcedNeuron:
             return
         with SubtensorWrapper(self.config.ws_endpoint) as client:
             client.set_identity(self.coldkey, self.NEURON_TYPE, description)
+        self.log.debug(f"Identity set for coldkey {self.coldkey.ss58_address}")
 
     def get_current_uid(self):
         with SubtensorWrapper(self.config.ws_endpoint) as client:
@@ -158,6 +158,7 @@ class ReinforcedNeuron:
             self.log.error(
                 f'Axon for hotkey {self.hotkey.ss58_address} not registered in net uid: {self.config.net_uid}'
             )
+            self.log.debug(f"Axon with hotkey {self.hotkey.ss58_address} not found")
             raise ReinforcedError('Axon not registered')
 
     def serve_axon(self):

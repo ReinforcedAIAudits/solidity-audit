@@ -12,3 +12,4 @@ hypothesis==6.124.9
 solidity-vulnerabilities-db<1
 websocket-client==1.8.0
 async-substrate-interface>=1.0.0
+-e git+https://github.com/ReinforcedAIAudits/lib.git#egg=solidity_audit_lib
