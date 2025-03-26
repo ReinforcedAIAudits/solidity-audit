@@ -11,6 +11,7 @@ from unique_playgrounds.types_system import SignParams
 from unique_playgrounds.unique import NFTToken
 from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask
 
+from ai_audits.protocol import ReportMessage
 from ai_audits.subnet_utils import create_session
 from neurons.base import ReinforcedNeuron, ReinforcedConfig
 
