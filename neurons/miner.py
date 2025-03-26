@@ -4,14 +4,13 @@ import os
 import time
 
 import fastapi
-from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask
+from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask, MinerResponseMessage
 from substrateinterface import Keypair
 from unique_playgrounds import UniqueHelper
 from unique_playgrounds.types_system import SignParams
 from unique_playgrounds.types_unique import CrossAccountId, Property
 from unique_playgrounds.unique import NFTToken, NFTCollection
 
-from ai_audits.protocol import ReportMessage
 from ai_audits.subnet_utils import create_session
 from neurons.base import ReinforcedNeuron, ReinforcedConfig
 
@@ -180,15 +179,15 @@ class Miner(ReinforcedNeuron):
         self.log.info(f"Created audit reports: {reports}")
         nft_token = self.prepare_nft_result(reports, task.ss58_address)
         self.log.info(f"Token minted: {nft_token}")
-        message = ReportMessage(
+        message = MinerResponseMessage(
             collection_id=self.collection.collection_id,
             token_id=nft_token.token_id,
             report=reports,
+            uid=task.uid,
         )
         message.sign(Keypair(ss58_address=self.hotkey.ss58_address))
 
         return message
-
 
 app = fastapi.FastAPI()
 

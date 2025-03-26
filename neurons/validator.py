@@ -11,12 +11,12 @@ import requests
 from bittensor_wallet import Keypair
 from dotenv import load_dotenv
 from solidity_audit_lib import SubtensorWrapper
-from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask
+from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask, MinerResponseMessage
 from solidity_audit_lib.relayer_client.client import RelayerClient
 from unique_playgrounds import UniqueHelper
 
 from ai_audits.nft_protocol import MedalRequestsMessage
-from ai_audits.protocol import ValidatorTask, TaskType, ReportMessage
+from ai_audits.protocol import ValidatorTask, TaskType
 from ai_audits.subnet_utils import create_session, is_synonyms, get_invalid_code
 from neurons.base import ReinforcedNeuron, ScoresBuffer, ReinforcedConfig, ReinforcedError
 
@@ -140,6 +140,11 @@ class Validator(ReinforcedNeuron):
             self.log.info(f"Error checking uid {uid}: {e}")
             return uid, False
 
+    def check_token(self, response: MinerResponseMessage) -> bool:
+        with UniqueHelper(os.getenv('UNIQUE_WS_ENDPOINT', 'ws://127.0.0.1:9944')) as helper:
+            token = helper.nft.get_token_info(response.collection_id, response.token_id)
+            return token is not None
+
     def ask_miner(self, miner: MinerInfo, task: ValidatorTask) -> MinerResult:
         start_time = time.time()
         response = None
@@ -154,13 +159,11 @@ class Validator(ReinforcedNeuron):
                 f"http://{miner.ip}:{miner.port}/forward", json=task_json, timeout=self.MINER_RESPONSE_TIMEOUT
             ).json()
 
-            response: ReportMessage = ReportMessage(**result)
+            response: MinerResponseMessage = MinerResponseMessage(**result)
 
-            with UniqueHelper(os.getenv('UNIQUE_WS_ENDPOINT', 'ws://127.0.0.1:9944')) as helper:
-                token = helper.nft.get_token_info(response.collection_id, response.token_id)
-                if token is None:
-                    self.log.error(f"Could not get token for miner {miner.uid}")
-                    return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=None)
+            if not self.check_token(response):
+                self.log.error(f"Token is not minted for uid {miner.uid}")
+                return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=None)
 
         except Exception as e:
             self.log.info(f"Error asking miner {miner.uid} ({miner.ip}:{miner.port}): {e}")
@@ -176,16 +179,30 @@ class Validator(ReinforcedNeuron):
     def ask_miners_relay(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
         relayer_client = RelayerClient(relayer_url=os.getenv("RELAYER_URL"), network_id=1, subnet_uid=self.config.net_uid) # TODO network_id
         results = []
+
         for miner in miners:
-            start = time.time()
+            start_time = time.time()
             result = relayer_client.perform_audit(Keypair.create_from_private_key(self.coldkey), miner.uid, task.contract_code)
-            end = time.time()
-            if not result["success"]:
-                self.log.error(f"Error asking miner {miner.uid}: {result['error']}")
-                results.append(MinerResult(uid=miner.uid, time=abs(end - start), response=None))
-            else:
-                response = ReportMessage(**result)
-                results.append(MinerResult(uid=miner.uid, time=abs(end - start), response=response.report))
+            elapsed_time = time.time() - start_time
+
+            if not result["result"]:
+                self.log.error(f"Error asking miner {miner.uid}")
+                results.append(MinerResult(uid=miner.uid, time=elapsed_time, response=None))
+                continue
+
+            response = MinerResponseMessage(**result["result"])
+
+            if not response.verify():
+                self.log.error(f"Response from miner {miner.uid} has incorrect signature")
+                results.append(MinerResult(uid=miner.uid, time=elapsed_time, response=None))
+                continue
+
+            if not self.check_token(response):
+                self.log.error(f"Token is not minted for uid {miner.uid}")
+                results.append(MinerResult(uid=miner.uid, time=elapsed_time, response=None))
+                continue
+
+            results.append(MinerResult(uid=miner.uid, time=elapsed_time, response=response.report))
 
         return results
 

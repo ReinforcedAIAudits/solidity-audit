@@ -1,10 +1,7 @@
 from enum import Enum, StrEnum
 
 from pydantic import (
-    AliasChoices,
-    AliasGenerator,
     BaseModel,
-    ConfigDict,
     Field,
     constr,
     field_validator,
@@ -13,7 +10,7 @@ from solidity_audit_lib import SignedMessage
 
 __all__ = [
     "VulnerabilityReport", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType",
-    "ContractTask", "ReportMessage", "MinerResponseMessage", "TaskMessage", "OpenAIVulnerabilityReport"
+    "ContractTask", "ReportMessage", "TaskMessage"
 ]
 
 from solidity_audit_lib.messaging import VulnerabilityReport, AuditBase, ContractTask
@@ -85,9 +82,3 @@ class RelayerContainer(SignedMessage):
 class TaskMessage(BaseModel):
     code: ContractTask
     validator_ss58_hotkey: str
-
-
-class MinerResponseMessage(BaseModel):
-    result: ReportMessage
-    miner_ss58_hotkey: str
-    response_time: float
