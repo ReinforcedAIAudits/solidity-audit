@@ -11,6 +11,7 @@ import requests
 from bittensor_wallet import Keypair
 from dotenv import load_dotenv
 from solidity_audit_lib import SubtensorWrapper
+from solidity_audit_lib.encrypting import decrypt
 from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask, MinerResponseMessage
 from solidity_audit_lib.relayer_client.client import RelayerClient
 from unique_playgrounds import UniqueHelper
@@ -113,7 +114,6 @@ class Validator(ReinforcedNeuron):
         self.log.info(f"Active miner uids: {valid_miner_uids}")
         return [x for x in miners if x.uid in valid_miner_uids]
 
-
     def get_miners_raw(self) -> list[MinerInfo]:
         axons = [
             MinerInfo(uid=uid, hotkey=axon["hotkey"], ip=axon["info"]["ip"], port=axon["info"]["port"])
@@ -123,8 +123,12 @@ class Validator(ReinforcedNeuron):
         return self.remove_dead_miners(axons)
 
     def get_miners_from_relayer(self) -> list[MinerInfo]:
-        relayer_client = RelayerClient(relayer_url=os.getenv("RELAYER_URL"), network_id=1, subnet_uid=self.config.net_uid) # TODO network_id
-        miners = [MinerInfo(**miner) for miner in relayer_client.get_miners(Keypair.create_from_private_key(self.coldkey))]
+        relayer_client = RelayerClient(
+            relayer_url=os.getenv("RELAYER_URL"), network_id=1, subnet_uid=self.config.net_uid
+        )  # TODO network_id
+        miners = [
+            MinerInfo(**miner) for miner in relayer_client.get_miners(Keypair.create_from_private_key(self.coldkey))
+        ]
         return self.remove_dead_miners(miners)
 
     def get_miners(self) -> list[MinerInfo]:
@@ -140,10 +144,43 @@ class Validator(ReinforcedNeuron):
             self.log.info(f"Error checking uid {uid}: {e}")
             return uid, False
 
+    def check_collection(self, response: MinerResponseMessage) -> bool:
+        with UniqueHelper(os.getenv("UNIQUE_WS_ENDPOINT", "ws://127.0.0.1:9944")) as helper:
+            collection = helper.nft.get_collection_info(response.collection_id)
+
+        if not collection:
+            self.log.error(f"Collection {response.collection_id} for miner {response.ss58_address} not found")
+            return False
+
+        if collection.owner != response.ss58_address:
+            self.log.error(f"Collection {response.collection_id} for miner {response.ss58_address} is not owned by him")
+            return False
+
+        return True
+
     def check_token(self, response: MinerResponseMessage) -> bool:
-        with UniqueHelper(os.getenv('UNIQUE_WS_ENDPOINT', 'ws://127.0.0.1:9944')) as helper:
+        with UniqueHelper(os.getenv("UNIQUE_WS_ENDPOINT", "ws://127.0.0.1:9944")) as helper:
             token = helper.nft.get_token_info(response.collection_id, response.token_id)
-            return token is not None
+
+        if not token:
+            self.log.error(f"Token {response.token_id} for miner {response.ss58_address} not found")
+            return False
+
+        reports_in_nft = [
+            VulnerabilityReport(**report)
+            for report in json.loads(
+                decrypt(
+                    token.properties.get("tokenData", []),
+                    Keypair(ss58_address=self.hotkey.ss58_address),
+                    response.ss58_address,
+                )
+            )
+        ]
+        if set(reports_in_nft) != set(response.report):
+            self.log.error(f"Token {response.token_id} for miner {response.ss58_address} has incorrect data")
+            return False
+
+        return True
 
     def ask_miner(self, miner: MinerInfo, task: ValidatorTask) -> MinerResult:
         start_time = time.time()
@@ -161,6 +198,10 @@ class Validator(ReinforcedNeuron):
 
             response: MinerResponseMessage = MinerResponseMessage(**result)
 
+            if not self.check_collection(response):
+                self.log.error(f"Collection is not minted for uid {miner.uid}")
+                return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=None)
+
             if not self.check_token(response):
                 self.log.error(f"Token is not minted for uid {miner.uid}")
                 return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=None)
@@ -177,20 +218,24 @@ class Validator(ReinforcedNeuron):
         return results
 
     def ask_miners_relay(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
-        relayer_client = RelayerClient(relayer_url=os.getenv("RELAYER_URL"), network_id=1, subnet_uid=self.config.net_uid) # TODO network_id
+        relayer_client = RelayerClient(
+            relayer_url=os.getenv("RELAYER_URL"), network_id=1, subnet_uid=self.config.net_uid
+        )  # TODO network_id
         results = []
 
         for miner in miners:
             start_time = time.time()
-            result = relayer_client.perform_audit(Keypair.create_from_private_key(self.coldkey), miner.uid, task.contract_code)
+            result = relayer_client.perform_audit(
+                Keypair.create_from_private_key(self.coldkey), miner.uid, task.contract_code
+            )
             elapsed_time = time.time() - start_time
 
-            if not result["result"]:
-                self.log.error(f"Error asking miner {miner.uid}")
+            if not result.success:
+                self.log.error(f"Error asking miner {miner.uid}: {result.error}")
                 results.append(MinerResult(uid=miner.uid, time=elapsed_time, response=None))
                 continue
 
-            response = MinerResponseMessage(**result["result"])
+            response = MinerResponseMessage(**result.result)
 
             if not response.verify():
                 self.log.error(f"Response from miner {miner.uid} has incorrect signature")

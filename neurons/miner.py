@@ -4,6 +4,7 @@ import os
 import time
 
 import fastapi
+from solidity_audit_lib.encrypting import encrypt
 from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask, MinerResponseMessage
 from substrateinterface import Keypair
 from unique_playgrounds import UniqueHelper
@@ -89,7 +90,14 @@ class Miner(ReinforcedNeuron):
     def prepare_nft_result(self, reports: list[VulnerabilityReport], validator_hotkey_ss58: str) -> NFTToken:
         properties = [
             Property(key="validator", value=validator_hotkey_ss58),
-            Property(key="tokenData", value=json.dumps([report.model_dump() for report in reports])),
+            Property(
+                key="tokenData",
+                value=encrypt(
+                    json.dumps([report.model_dump() for report in reports if not report.is_suggestion]),
+                    Keypair(ss58_address=self.hotkey.ss58_address),
+                    validator_hotkey_ss58,
+                ),
+            ),
             Property(key="schemaName", value="unique"),
             Property(key="schemaVersion", value="2.0.0"),
         ]
@@ -188,6 +196,7 @@ class Miner(ReinforcedNeuron):
         message.sign(Keypair(ss58_address=self.hotkey.ss58_address))
 
         return message
+
 
 app = fastapi.FastAPI()
 
