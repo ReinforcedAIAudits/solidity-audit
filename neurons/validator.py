@@ -10,11 +10,12 @@ from random import choices
 import requests
 from dotenv import load_dotenv
 from unique_playgrounds import UniqueHelper
+from solidity_audit_lib import SubtensorWrapper
+from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask
 
 from ai_audits.nft_protocol import MedalRequestsMessage
-from ai_audits.protocol import VulnerabilityReport, ValidatorTask, TaskType, ContractTask, ReportMessage
+from ai_audits.protocol import ValidatorTask, TaskType
 from ai_audits.subnet_utils import create_session, is_synonyms, get_invalid_code
-from ai_audits.subtensor_wrapper import SubtensorWrapper
 from neurons.base import ReinforcedNeuron, ScoresBuffer, ReinforcedConfig, ReinforcedError
 
 load_dotenv()
@@ -81,6 +82,7 @@ class Validator(ReinforcedNeuron):
             raise ValueError("Unable to receive task from MODEL_SERVER!")
 
         json = result.json()
+        self.log.debug("Task received from model server.")
         self.log.info(f"Response from model server: {json}")
         task = ValidatorTask(task_type=task_type, **json)
         return task
@@ -99,6 +101,7 @@ class Validator(ReinforcedNeuron):
                 else:
                     self.log.error("Max retries reached. Unable to get audit task.")
                     return None
+        return None
 
     def get_miners_raw(self) -> list[MinerInfo]:
         axons = [
@@ -154,6 +157,7 @@ class Validator(ReinforcedNeuron):
 
         except Exception as e:
             self.log.info(f"Error asking miner {miner.uid} ({miner.ip}:{miner.port}): {e}")
+        self.log.debug(f"Miner {miner.uid} successfully processed in {abs(time.time() - start_time)} seconds")
         return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=response.report)
 
     def ask_miners_raw(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
@@ -190,16 +194,19 @@ class Validator(ReinforcedNeuron):
 
     def validate(self):
         miners = self.get_miners()
+        self.log.info("Miners list received")
         if not miners:
             self.log.warning("No active miners, validator would skip this loop")
             return
         task = self.try_get_task()
+        self.log.info("Task for miners received")
         if task is None:
             self.log.error("Unable to get task. Check your settings")
             raise ReinforcedError("Unable to get task")
-        self.log.info(f"Validator task:\n{task}")
+        self.log.debug(f"Validator task:\n{task}")
         responses = self.ask_miners(miners, task)
         responses = [self.remove_suggestions(x) for x in responses]
+        self.log.info("Miners responses received")
 
         rewards = self.validate_responses(responses, task, miners)
 
