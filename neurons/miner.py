@@ -8,6 +8,7 @@ from solidity_audit_lib.encrypting import encrypt
 from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask, MinerResponseMessage, MinerResponse
 from solidity_audit_lib.relayer_client.relayer_types import MinerStorage
 from unique_playgrounds import UniqueHelper
+from unique_playgrounds.types_system import SignParams
 from unique_playgrounds.types_unique import CrossAccountId, Property
 
 from ai_audits.subnet_utils import create_session
@@ -70,7 +71,7 @@ class Miner(ReinforcedNeuron):
                         "owner": CrossAccountId(Substrate=self.hotkey.ss58_address),
                         "data": {"NFT": {"properties": [[] if properties is None else properties]}},
                     },
-                    sign_params={'nonce': self.nonce, 'era': None},
+                    sign_params=SignParams(nonce=self.nonce, era=None),
                 )
                 self.nonce += 1
 
@@ -86,7 +87,7 @@ class Miner(ReinforcedNeuron):
                 key="audit",
                 value=encrypt(
                     json.dumps([report.model_dump() for report in reports if not report.is_suggestion]),
-                    self.hotkey,
+                    self.crypto_hotkey,
                     validator_hotkey_ss58,
                 ),
             )

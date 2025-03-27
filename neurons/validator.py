@@ -44,6 +44,7 @@ class MinerResult:
 class Validator(ReinforcedNeuron):
     MODE_RAW = "raw"
     MODE_RELAYER = "relayer"
+    NEURON_TYPE = 'validator'
 
     WEIGHT_TIME = 0.1
     WEIGHT_ONLY_SCORE = 0.9
@@ -152,7 +153,7 @@ class Validator(ReinforcedNeuron):
             for report in json.loads(
                 decrypt(
                     token.properties.get("audit", ""),
-                    self.hotkey,
+                    self.crypto_hotkey,
                     response.ss58_address,
                 )
             )
@@ -201,38 +202,37 @@ class Validator(ReinforcedNeuron):
             results = [future.result() for future in futures]
         return results
 
+    def ask_miner_relay(self, miner: MinerInfo, task: ValidatorTask) -> MinerResult:
+        start_time = time.time()
+        result = self.relayer_client.perform_audit(self.hotkey, miner.uid, task.contract_code)
+        elapsed_time = time.time() - start_time
+
+        if not result.success:
+            self.log.error(f"Error asking miner {miner.uid}: {result.error}")
+            return MinerResult(uid=miner.uid, time=elapsed_time, response=None)
+
+        response = result.result
+
+        if not response.verify():
+            self.log.error(f"Response from miner {miner.uid} has incorrect signature")
+            return MinerResult(uid=miner.uid, time=elapsed_time, response=None)
+
+        if not self.check_nft_collection_ownership(response.result.collection_id, response.ss58_address):
+            self.log.error(f"Collection is not minted for uid {miner.uid}")
+            return MinerResult(uid=miner.uid, time=elapsed_time, response=None)
+
+        if not self.check_token(response):
+            self.log.error(f"Token is not minted for uid {miner.uid}")
+            return MinerResult(uid=miner.uid, time=elapsed_time, response=None)
+
+        return MinerResult(uid=miner.uid, time=elapsed_time, response=response.report)
+
+
     def ask_miners_relay(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
-        results = []
-
-        for miner in miners:
-            start_time = time.time()
-            result = self.relayer_client.perform_audit(self.hotkey, miner.uid, task.contract_code)
-            elapsed_time = time.time() - start_time
-
-            if not result.success:
-                self.log.error(f"Error asking miner {miner.uid}: {result.error}")
-                results.append(MinerResult(uid=miner.uid, time=elapsed_time, response=None))
-                continue
-
-            response = result.result
-
-            if not response.verify():
-                self.log.error(f"Response from miner {miner.uid} has incorrect signature")
-                results.append(MinerResult(uid=miner.uid, time=elapsed_time, response=None))
-                continue
-
-            if not self.check_nft_collection_ownership(response.result.collection_id, response.ss58_address):
-                self.log.error(f"Collection is not minted for uid {miner.uid}")
-                results.append(MinerResult(uid=miner.uid, time=elapsed_time, response=None))
-                continue
-
-            if not self.check_token(response):
-                self.log.error(f"Token is not minted for uid {miner.uid}")
-                results.append(MinerResult(uid=miner.uid, time=elapsed_time, response=None))
-                continue
-
-            results.append(MinerResult(uid=miner.uid, time=elapsed_time, response=response.report))
-
+        to_check = [(x, task) for x in miners]
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(self.ask_miner_relay, *args) for args in to_check]
+            results = [future.result() for future in futures]
         return results
 
     def ask_miners(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:

@@ -10,6 +10,7 @@ from async_substrate_interface.sync_substrate import Keypair
 from bittensor.utils import networking as net
 from solidity_audit_lib import SubtensorWrapper
 from solidity_audit_lib.relayer_client.client import RelayerClient
+from substrateinterface import Keypair as CryptoKeypair
 
 __all__ = ["ReinforcedNeuron", "ReinforcedConfig", "ScoresBuffer", "ReinforcedError"]
 
@@ -124,6 +125,7 @@ class ReinforcedNeuron:
         self.log = logging.getLogger(f'reinforced.{self.NEURON_TYPE}')
         self.config = config
         self.hotkey = Keypair.create_from_uri(os.getenv('MNEMONIC_HOTKEY', '//Alice'))
+        self.crypto_hotkey = CryptoKeypair.create_from_uri(os.getenv('MNEMONIC_HOTKEY', '//Alice'))
         self.coldkey = Keypair.create_from_uri(os.getenv('MNEMONIC_COLDKEY', '//Alice'))
         self._axons_cache = None
         self._axons_cache_time = 0
