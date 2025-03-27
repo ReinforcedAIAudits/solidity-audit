@@ -13,4 +13,4 @@ solidity-vulnerabilities-db<1
 websocket-client==1.8.0
 async-substrate-interface>=1.0.0
 unique-playgrounds-py==0.0.1
--e git+https://github.com/ReinforcedAIAudits/lib.git#egg=solidity_audit_lib
+solidity_audit_lib @ git+https://github.com/ReinforcedAIAudits/lib.git

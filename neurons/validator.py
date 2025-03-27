@@ -56,6 +56,8 @@ class Validator(ReinforcedNeuron):
 
     def __init__(self, config: ReinforcedConfig):
         super().__init__(config)
+        self.ip = "0.0.0.0"
+        self.port = 1
         self._last_validation = 0
         self._validator_time_min = (
             int(os.getenv("VALIDATOR_TIME"))
@@ -123,7 +125,7 @@ class Validator(ReinforcedNeuron):
 
     def get_miners_from_relayer(self) -> list[MinerInfo]:
         miners = [
-            MinerInfo(**miner.model_dump()) for miner in self.relayer_client.get_miners(self.hotkey)
+            MinerInfo(uid=miner.uid, hotkey=miner.hotkey, ip=miner.ip, port=miner.port) for miner in self.relayer_client.get_miners(self.hotkey)
         ]
         return miners
 
@@ -147,18 +149,16 @@ class Validator(ReinforcedNeuron):
         if not token:
             self.log.error(f"Token {response.token_id} for miner {response.ss58_address} not found")
             return False
-
-        reports_in_nft = [
-            VulnerabilityReport(**report)
-            for report in json.loads(
+        properties = {x["key"]: x["value"] for x in token["properties"]}
+        reports_in_nft = json.loads(
                 decrypt(
-                    token.properties.get("audit", ""),
+                    properties.get("audit", "")[2:],
                     self.crypto_hotkey,
                     response.ss58_address,
                 )
             )
-        ]
-        if set(reports_in_nft) != set(response.report):
+        response_reports = {x.vulnerability_class for x in response.report if not x.is_suggestion}
+        if set(reports_in_nft) != response_reports:
             self.log.error(f"Token {response.token_id} for miner {response.ss58_address} has incorrect data")
             return False
 
@@ -204,7 +204,12 @@ class Validator(ReinforcedNeuron):
 
     def ask_miner_relay(self, miner: MinerInfo, task: ValidatorTask) -> MinerResult:
         start_time = time.time()
-        result = self.relayer_client.perform_audit(self.hotkey, miner.uid, task.contract_code)
+        try:
+            result = self.relayer_client.perform_audit(self.hotkey, miner.uid, task.contract_code)
+        except Exception as e:
+            self.log.error(f"Error performing audit {miner.uid}: {e}")
+            return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=None)
+
         elapsed_time = time.time() - start_time
 
         if not result.success:
@@ -217,7 +222,7 @@ class Validator(ReinforcedNeuron):
             self.log.error(f"Response from miner {miner.uid} has incorrect signature")
             return MinerResult(uid=miner.uid, time=elapsed_time, response=None)
 
-        if not self.check_nft_collection_ownership(response.result.collection_id, response.ss58_address):
+        if not self.check_nft_collection_ownership(response.collection_id, response.ss58_address):
             self.log.error(f"Collection is not minted for uid {miner.uid}")
             return MinerResult(uid=miner.uid, time=elapsed_time, response=None)
 
@@ -439,7 +444,7 @@ class Validator(ReinforcedNeuron):
         self.log.info("Saving validator state.")
 
         self.relayer_client.set_storage(self.hotkey, ValidatorStorage(
-            last_validation=self._last_validation,
+            last_validation=int(self._last_validation),
             scores=self._buffer_scores.dump(),
             hotkeys={str(k): v for k, v in self.hotkeys.items()}
         ))

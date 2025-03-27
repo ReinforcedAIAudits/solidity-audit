@@ -60,7 +60,7 @@ class Miner(ReinforcedNeuron):
         self.relayer_client.set_storage(self.hotkey, MinerStorage(collection_id=collection_id))
         return collection_id
 
-    def mint_token_with_nonce(self, collection_id: int, properties: list[Property]) -> tuple[int, int]:
+    async def mint_token_with_nonce(self, collection_id: int, properties: list[Property]) -> tuple[int, int]:
         with UniqueHelper(self.settings.unique_endpoint) as helper:
             async with asyncio.Lock():
                 receipt = helper.execute_extrinsic(
@@ -80,20 +80,20 @@ class Miner(ReinforcedNeuron):
         collection_id, token_id, owner, collection_type = event["attributes"]
         return collection_id, token_id
 
-    def prepare_nft_result(self, reports: list[VulnerabilityReport], validator_hotkey_ss58: str) -> tuple[int, int]:
+    async def prepare_nft_result(self, reports: list[VulnerabilityReport], validator_hotkey_ss58: str) -> tuple[int, int]:
         properties = [
             Property(key="validator", value=validator_hotkey_ss58),
             Property(
                 key="audit",
-                value=encrypt(
-                    json.dumps([report.model_dump() for report in reports if not report.is_suggestion]),
+                value="r_" + encrypt(
+                    json.dumps(list({report.vulnerability_class for report in reports if not report.is_suggestion})),
                     self.crypto_hotkey,
                     validator_hotkey_ss58,
                 ),
             )
         ]
 
-        return self.mint_token_with_nonce(self.collection_id, properties)
+        return await self.mint_token_with_nonce(self.collection_id, properties)
 
     def do_audit_code(self, contract_code: str) -> list[VulnerabilityReport]:
         result = create_session().post(
@@ -151,7 +151,7 @@ class Miner(ReinforcedNeuron):
         self._last_call[request.ss58_address] = time.time()
         return False, None
 
-    def forward(self, task: ContractTask) -> MinerResponseMessage:
+    async def forward(self, task: ContractTask) -> MinerResponseMessage:
         self.check_axon_alive()
         self.log.info(f"Got task from {task.ss58_address}")
         is_blacklisted, error = self.check_blacklist(task)
@@ -161,7 +161,7 @@ class Miner(ReinforcedNeuron):
         self.log.info(f"Task is valid, contract code:\n{task.contract_code}")
         reports = self.do_audit_code(task.contract_code)
         self.log.info(f"Created audit reports: {reports}")
-        collection_id, token_id = self.prepare_nft_result(reports, task.ss58_address)
+        collection_id, token_id = await self.prepare_nft_result(reports, task.ss58_address)
         self.log.info(f"Token minted: {token_id}")
         response = MinerResponse(
             collection_id=collection_id,
@@ -191,7 +191,7 @@ async def healthchecker():
 @app.post("/forward")
 async def forward(task: ContractTask):
     try:
-        result = miner.forward(task)
+        result = await miner.forward(task)
     except Exception as e:
         miner.log.error(f'Exception in forward: {e}')
         result = MinerResponseMessage(success=False, error="MinerInternalError")

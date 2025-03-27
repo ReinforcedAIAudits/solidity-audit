@@ -130,6 +130,8 @@ class ReinforcedNeuron:
         self._axons_cache = None
         self._axons_cache_time = 0
         self.uid = None
+        self.ip = os.getenv('EXTERNAL_IP', net.get_external_ip())
+        self.port = int(os.getenv('BT_AXON_PORT', '8091'))
         self._uid_check_time = 0
         self.log_handler = None
         self.init_logging()
@@ -144,7 +146,7 @@ class ReinforcedNeuron:
         if os.getenv('NETWORK_TYPE'):
             relayer = [x for x in settings['relayers'] if x['network'] == os.getenv('NETWORK_TYPE')][0]
         else:
-            relayer = [x for x in settings['relayer'] if x['subnet_uid'] == self.config.net_uid][0]
+            relayer = [x for x in settings['relayers'] if x['subnet_uid'] == self.config.net_uid][0]
         self.settings = ReinforcedSettings(
             unique_endpoint=settings['unique_endpoint'], trusted_keys=settings['trusted_keys'],
             relayer_ip=relayer['ip'], relayer_port=relayer['port'], network_id=relayer['network_id']
@@ -165,7 +167,7 @@ class ReinforcedNeuron:
             self.log.error(f"Collection #{collection_id} not found")
             return False
 
-        if collection.owner != helper.address.normalize(owner):
+        if collection["owner"] != helper.address.normalize(owner):
             self.log.error(f"Collection #{collection_id} not owned by {owner}")
             return False
 
@@ -223,8 +225,8 @@ class ReinforcedNeuron:
                     )
                     raise ReinforcedError('Axon not registered')
                 result = self.relayer_client.register_axon(self.hotkey, RegisterParams(
-                    uid=uid, ip=os.getenv('EXTERNAL_IP', net.get_external_ip()),
-                    port=int(os.getenv('BT_AXON_PORT', '8091')),
+                    uid=uid, ip=self.ip,
+                    port=self.port,
                     type=self.NEURON_TYPE
                 ))
                 if not result.success:
