@@ -264,16 +264,19 @@ class Validator(ReinforcedNeuron):
 
     def validate(self):
         miners = self.get_miners()
+        self.log.info("Miners list received")
         if not miners:
             self.log.warning("No active miners, validator would skip this loop")
             return
         task = self.try_get_task()
+        self.log.info("Task for miners received")
         if task is None:
             self.log.error("Unable to get task. Check your settings")
             raise ReinforcedError("Unable to get task")
-        self.log.info(f"Validator task:\n{task}")
+        self.log.debug(f"Validator task:\n{task}")
         responses = self.ask_miners(miners, task)
         responses = [self.remove_suggestions(x) for x in responses]
+        self.log.info("Miners responses received")
 
         rewards = self.validate_responses(responses, task, miners)
 
