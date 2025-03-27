@@ -9,8 +9,14 @@ import uvicorn
 from async_substrate_interface.sync_substrate import Keypair
 from bittensor.utils import networking as net
 from solidity_audit_lib import SubtensorWrapper
+from solidity_audit_lib.relayer_client.client import RelayerClient
 
 __all__ = ["ReinforcedNeuron", "ReinforcedConfig", "ScoresBuffer", "ReinforcedError"]
+
+from solidity_audit_lib.relayer_client.relayer_types import RegisterParams
+from unique_playgrounds import UniqueHelper
+
+from ai_audits.subnet_utils import create_session
 
 
 class ScoresBuffer:
@@ -69,7 +75,7 @@ class ScoresBuffer:
         self._items.pop(uid, None)
 
     def dump(self):
-        return {k: list(v) for k, v in self._items.items()}
+        return {str(k): list(v) for k, v in self._items.items()}
 
     def load(self, value: dict):
         self._items = {}
@@ -99,10 +105,20 @@ class ReinforcedError(Exception):
     pass
 
 
+@dataclasses.dataclass
+class ReinforcedSettings:
+    relayer_ip: str
+    relayer_port: int
+    unique_endpoint: str
+    network_id: int
+    trusted_keys: list[str]
+
+
 class ReinforcedNeuron:
     NEURON_TYPE = 'Base'
     AXONS_CACHE_INVALIDATION = 5 * 60
     UID_CACHE_INVALIDATION = 5 * 60
+    settings: ReinforcedSettings
 
     def __init__(self, config: ReinforcedConfig):
         self.log = logging.getLogger(f'reinforced.{self.NEURON_TYPE}')
@@ -115,6 +131,22 @@ class ReinforcedNeuron:
         self._uid_check_time = 0
         self.log_handler = None
         self.init_logging()
+        self.get_settings()
+        self.relayer_client = RelayerClient(
+            f'http://{self.settings.relayer_ip}:{self.settings.relayer_port}',
+            self.settings.network_id, self.config.net_uid
+        )
+
+    def get_settings(self):
+        settings = create_session().get('https://audit.reinforced.app/api/settings').json()
+        if os.getenv('NETWORK_TYPE'):
+            relayer = [x for x in settings['relayers'] if x['network'] == os.getenv('NETWORK_TYPE')][0]
+        else:
+            relayer = [x for x in settings['relayer'] if x['subnet_uid'] == self.config.net_uid][0]
+        self.settings = ReinforcedSettings(
+            unique_endpoint=settings['unique_endpoint'], trusted_keys=settings['trusted_keys'],
+            relayer_ip=relayer['ip'], relayer_port=relayer['port'], network_id=relayer['network_id']
+        )
 
     def init_logging(self):
         handler = logging.StreamHandler(sys.stdout)
@@ -122,6 +154,24 @@ class ReinforcedNeuron:
         handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s'))
         self.log.addHandler(handler)
         self.log.setLevel(logging.DEBUG)
+
+    def check_nft_collection_ownership(self, collection_id: int, owner: str) -> bool:
+        with UniqueHelper(self.settings.unique_endpoint) as helper:
+            collection = helper.nft.get_collection_info(collection_id)
+
+        if not collection:
+            self.log.error(f"Collection #{collection_id} not found")
+            return False
+
+        if collection.owner != helper.address.normalize(owner):
+            self.log.error(f"Collection #{collection_id} not owned by {owner}")
+            return False
+
+        return True
+
+    def get_nft_nonce(self):
+        with UniqueHelper(self.settings.unique_endpoint) as helper:
+            return helper.call_query("System", "Account", [self.hotkey.ss58_address]).value["nonce"]
 
     def get_axons(self):
         now = time.time()
@@ -170,11 +220,19 @@ class ReinforcedNeuron:
                         f'Axon for hotkey {self.hotkey.ss58_address} not registered in net uid: {self.config.net_uid}'
                     )
                     raise ReinforcedError('Axon not registered')
+                result = self.relayer_client.register_axon(self.hotkey, RegisterParams(
+                    uid=uid, ip=os.getenv('EXTERNAL_IP', net.get_external_ip()),
+                    port=int(os.getenv('BT_AXON_PORT', '8091')),
+                    type=self.NEURON_TYPE
+                ))
+                if not result.success:
+                    self.log.warning('Unable to register at relayer, need wait for sync...')
+                    time.sleep(60)
+                    continue
                 self.uid = uid
                 self._uid_check_time = time.time()
                 result, error = client.serve_axon(
-                    self.hotkey, self.config.net_uid, ip=os.getenv('EXTERNAL_IP', net.get_external_ip()),
-                    port=int(os.getenv('BT_AXON_PORT', '8091'))
+                    self.hotkey, self.config.net_uid, ip=self.settings.relayer_ip, port=self.settings.relayer_port
                 )
                 if result:
                     self.log.info(f'Axon serving, net uid: {self.config.net_uid}, uid: {uid}')
