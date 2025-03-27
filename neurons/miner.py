@@ -1,8 +1,15 @@
+import asyncio
+import json
 import os
 import time
 
 import fastapi
-from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask
+from solidity_audit_lib.encrypting import encrypt
+from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask, MinerResponseMessage, MinerResponse
+from solidity_audit_lib.relayer_client.relayer_types import MinerStorage
+from unique_playgrounds import UniqueHelper
+from unique_playgrounds.types_system import SignParams
+from unique_playgrounds.types_unique import CrossAccountId, Property
 
 from ai_audits.subnet_utils import create_session
 from neurons.base import ReinforcedNeuron, ReinforcedConfig
@@ -19,23 +26,74 @@ class Miner(ReinforcedNeuron):
     def __init__(self, config: ReinforcedConfig):
         super().__init__(config)
         self._last_call = {}
-        self._callers_whitelist = [key.strip() for key in os.getenv("", "").split(",") if key.strip()]
-        self.load_website_keys()
-        self.set_identity()
+        self._callers_whitelist = list(
+            set(self.settings.trusted_keys) |
+            {key.strip() for key in os.getenv("WHITELISTED_KEYS", "").split(",") if key.strip()}
+        )
+        self.collection_id = self.create_nft_collection()
+        self.nonce = self.get_nft_nonce()
 
-    def load_website_keys(self):
-        try:
-            keys_response = create_session().get(os.getenv("KEYS_WEBSITE", "https://audit.reinforced.app/keys"))
-            if keys_response.status_code == 200:
-                keys_list = keys_response.json()
-                if isinstance(keys_list, list) and all(isinstance(key, str) for key in keys_list):
-                    self._callers_whitelist = list(set(self._callers_whitelist) | set(keys_list))
-                else:
-                    self.log.error(f"key list has invalid format: {keys_list}")
-            else:
-                self.log.info(f"Something went wrong with the key service. Status code: {keys_response.status_code}")
-        except Exception as e:
-            self.log.error(f"An error occurred while connection to key service: {e}")
+    def create_nft_collection(self) -> int:
+        existed = self.relayer_client.get_storage(self.hotkey)
+        if existed.success and existed.result is not None and 'collection_id' in existed.result:
+            if self.check_nft_collection_ownership(existed.result['collection_id'], self.hotkey.ss58_address):
+                return existed.result['collection_id']
+        collection_data = {
+            "name": f"{self.hotkey.ss58_address} Audits",
+            "description": "Collection of contract audits performed by miner",
+            "token_prefix": "AUD",
+            "token_property_permissions": [
+                {
+                    "key": "validator",
+                    "permission": {"mutable": False, "token_owner": False, "collection_admin": True},
+                },
+                {
+                    "key": "audit",
+                    "permission": {"mutable": False, "token_owner": False, "collection_admin": True},
+                }
+            ]
+        }
+        with UniqueHelper(self.settings.unique_endpoint) as helper:
+            collection = helper.nft.create_collection(self.hotkey, collection_data)
+            collection_id = collection.collection_id
+
+        self.relayer_client.set_storage(self.hotkey, MinerStorage(collection_id=collection_id))
+        return collection_id
+
+    async def mint_token_with_nonce(self, collection_id: int, properties: list[Property]) -> tuple[int, int]:
+        with UniqueHelper(self.settings.unique_endpoint) as helper:
+            async with asyncio.Lock():
+                receipt = helper.execute_extrinsic(
+                    self.hotkey,
+                    "Unique.create_item",
+                    {
+                        "collection_id": collection_id,
+                        "owner": CrossAccountId(Substrate=self.hotkey.ss58_address),
+                        "data": {"NFT": {"properties": [[] if properties is None else properties]}},
+                    },
+                    sign_params=SignParams(nonce=self.nonce, era=None),
+                )
+                self.nonce += 1
+
+            event = helper.find_event("Common.ItemCreated", receipt["events"])
+
+        collection_id, token_id, owner, collection_type = event["attributes"]
+        return collection_id, token_id
+
+    async def prepare_nft_result(self, reports: list[VulnerabilityReport], validator_hotkey_ss58: str) -> tuple[int, int]:
+        properties = [
+            Property(key="validator", value=validator_hotkey_ss58),
+            Property(
+                key="audit",
+                value="r_" + encrypt(
+                    json.dumps(list({report.vulnerability_class for report in reports if not report.is_suggestion})),
+                    self.crypto_hotkey,
+                    validator_hotkey_ss58,
+                ),
+            )
+        ]
+
+        return await self.mint_token_with_nonce(self.collection_id, properties)
 
     def do_audit_code(self, contract_code: str) -> list[VulnerabilityReport]:
         result = create_session().post(
@@ -43,65 +101,77 @@ class Miner(ReinforcedNeuron):
             contract_code,
             headers={"Content-Type": "text/plain"},
         )
-        # TODO: Remove the error and allow sending a result with an empty response + log this event
-        if result.status_code != 200:
-            self.log.info(f"Not successful AI response. Description: {result.text}")
-            raise ValueError("Contract audit is not successful!")
 
-        json = result.json()
-        self.log.info(f"Response from model server: {json}")
+        if result.status_code != 200:
+            self.log.error(f"Not successful AI response. Description: {result.text}")
+            self.log.info("Miner will return an empty response.")
+            return []
+
+        reports = result.json()
+        self.log.info(f"Response from model server: {reports}")
         vulnerabilities = [
             VulnerabilityReport(
                 **vuln,
             )
-            for vuln in json
+            for vuln in reports
         ]
         return vulnerabilities
 
-    def check_blacklist(self, request: ContractTask) -> tuple[bool, dict | None]:
+    def check_blacklist(self, request: ContractTask) -> tuple[bool, str | None]:
         if request.ss58_address is None:
             self.log.warning("Received a request without signature.")
-            return True, {"name": "NoSignature"}
+            return True, "NoSignature"
 
         if not request.verify():
             self.log.warning("Received a request with bad signature.")
-            return True, {"name": "InvalidSignature"}
+            return True, "InvalidSignature"
 
         if request.uid != self.uid:
             self.log.error(f"Task is not for this miner. Task uid: {request.uid}, miner uid: {self.uid}")
-            return True, {"name": "NotForThisMiner"}
+            return True, "NotForThisMiner"
 
         if (
-            request.ss58_address in self._last_call
+            request.ss58_address in self._last_call and request.ss58_address not in self._callers_whitelist
             and time.time() - self._last_call[request.ss58_address] < self.REQUEST_PERIOD
         ):
             self.log.warning("Received a request too often.")
-            return True, {"name": "TooOften"}
+            return True, "TooOften"
 
         axons = self.get_axons()
-        # TODO: check relayer and validators and site
         allowed_keys = list(set([x["hotkey"] for x in axons]) | set(self._callers_whitelist))
         if request.ss58_address not in allowed_keys:
             self.log.warning("Received a request not from metagraph.")
-            return True, {"name": "NotFromMetagraph"}
+            return True, "NotFromMetagraph"
 
         for axon in axons:
             if request.ss58_address == axon["hotkey"] and axon["rank"] != 0:
                 self.log.warning("Received a request from not a validator.")
-                return True, {"name": "NotValidator"}
+                return True, "NotValidator"
 
         self._last_call[request.ss58_address] = time.time()
         return False, None
 
-    def forward(self, task: ContractTask):
+    async def forward(self, task: ContractTask) -> MinerResponseMessage:
         self.check_axon_alive()
         self.log.info(f"Got task from {task.ss58_address}")
         is_blacklisted, error = self.check_blacklist(task)
         if is_blacklisted:
-            return {"status": "ERROR", "reason": error}
+            return MinerResponseMessage(success=False, error=error)
 
         self.log.info(f"Task is valid, contract code:\n{task.contract_code}")
-        return self.do_audit_code(task.contract_code)
+        reports = self.do_audit_code(task.contract_code)
+        self.log.info(f"Created audit reports: {reports}")
+        collection_id, token_id = await self.prepare_nft_result(reports, task.ss58_address)
+        self.log.info(f"Token minted: {token_id}")
+        response = MinerResponse(
+            collection_id=collection_id,
+            token_id=token_id,
+            report=reports,
+            uid=task.uid,
+        )
+        response.sign(self.hotkey)
+
+        return MinerResponseMessage(success=True, result=response)
 
 
 app = fastapi.FastAPI()
@@ -120,9 +190,13 @@ async def healthchecker():
 
 @app.post("/forward")
 async def forward(task: ContractTask):
-    # TODO: unwrap relayer here
-    result = miner.forward(task)
-    return result
+    try:
+        result = await miner.forward(task)
+    except Exception as e:
+        miner.log.error(f'Exception in forward: {e}')
+        result = MinerResponseMessage(success=False, error="MinerInternalError")
+    result.sign(miner.hotkey)
+    return result.model_dump()
 
 
 if __name__ == "__main__":
