@@ -135,7 +135,13 @@ class Vulnerability(BaseModel):
 
 
 def extract_storages_functions(vulnerability_source: str) -> tuple[list[str], list[str]]:
-    ast_with_restored_storages = restore_storages(create_ast_with_standart_input(vulnerability_source))
+    try:
+        vulnerability_ast = create_ast_with_standart_input(vulnerability_source)
+    except SolcError as e:
+        print(f"Error during vulnerability compilation: {e}")
+        raise ValueError(f"Error during vulnerability compilation")
+
+    ast_with_restored_storages = restore_storages(vulnerability_ast)
 
     return [
         parse_variable_declaration(node)
@@ -150,7 +156,8 @@ def create_task(
     try:
         ast_obj_contract = create_ast_from_source(contract_source)
     except SolcError as e:
-        raise ValueError(f"Error during contract compilation: {e}")
+        print(f"Error during valid contract compilation: {e}")
+        raise ValueError(f"Error during valid contract compilation")
 
     vulnerability_contract = create_contract(raw_vulnerability.code)
     ast_obj_vulnerability = create_ast_with_standart_input(vulnerability_contract)
@@ -162,7 +169,8 @@ def create_task(
     try:
         ast_contract_with_vul = create_ast_from_source(contract_source)
     except SolcError as e:
-        raise ValueError(f"Error during contract with vulnerability compilation: {e}")
+        print(f"Error during contract with vulnerability compilation: {e}")
+        raise ValueError(f"Error during contract with vulnerability compilation")
 
     from_line, to_line = find_function_boundaries(
         ast_contract_with_vul,

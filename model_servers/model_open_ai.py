@@ -6,6 +6,9 @@ from fastapi import FastAPI, Request, Response, HTTPException
 from openai import AsyncOpenAI
 from py_solidity_vuln_db import get_vulnerability
 from pydantic import BaseModel
+from solc_ast_parser.ast_parser import parse_variable_declaration, build_function_header
+from solc_ast_parser.models.base_ast_models import NodeType
+from solc_ast_parser.utils import create_ast_with_standart_input, get_contract_nodes
 from solidity_audit_lib.messaging import OpenAIVulnerabilityReport, VulnerabilityReport
 
 from ai_audits.contracts.contract_generator import (
@@ -220,7 +223,12 @@ async def get_task(request: Request):
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
 
-    return create_task(result.code, raw_vulnerability)
+    try:
+        task = create_task(result.code, raw_vulnerability)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return task
 
 
 @app.post("/valid_contract")
@@ -228,12 +236,27 @@ async def get_valid_contract(request: Request):
     tries = int(os.getenv("MAX_TRIES", "3"))
     is_valid, result = False, None
 
-    raw_vulnerability = get_vulnerability()
-    raw_vulnerability = Vulnerability(vulnerabilityClass=raw_vulnerability.name, code=raw_vulnerability.code)
-
     while tries > 0:
+        raw_vulnerability = get_vulnerability()
+        raw_vulnerability = Vulnerability(vulnerabilityClass=raw_vulnerability.name, code=raw_vulnerability.code)
+
         vulnerability_contract = create_contract(raw_vulnerability.code)
-        storages, functions = extract_storages_functions(vulnerability_contract)
+        try:
+            vulnerability_ast = create_ast_with_standart_input(vulnerability_contract)
+        except Exception as e:
+            print(f"Error during vulnerability compilation: {e}")
+            continue
+
+        storages, functions = [
+            parse_variable_declaration(node)
+            for node in get_contract_nodes(
+                vulnerability_ast, node_type=NodeType.VARIABLE_DECLARATION
+            )
+        ], [
+            build_function_header(function)
+            for function in get_contract_nodes(vulnerability_ast, node_type=NodeType.FUNCTION_DEFINITION)
+        ]
+
         result = await generate_contract(
             functions,
             storages,
@@ -252,7 +275,13 @@ async def get_valid_contract(request: Request):
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
 
-    return result.code
+    return ValidatorTask(
+        contract_code=result.code,
+        task_type="valid_contract",
+        from_line=1,
+        to_line=len(result.code.splitlines()) + 1,
+        vulnerability_class=KnownVulnerability.VALID_CONTRACT,
+    )
 
 @app.get("/healthcheck")
 async def healthchecker():

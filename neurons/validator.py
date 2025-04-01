@@ -72,7 +72,7 @@ class Validator(ReinforcedNeuron):
         self.log.info(f"Validator running in {self.mode} mode")
 
     def get_audit_task(self, vulnerability_type: str | None = None) -> ValidatorTask:
-        task_type = choices(list(TaskType), [70, 25, 5])[0]
+        task_type = choices(list(TaskType), [60, 25, 5, 10])[0]
         if task_type == TaskType.RANDOM_TEXT:
             return get_invalid_code()
         result = create_session().post(

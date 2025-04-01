@@ -6,11 +6,10 @@ from pydantic import (
     constr,
     field_validator,
 )
-from solidity_audit_lib import SignedMessage
 
 __all__ = [
     "VulnerabilityReport", "ValidatorTask", "KnownVulnerability", "SmartContract", "TaskType",
-    "ContractTask", "ReportMessage", "TaskMessage"
+    "ContractTask"
 ]
 
 from solidity_audit_lib.messaging import VulnerabilityReport, AuditBase, ContractTask
@@ -34,6 +33,7 @@ class KnownVulnerability(str, Enum):
     SIGNATURE_REPLAY = "Signature replay"
     UNSAFE_OPERATION = "Unsafe operation"
     INVALID_CODE = "Invalid code"
+    VALID_CONTRACT = "Valid contract"
 
 
 class OtherVulnerability(BaseModel):
@@ -61,24 +61,10 @@ class TaskType(StrEnum):
     HYBRID = "hybrid_task"
     LLM = "task"
     RANDOM_TEXT = "random_task"
+    VALID = "valid_contract"
 
 
 class ValidatorTask(AuditBase):
     contract_code: str = Field(..., title="Contract code", description="Code of vulnerable contract")
     task_type: str | None = Field(default=None, title="Task type", description="Type of validator task")
 
-
-class ReportMessage(SignedMessage):
-    collection_id: str
-    token_id: int
-    report: list[VulnerabilityReport]
-
-
-class RelayerContainer(SignedMessage):
-    content: str
-    content_type: str
-
-
-class TaskMessage(BaseModel):
-    code: ContractTask
-    validator_ss58_hotkey: str
