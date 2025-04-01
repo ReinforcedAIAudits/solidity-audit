@@ -4,8 +4,8 @@ import random
 
 from fastapi import FastAPI, Request, HTTPException
 from openai import AsyncOpenAI
-from pydantic import BaseModel
 from py_solidity_vuln_db import get_vulnerability
+from pydantic import BaseModel
 
 from ai_audits.contracts.contract_generator import (
     Vulnerability,
@@ -15,7 +15,6 @@ from ai_audits.contracts.contract_generator import (
 )
 from ai_audits.protocol import SmartContract, ValidatorTask, KnownVulnerability
 from ai_audits.subnet_utils import ROLES, SolcSingleton, preprocess_text
-
 
 GPT_MODEL = "meta-llama/llama-3.3-70b-instruct"
 
@@ -227,31 +226,7 @@ class ContractInfo(BaseModel):
     storages: list[str]
 
 
-@app.post("/valid_contract")
-async def get_valid_contract(request: Request, contract_info: ContractInfo):
-    tries = int(os.getenv("MAX_TRIES", "3"))
-    is_valid, result = False, None
 
-    while tries > 0:
-        result = await generate_contract(
-            contract_info.functions,
-            contract_info.storages,
-        )
-        print(f"Generated contract: {result}")
-        try:
-            solc.compile(result.code)
-        except Exception as e:
-            print(f"Compilation error: {e}")
-            continue
-
-        if result is not None:
-            is_valid = True
-            break
-        tries -= 1
-    if not is_valid:
-        raise HTTPException(status_code=400, detail="Invalid answer from LLM")
-
-    return result.code
 
 
 async def generate_task(requested_vulnerability: str | None = None) -> ValidatorTask:
@@ -338,6 +313,37 @@ async def get_hybrid_task(request: Request):
 
     return create_task(result.code, raw_vulnerability)
 
+
+@app.post("/valid_contract")
+async def get_valid_contract(request: Request):
+    tries = int(os.getenv("MAX_TRIES", "3"))
+    is_valid, result = False, None
+
+    raw_vulnerability = get_vulnerability()
+    raw_vulnerability = Vulnerability(vulnerabilityClass=raw_vulnerability.name, code=raw_vulnerability.code)
+
+    while tries > 0:
+        vulnerability_contract = create_contract(raw_vulnerability.code)
+        storages, functions = extract_storages_functions(vulnerability_contract)
+        result = await generate_contract(
+            functions,
+            storages,
+        )
+        print(f"Generated contract: {result}")
+        try:
+            solc.compile(result.code)
+        except Exception as e:
+            print(f"Compilation error: {e}")
+            continue
+
+        if result is not None:
+            is_valid = True
+            break
+        tries -= 1
+    if not is_valid:
+        raise HTTPException(status_code=400, detail="Invalid answer from LLM")
+
+    return result.code
 
 @app.get("/healthcheck")
 async def healthchecker():

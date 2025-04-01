@@ -1,8 +1,8 @@
-import asyncio
 import json
 import os
 import time
 
+import atomics
 import fastapi
 from solidity_audit_lib.encrypting import encrypt
 from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask, MinerResponseMessage, MinerResponse
@@ -31,7 +31,8 @@ class Miner(ReinforcedNeuron):
             {key.strip() for key in os.getenv("WHITELISTED_KEYS", "").split(",") if key.strip()}
         )
         self.collection_id = self.create_nft_collection()
-        self.nonce = self.get_nft_nonce()
+        self.nonce = atomics.atomic(width=4, atype=atomics.INT)
+        self.nonce.add(self.get_nft_nonce())
 
     def create_nft_collection(self) -> int:
         existed = self.relayer_client.get_storage(self.hotkey)
@@ -62,8 +63,9 @@ class Miner(ReinforcedNeuron):
 
     async def mint_token_with_nonce(self, collection_id: int, properties: list[Property]) -> tuple[int, int]:
         with UniqueHelper(self.settings.unique_endpoint) as helper:
-            async with asyncio.Lock():
-                receipt = helper.execute_extrinsic(
+            current_nonce = self.nonce.load()
+            self.nonce.inc()
+            receipt = helper.execute_extrinsic(
                     self.hotkey,
                     "Unique.create_item",
                     {
@@ -71,9 +73,8 @@ class Miner(ReinforcedNeuron):
                         "owner": CrossAccountId(Substrate=self.hotkey.ss58_address),
                         "data": {"NFT": {"properties": [[] if properties is None else properties]}},
                     },
-                    sign_params=SignParams(nonce=self.nonce, era=None),
+                    sign_params=SignParams(nonce=current_nonce, era=None),
                 )
-                self.nonce += 1
 
             event = helper.find_event("Common.ItemCreated", receipt["events"])
 
