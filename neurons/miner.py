@@ -30,7 +30,7 @@ class Miner(ReinforcedNeuron):
             set(self.settings.trusted_keys) |
             {key.strip() for key in os.getenv("WHITELISTED_KEYS", "").split(",") if key.strip()}
         )
-        self.collection_id = self.create_nft_collection()
+        self.collection_id = None
         self.nonce = self.get_nft_nonce()
 
     def create_nft_collection(self) -> int:
@@ -58,6 +58,8 @@ class Miner(ReinforcedNeuron):
             collection_id = collection.collection_id
 
         self.relayer_client.set_storage(self.hotkey, MinerStorage(collection_id=collection_id))
+
+        self.collection_id = collection_id
         return collection_id
 
     async def mint_token_with_nonce(self, collection_id: int, properties: list[Property]) -> tuple[int, int]:
@@ -201,4 +203,5 @@ async def forward(task: ContractTask):
 
 if __name__ == "__main__":
     miner.serve_axon()
+    miner.create_nft_collection()
     miner.serve_uvicorn(app)
