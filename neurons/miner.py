@@ -31,7 +31,6 @@ class Miner(ReinforcedNeuron):
             {key.strip() for key in os.getenv("WHITELISTED_KEYS", "").split(",") if key.strip()}
         )
         self.collection_id = None
-        self.collection_id = self.create_nft_collection()
         self.nonce = atomics.atomic(width=4, atype=atomics.INT)
         self.nonce.add(self.get_nft_nonce())
 
