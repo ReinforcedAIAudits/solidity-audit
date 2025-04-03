@@ -37,7 +37,8 @@ class Miner(ReinforcedNeuron):
         existed = self.relayer_client.get_storage(self.hotkey)
         if existed.success and existed.result is not None and 'collection_id' in existed.result:
             if self.check_nft_collection_ownership(existed.result['collection_id'], self.hotkey.ss58_address):
-                return existed.result['collection_id']
+                self.collection_id = existed.result["collection_id"]
+                return self.collection_id
         collection_data = {
             "name": f"{self.hotkey.ss58_address} Audits",
             "description": "Collection of contract audits performed by miner",
@@ -60,7 +61,7 @@ class Miner(ReinforcedNeuron):
         self.relayer_client.set_storage(self.hotkey, MinerStorage(collection_id=collection_id))
 
         self.collection_id = collection_id
-        return collection_id
+        return self.collection_id
 
     async def mint_token_with_nonce(self, collection_id: int, properties: list[Property]) -> tuple[int, int]:
         with UniqueHelper(self.settings.unique_endpoint) as helper:
