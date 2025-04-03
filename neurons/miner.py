@@ -59,6 +59,7 @@ class Miner(ReinforcedNeuron):
         with UniqueHelper(self.settings.unique_endpoint) as helper:
             collection = helper.nft.create_collection(self.hotkey, collection_data)
             collection_id = collection.collection_id
+            self.nonce.inc()
 
         self.relayer_client.set_storage(self.hotkey, MinerStorage(collection_id=collection_id))
 
@@ -67,8 +68,7 @@ class Miner(ReinforcedNeuron):
 
     async def mint_token_with_nonce(self, collection_id: int, properties: list[Property]) -> tuple[int, int]:
         with UniqueHelper(self.settings.unique_endpoint) as helper:
-            current_nonce = self.nonce.load()
-            self.nonce.inc()
+            current_nonce = self.nonce.fetch_inc()
             receipt = helper.execute_extrinsic(
                     self.hotkey,
                     "Unique.create_item",
