@@ -57,6 +57,7 @@ class Miner(ReinforcedNeuron):
         with UniqueHelper(self.settings.unique_endpoint) as helper:
             collection = helper.nft.create_collection(self.hotkey, collection_data)
             collection_id = collection.collection_id
+            self.nonce += 1
 
         self.relayer_client.set_storage(self.hotkey, MinerStorage(collection_id=collection_id))
 
