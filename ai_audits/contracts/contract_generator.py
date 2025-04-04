@@ -10,7 +10,7 @@ from solc_ast_parser.models.ast_models import (
 )
 from solc_ast_parser.models.base_ast_models import NodeType
 from solc_ast_parser.utils import create_ast_from_source, create_ast_with_standart_input, get_contract_nodes
-from solidity_audit_lib.messaging import VulnerabilityReport
+from solcx.exceptions import SolcError
 
 from ai_audits.protocol import ValidatorTask, TaskType
 
@@ -135,7 +135,13 @@ class Vulnerability(BaseModel):
 
 
 def extract_storages_functions(vulnerability_source: str) -> tuple[list[str], list[str]]:
-    ast_with_restored_storages = restore_storages(create_ast_with_standart_input(vulnerability_source))
+    try:
+        vulnerability_ast = create_ast_with_standart_input(vulnerability_source)
+    except SolcError as e:
+        print(f"Error during vulnerability compilation: {e}")
+        raise ValueError(f"Error during vulnerability compilation")
+
+    ast_with_restored_storages = restore_storages(vulnerability_ast)
 
     return [
         parse_variable_declaration(node)
@@ -147,7 +153,11 @@ def create_task(
     contract_source: str,
     raw_vulnerability: Vulnerability,
 ) -> ValidatorTask:
-    ast_obj_contract = create_ast_from_source(contract_source)
+    try:
+        ast_obj_contract = create_ast_from_source(contract_source)
+    except SolcError as e:
+        print(f"Error during valid contract compilation: {e}")
+        raise ValueError(f"Error during valid contract compilation")
 
     vulnerability_contract = create_contract(raw_vulnerability.code)
     ast_obj_vulnerability = create_ast_with_standart_input(vulnerability_contract)
@@ -156,7 +166,11 @@ def create_task(
 
     contract_source = insert_vulnerability_to_contract(ast_obj_contract, ast_obj_vulnerability)
 
-    ast_contract_with_vul = create_ast_from_source(contract_source)
+    try:
+        ast_contract_with_vul = create_ast_from_source(contract_source)
+    except SolcError as e:
+        print(f"Error during contract with vulnerability compilation: {e}")
+        raise ValueError(f"Error during contract with vulnerability compilation")
 
     from_line, to_line = find_function_boundaries(
         ast_contract_with_vul,
@@ -164,16 +178,10 @@ def create_task(
         [node.name for node in get_contract_nodes(ast_obj_vulnerability, NodeType.FUNCTION_DEFINITION)],
     )
 
-    vulnerability_report = VulnerabilityReport(
-        from_line=from_line,
-        to_line=to_line,
-        vulnerability_class=raw_vulnerability.vulnerabilityClass,
-    )
-
     return ValidatorTask(
         contract_code=contract_source,
-        from_line=vulnerability_report.from_line,
-        to_line=vulnerability_report.to_line,
-        vulnerability_class=vulnerability_report.vulnerability_class,
-        taskType=TaskType.HYBRID,
+        from_line=from_line,
+        to_line=to_line,
+        vulnerability_class=raw_vulnerability.vulnerability_class,
+        task_type=TaskType.HYBRID,
     )

@@ -72,7 +72,7 @@ class Validator(ReinforcedNeuron):
         self.log.info(f"Validator running in {self.mode} mode")
 
     def get_audit_task(self, vulnerability_type: str | None = None) -> ValidatorTask:
-        task_type = choices(list(TaskType), [70, 25, 5])[0]
+        task_type = choices(list(TaskType), [60, 25, 5, 10])[0]
         if task_type == TaskType.RANDOM_TEXT:
             return get_invalid_code()
         result = create_session().post(
@@ -253,7 +253,8 @@ class Validator(ReinforcedNeuron):
                 self._buffer_scores.reset(uid)
         self.hotkeys = new_hotkeys
 
-    def remove_suggestions(self, miner_answer: MinerResult):
+    @classmethod
+    def remove_suggestions(cls, miner_answer: MinerResult):
         if miner_answer.response is None:
             return miner_answer
         return MinerResult(
@@ -362,8 +363,9 @@ class Validator(ReinforcedNeuron):
         log.debug(f"Final scores: {scores}")
         return scores
 
+    @classmethod
     def assign_achievements(
-        self, rewards: list[float], miners: list[MinerInfo], achievement_count: int = 3
+        cls, rewards: list[float], miners: list[MinerInfo], achievement_count: int = 3
     ) -> list[MinerInfo]:
         top_scores = sorted(enumerate(rewards), key=lambda x: x[1], reverse=True)[:achievement_count]
         return [miners[index] for index, _ in top_scores]

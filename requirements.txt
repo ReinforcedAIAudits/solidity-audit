@@ -1,5 +1,6 @@
 bittensor==9.1.0
 bittensor-wallet==3.0.4
+atomics==1.0.3
 starlette==0.37.2
 pydantic==2.9.2
 pytest==8.3.3
