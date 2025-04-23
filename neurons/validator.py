@@ -59,7 +59,6 @@ class Validator(ReinforcedNeuron):
 
         self._buffer_scores = ScoresBuffer(self.MAX_BUFFER)
         self.hotkeys = {}
-        self.load_state()
         self.mode = self.MODE_RELAYER
         self.log.info(f"Validator running in {self.mode} mode")
 
@@ -134,7 +133,6 @@ class Validator(ReinforcedNeuron):
         except Exception as e:
             self.log.info(f"Error checking uid {uid}: {e}")
             return uid, False
-
 
     def check_tokens(self, response: MinerResponse, task: ValidatorTask) -> bool:
         token = None
@@ -310,6 +308,7 @@ class Validator(ReinforcedNeuron):
         self.set_weights()
 
     def run(self):
+        self.load_state()
         while True:
             self.log.info("Validator loop is running")
             sleep_time = self.get_sleep_time()
