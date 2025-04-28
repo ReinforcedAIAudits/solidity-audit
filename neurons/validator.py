@@ -11,11 +11,11 @@ import requests
 from dotenv import load_dotenv
 from solidity_audit_lib import SubtensorWrapper
 from solidity_audit_lib.encrypting import decrypt
-from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask, MinerResponseMessage, MinerResponse
+from solidity_audit_lib.messaging import VulnerabilityReport, ContractTask, MinerResponseMessage, MinerResponse, \
+    MedalRequestsMessage
 from solidity_audit_lib.relayer_client.relayer_types import ValidatorStorage
 from unique_playgrounds import UniqueHelper
 
-from ai_audits.nft_protocol import MedalRequestsMessage
 from ai_audits.protocol import ValidatorTask, TaskType, MinerInfo, NFTMetadata
 from ai_audits.subnet_utils import create_session, is_synonyms, get_invalid_code
 from neurons.base import ReinforcedNeuron, ScoresBuffer, ReinforcedConfig, ReinforcedError
@@ -31,6 +31,8 @@ class MinerResult:
     uid: int
     time: float
     response: list[VulnerabilityReport] | None
+    collection_id: int | None = None
+    tokens: list[int] | None = None
 
 
 class Validator(ReinforcedNeuron):
@@ -207,6 +209,8 @@ class Validator(ReinforcedNeuron):
             uid=miner.uid,
             time=abs(time.time() - start_time),
             response=response.result.report if response.result else None,
+            collection_id=response.result.collection_id if response.result else None,
+            tokens=response.result.token_ids if response.result else None,
         )
 
     def ask_miners_raw(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
@@ -244,7 +248,7 @@ class Validator(ReinforcedNeuron):
             self.log.error(f"Token is not minted for uid {miner.uid}")
             return MinerResult(uid=miner.uid, time=elapsed_time, response=None)
 
-        return MinerResult(uid=miner.uid, time=elapsed_time, response=response.report)
+        return MinerResult(uid=miner.uid, time=elapsed_time, response=response.report, collection_id=response.collection_id, tokens=response.token_ids)
 
     def ask_miners_relay(self, miners: list[MinerInfo], task: ValidatorTask) -> list[MinerResult]:
         to_check = [(x, task) for x in miners]
@@ -274,6 +278,8 @@ class Validator(ReinforcedNeuron):
             uid=miner_answer.uid,
             time=miner_answer.time,
             response=[x for x in miner_answer.response if not x.is_suggestion],
+            collection_id=miner_answer.collection_id,
+            tokens=miner_answer.tokens,
         )
 
     def validate(self):
@@ -298,7 +304,7 @@ class Validator(ReinforcedNeuron):
         self.log.info(f"Scored responses: {rewards}")
 
         try:
-            self.send_top_miners(rewards, miners)
+            self.set_top_miners(responses, rewards, miners)
         except Exception as e:
             self.log.error(f"Unable to send top miners: {str(e)}")
 
@@ -383,35 +389,34 @@ class Validator(ReinforcedNeuron):
         cls, rewards: list[float], miners: list[MinerInfo], achievement_count: int = 3
     ) -> list[MinerInfo]:
         top_scores = sorted(enumerate(rewards), key=lambda x: x[1], reverse=True)[:achievement_count]
-        return [miners[index] for index, _ in top_scores]
+        return [miners[index] for index, score in top_scores if score > 0.0]
 
-    def create_top_miners(self, rewards: list[float], miners: list[MinerInfo]):
+    def create_top_miners(self, results: list[MinerResult], rewards: list[float], miners: list[MinerInfo]):
         miner_rewards = dict(zip([x.uid for x in miners], rewards))
         top_miners = self.assign_achievements(rewards, miners)
         achievements = {1: "Gold", 2: "Silver", 3: "Bronze"}
         result_top = []
         for place, miner in enumerate(top_miners):
+            miner_result = next((x for x in results if x.uid == miner.uid), None)
             message = MedalRequestsMessage(
                 medal=achievements[place + 1],
                 miner_ss58_hotkey=miner.hotkey,
                 score=miner_rewards[miner.uid],
+                collection_id=miner_result.collection_id if miner_result else None,
+                token_ids=miner_result.tokens if miner_result else None,
             )
             message.sign(self.hotkey)
             result_top.append(message)
         self.log.info(f"Top miners: {result_top}")
         return result_top
 
-    def send_top_miners(self, rewards: list[float], miners: list[MinerInfo]):
-        top_miners = self.create_top_miners(rewards, miners)
+    def set_top_miners(self, results: list[MinerResult], rewards: list[float], miners: list[MinerInfo]):
+        top_miners = self.create_top_miners(results, rewards, miners)
         if not top_miners:
             self.log.warning("No top miners during this validation")
-        result = create_session().post(
-            f"{os.getenv('WEBSITE_URL', 'https://audit.reinforced.app')}/api/mint_medals",
-            json=[miner.model_dump() for miner in top_miners],
-            headers={"Content-Type": "application/json"},
-        )
-        if result.status_code != 200:
-            self.log.info(f"Not successful setting top miners. Description: {result.text}")
+        result = self.relayer_client.set_top_miners(self.hotkey, top_miners)
+        if not result.success:
+            self.log.info(f"Not successful setting top miners. Description: {result.error}")
             raise ValueError("Unable to set top miners!")
         self.log.info(f"Top miners set successfully.")
 
@@ -515,3 +520,4 @@ if __name__ == "__main__":
 
     validator.serve_axon()
     validator.run()
+
