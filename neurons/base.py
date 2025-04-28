@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import time
+
 import requests
 import uvicorn
 from async_substrate_interface.sync_substrate import Keypair
@@ -141,7 +142,7 @@ class ReinforcedNeuron:
         )
 
     def get_settings(self):
-        settings = create_session().get(f'{os.getenv("WEBSITE_URL", "https://audit.reinforced.app")}/api/settings').json()
+        settings = create_session().get('https://audit.reinforced.app/api/settings').json()
         if os.getenv('NETWORK_TYPE'):
             relayer = [x for x in settings['relayers'] if x['network'] == os.getenv('NETWORK_TYPE')][0]
         else:
