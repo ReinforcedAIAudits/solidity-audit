@@ -13,6 +13,7 @@
 
 - [Architecture](#architecture)
 - [Joining the Network](#joining-the-network)
+- [Minimal requirements](#minimum-requirements)
 - [Creating your own miner](#creating-your-own-miner)
 - [Audit Protocol](#audit-protocol)
 - [Secure Proof-of-Work Validation](#secure-proof-of-work-validation-via-unique-network-integration)
@@ -43,6 +44,12 @@ As a reference, an implementation of a microservice based on local LLM is provid
 The simplest way to join the network is to use the reference implementation of the microservice. This configuration is described in `.docker/docker-compose.yml`, which allows you to run all services at once by configuring the environment variables with wallets and network addresses.
 
 Alternatively, you can run each service separately (this will be discussed in the relevant sections below).
+
+## Minimum requirements
+
+* Python 3.11 (We use Rust-built wheels that are available only for this version)
+* 8GB RAM or 4GB VRAM (However, we strongly recommend more for working with more powerful LLMs)
+* UNQ tokens for miners
 
 ## Creating Your Own Miner
 
