@@ -131,7 +131,7 @@ class ReinforcedNeuron:
             Keypair.create_from_uri(hotkey)
         )
         self.crypto_hotkey = (
-            CryptoKeypair.create_from_private_key(hotkey) if hotkey.startswith('0x') else
+            CryptoKeypair.create_from_private_key(hotkey, ss58_format=42) if hotkey.startswith('0x') else
             CryptoKeypair.create_from_uri(hotkey)
         )
         self._axons_cache = None
