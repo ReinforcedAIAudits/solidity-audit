@@ -126,14 +126,22 @@ class ReinforcedNeuron:
         self.log = logging.getLogger(f'reinforced.{self.NEURON_TYPE}')
         self.config = config
         hotkey = os.getenv('MNEMONIC_HOTKEY', '//Alice')
-        self.hotkey = (
-            Keypair.create_from_private_key(hotkey) if hotkey.startswith('0x') else
-            Keypair.create_from_uri(hotkey)
-        )
-        self.crypto_hotkey = (
-            CryptoKeypair.create_from_private_key(hotkey, ss58_format=42) if hotkey.startswith('0x') else
-            CryptoKeypair.create_from_uri(hotkey)
-        )
+        if hotkey.startswith('0x'):
+            hotkey_size = len(hotkey) // 2 - 1
+            if hotkey_size not in (32, 64):
+                raise ReinforcedError('Invalid MNEMONIC_HOTKEY, only seed phrase, seed and full private key supported')
+            self.hotkey = (
+                Keypair.create_from_private_key(hotkey) if hotkey_size == 64 else
+                Keypair.create_from_seed(hotkey)
+            )
+            self.crypto_hotkey = (
+                CryptoKeypair.create_from_private_key(hotkey, ss58_format=42) if hotkey_size == 64 else
+                CryptoKeypair.create_from_seed(private_key, ss58_format=42)
+            )
+        else:
+            self.hotkey = Keypair.create_from_uri(hotkey)
+            self.crypto_hotkey = CryptoKeypair.create_from_uri(hotkey)
+        
         self._axons_cache = None
         self._axons_cache_time = 0
         self.uid = None
