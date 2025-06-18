@@ -136,7 +136,7 @@ class ReinforcedNeuron:
             )
             self.crypto_hotkey = (
                 CryptoKeypair.create_from_private_key(hotkey, ss58_format=42) if hotkey_size == 64 else
-                CryptoKeypair.create_from_seed(private_key, ss58_format=42)
+                CryptoKeypair.create_from_seed(hotkey, ss58_format=42)
             )
         else:
             self.hotkey = Keypair.create_from_uri(hotkey)
