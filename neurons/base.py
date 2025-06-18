@@ -125,8 +125,15 @@ class ReinforcedNeuron:
     def __init__(self, config: ReinforcedConfig):
         self.log = logging.getLogger(f'reinforced.{self.NEURON_TYPE}')
         self.config = config
-        self.hotkey = Keypair.create_from_uri(os.getenv('MNEMONIC_HOTKEY', '//Alice'))
-        self.crypto_hotkey = CryptoKeypair.create_from_uri(os.getenv('MNEMONIC_HOTKEY', '//Alice'))
+        hotkey = os.getenv('MNEMONIC_HOTKEY', '//Alice')
+        self.hotkey = (
+            Keypair.create_from_private_key(hotkey) if hotkey.startswith('0x') else
+            Keypair.create_from_uri(hotkey)
+        )
+        self.crypto_hotkey = (
+            CryptoKeypair.create_from_private_key(hotkey) if hotkey.startswith('0x') else
+            CryptoKeypair.create_from_uri(hotkey)
+        )
         self._axons_cache = None
         self._axons_cache_time = 0
         self.uid = None
