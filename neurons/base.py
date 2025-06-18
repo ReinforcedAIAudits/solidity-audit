@@ -7,7 +7,7 @@ import time
 
 import requests
 import uvicorn
-from async_substrate_interface.sync_substrate import Keypair
+from bittensor_wallet import Keypair
 from bittensor.utils import networking as net
 from solidity_audit_lib import SubtensorWrapper
 from solidity_audit_lib.relayer_client.client import RelayerClient
