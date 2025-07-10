@@ -1,4 +1,7 @@
 from enum import Enum, StrEnum
+import json
+import time
+import os
 
 from pydantic import (
     BaseModel,
@@ -13,6 +16,7 @@ __all__ = [
 ]
 
 from solidity_audit_lib.messaging import VulnerabilityReport, AuditBase, ContractTask
+from config import Config
 
 
 class KnownVulnerability(str, Enum):
@@ -74,6 +78,7 @@ class MinerInfo(BaseModel):
     ip: str
     port: int
     hotkey: str
+    is_alive: bool = True
 
 
 class NFTMetadata(BaseModel):

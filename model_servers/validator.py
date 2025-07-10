@@ -1,21 +1,22 @@
 import json
 import os
 import random
+import re
 
+from bittensor_wallet import Keypair
 from fastapi import FastAPI, Request, HTTPException
 from openai import AsyncOpenAI
-from py_solidity_vuln_db import get_vulnerability
+from pydantic import BaseModel
 from solc_ast_parser.utils import compile_contract_with_standart_input
 
-from ai_audits.contracts.contract_generator import (
-    Vulnerability,
-    create_contract,
-    create_task,
-)
+from ai_audits.contracts.contract_generator import Vulnerability, create_contract, create_task
 from ai_audits.protocol import SmartContract, ValidatorTask, KnownVulnerability, TaskType
-from ai_audits.subnet_utils import ROLES, SolcSingleton
+from ai_audits.report_correction import LLMScoring, MinerResult, ValidatorEstimation, prepare_reports, restore_reports
+from ai_audits.subnet_utils import ROLES, solc
+from config import Config
 
-GPT_MODEL = "anthropic/claude-3.7-sonnet"
+TASK_MODEL = "anthropic/claude-3.7-sonnet"
+ESTIMATION_MODEL = "meta-llama/llama-3.3-70b-instruct"
 
 client = AsyncOpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -57,55 +58,128 @@ Output format:
 """.strip()
 
 PROMPT_VALID_CONTRACT = """
-    You are a Solidity smart contract writer. 
-    Your role is to help user writers learn Solidity smart contracts by providing them different examples of contracts.
-    Be creative when generating contracts, avoid using common names or known contract structures. 
-    Do not use primitive examples of contracts, human writers need to understand the complexity of the contracts.
+You are a Solidity smart contract writer. 
+Your role is to help user writers learn Solidity smart contracts by providing them different examples of contracts.
+Be creative when generating contracts, avoid using common names or known contract structures. 
+Do not use primitive examples of contracts, human writers need to understand the complexity of the contracts.
 
-    Aim to create more complex contracts rather than simple, typical examples.  
-    You should add 5-7 state variables and 5-7 functions.
-    Ensure that the contract code is valid and can be successfully compiled by solidity compiler.
+Aim to create more complex contracts rather than simple, typical examples.  
+You should add 5-7 state variables and 5-7 functions.
+Ensure that the contract code is valid and can be successfully compiled by solidity compiler.
 
-    Generate response in JSON format with no extra comments or explanations.
-    Answer with only JSON text, without markdown formatting, without any formatting.
+Generate the contract code within XML <code></code> tags. Avoid any comments or explanations outside the code block.
 
-    Output format:
-    {{
-        "code": "Solidity code of the contract"
-    }}
+Output format:
+<code>
+// Your complete Solidity contract here
+</code>
 """
+
+
+PROMPT_ESTIMATION = """
+You are an expert Solidity security auditor with deep knowledge of smart contract vulnerabilities and testing methodologies.
+
+Given the contract code and the reports, your task is to evaluate each report and score the responses.
+You must make sure that the reports are relevant for vulnerability class specified in the report.
+Scoring should have the following JSON format:
+```
+type Reason = string; // Short reason for the score
+type Score = number; // Score from 0 to 10
+type Scoring = {
+    report_id: string; // The unique identifier of the report being evaluated
+    description_reasons: Reason[];
+    // How good are root cause, impact and context explained?
+    description_score: Score;
+    test_case_reasons: Reason[];
+    // Are setup, execution and expectations clear?
+    test_case_score: Score;
+    fixed_lines_reasons: Reason[];
+    // Are the fixed lines relevant and do they address the issue?
+    fixed_lines_score: Score;
+}
+```
+
+Avoid any comments.
+"""
+
+
+class VulnerableContract(BaseModel):
+    vulnerability_class: str
+    code: str
+    description: str = ""
 
 
 def get_hybrid_validator_prompt(code: str) -> str:
     return f"""
-    You are a Solidity smart contract writer. 
-    Your role is to help user writers learn Solidity smart contracts by providing them different examples of contracts.
-    Be creative when generating contracts, avoid using common names or known contract structures. 
-    Do not use primitive examples of contracts, human writers need to understand the complexity of the contracts.
+You are an expert Solidity smart contract developer. Generate a complete, compilable contract based on the provided code snippet.
 
-    Aim to create more complex contracts rather than simple, typical examples. 
-    You need to analyze this code: {code}
-    and define or initialize all identifiers that are presented in this code, 
-    except builtin functions and storages. (note: you are not allowed to use any imports and library initialization). 
-    Also you should add 2-3 state variables and 2-3 functions.
-    Ensure that the contract code is valid, doesn't include any undeclared identifiers and can be successfully compiled by solidity compiler.
+CRITICAL REQUIREMENTS:
+1. Use ONLY Solidity version ^0.8.30.
+2. ALL identifiers, variables, modifiers, functions that are provided in code, must be properly declared and defined in contract (you can remove 'override' keyword from function if it is not needed).
+3. NO imports, libraries, or external dependencies.
+4. NO override keyword unless explicitly inheriting. If there is useless override in provided code, you must remove it for correct compilation.
+5. NO custom modifiers unless you define them first.
+6. All functions must have proper visibility (public, private, internal, external).
+7. State variables must have proper visibility and types.
+8. Do not use safe math libraries or similar, use standard arithmetic operations.
+9. Use standard Solidity syntax only, no experimental features.
 
-    Generate response in JSON format with no extra comments or explanations.
-    Answer with only JSON text, without markdown formatting, without any formatting.
+CODE TO ANALYZE: <code-to-analyze>{code}</code-to-analyze>
 
-    Output format:
-    {{
-        "code": "Solidity code of the contract"
-    }}
-    """.strip()
+TEMPLATE STRUCTURE:
+<template>
+pragma solidity ^0.8.30;
 
+// Libraries (if needed)
 
-solc = SolcSingleton()
+// Interfaces (if needed)
+
+// Structs (if needed)
+
+contract YourContractName {{
+    // State variables from code-to-analyze
+    // State variables (2-3 additional ones)
+    
+    // Events (if needed)
+    
+    // Constructor (if needed)
+
+    // Functions from code-to-analyze
+    // Functions (2-3 additional ones)
+    // Each function must have proper visibility
+}}
+</template>
+Avoid any comments or explanations in code, you must generate only the contract code.
+
+You must to convert the constructor to the 'initialize' function and call it in your constructor if it is present in the code.
+Template for constructor is like this:
+<constructor-template>    
+constructor(...params) {{
+    initialize(...params)
+}}
+
+function initialize(...) {{ ...}}
+</constructor-template>
+
+COMMON MISTAKES TO AVOID:
+- Using undefined variables or functions
+- Adding 'override' without inheritance in the contract
+- Custom modifiers without definition
+- Missing function visibility
+- Using experimental features
+
+Generate the contract code within XML <code></code> tags. Avoid any comments or explanations outside the code block.
+
+Output format:
+<code>
+// Your complete Solidity contract here
+</code>
+""".strip()
 
 
 async def generate_contract(prompt: str) -> SmartContract | None:
     completion = await client.chat.completions.create(
-        model=GPT_MODEL,
+        model=TASK_MODEL,
         messages=[
             {"role": ROLES.SYSTEM, "content": prompt},
             {
@@ -115,20 +189,8 @@ async def generate_contract(prompt: str) -> SmartContract | None:
         ],
         temperature=0.3,
     )
-    return try_prepare_contract(completion.choices[0].message.content)
-
-
-def try_prepare_contract(result) -> SmartContract | None:
-    if isinstance(result, str):
-        try:
-            result = json.loads(result)
-        except:
-            return None
-    if not isinstance(result, dict):
-        return None
-    if "code" not in result:
-        return None
-    return SmartContract(code=result["code"])
+    content = re.search(r"<code>(.+?)</code>", completion.choices[0].message.content, re.DOTALL).group(1).strip()
+    return SmartContract(code=content)
 
 
 async def generate_task(requested_vulnerability: str | None = None) -> ValidatorTask:
@@ -138,7 +200,7 @@ async def generate_task(requested_vulnerability: str | None = None) -> Validator
         else [requested_vulnerability]
     )
     completion = await client.beta.chat.completions.parse(
-        model=GPT_MODEL,
+        model=TASK_MODEL,
         messages=[
             {"role": ROLES.SYSTEM, "content": PROMPT_VALIDATOR},
             # Output format guidance is provided automatically by OpenAI SDK.
@@ -158,12 +220,57 @@ async def generate_task(requested_vulnerability: str | None = None) -> Validator
         return None
 
 
+class AdditionalFieldsScoringRequest(BaseModel):
+    task: str
+    responses: list[MinerResult]
+
+
+@app.post("/estimate_response", response_model=list[ValidatorEstimation])
+async def estimate_response(request: AdditionalFieldsScoringRequest):
+    report_chunks = prepare_reports(request.responses)
+    if not report_chunks:
+        raise HTTPException(status_code=400, detail="No valid reports found")
+
+    scoring: list[ValidatorEstimation] = []
+
+    for reports in report_chunks:
+        if not reports:
+            continue
+        try:
+            completion = await client.chat.completions.create(
+                model=ESTIMATION_MODEL,
+                messages=[
+                    {"role": ROLES.SYSTEM, "content": PROMPT_ESTIMATION},
+                    {
+                        "role": ROLES.USER,
+                        "content": f"Solidity contract code:\n```solidity\n{request.task}\n```\n\n"
+                        + f"Reports to evaluate:\n```json\n{json.dumps([report.model_dump() for report in reports], indent=2)}\n```",
+                    },
+                ],
+            )
+            parsed_response = json.loads(
+                re.search(r"\`\`\`\w*\s*([\s\S]*?)\s*\`\`\`", completion.choices[0].message.content).group(1)
+            )
+            llm_response = (
+                [LLMScoring(**item) for item in parsed_response]
+                if isinstance(parsed_response, list)
+                else [LLMScoring(**parsed_response)]
+            )
+
+            scoring.extend(restore_reports(reports, llm_response))
+
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Error parsing LLM result: {e}")
+
+    return scoring
+
+
 @app.post("/task", response_model=ValidatorTask)
 async def get_task(request: Request):
     requested_vulnerability = (await request.body()).decode("utf-8")
     if requested_vulnerability not in VULNERABILITIES_TO_GENERATE:
         requested_vulnerability = None
-    tries = int(os.getenv("MAX_TRIES", "3"))
+    tries = Config.TASK_MAX_TRIES
     is_valid, validator_template = False, None
     while tries > 0:
         tries -= 1
@@ -183,27 +290,19 @@ async def get_task(request: Request):
 
 
 @app.post("/hybrid_task")
-async def get_hybrid_task(request: Request):
-    tries = int(os.getenv("MAX_TRIES", "3"))
-    is_valid, result = False, None
-
-    requested_vulnerability = (await request.body()).decode("utf-8")
-    if requested_vulnerability not in VULNERABILITIES_TO_GENERATE:
-        requested_vulnerability = None
-
+async def get_hybrid_task(vulnerability_from_validator: VulnerableContract):
+    tries = Config.TASK_MAX_TRIES
+    result = None
+    #  TODO:  Remove type Duplication
+    vulnerability = Vulnerability(
+        vulnerabilityClass=vulnerability_from_validator.vulnerability_class, code=vulnerability_from_validator.code
+    )
     while tries > 0:
-        raw_vulnerability = get_vulnerability(requested_vulnerability.lower() if requested_vulnerability else None)
-        print(f"Raw vulnerability code: {repr(raw_vulnerability.code)}")
-        raw_vulnerability = Vulnerability(vulnerabilityClass=raw_vulnerability.name, code=raw_vulnerability.code)
+        print(f"Raw vulnerability code: {repr(vulnerability.code)}")
 
         tries -= 1
-        try:
-            compile_contract_with_standart_input(create_contract(raw_vulnerability.code))
-        except Exception as e:
-            print(f"Vulnerability compilation error: {e}")
-            continue
 
-        result = await generate_contract(get_hybrid_validator_prompt(raw_vulnerability.code))
+        result = await generate_contract(get_hybrid_validator_prompt(vulnerability.code))
         print(f"Generated contract: {repr(result)}")
 
         try:
@@ -212,14 +311,11 @@ async def get_hybrid_task(request: Request):
             print(f"Compilation error: {e}")
             continue
 
-        if result is not None:
-            is_valid = True
-            break
-    if not is_valid:
+    if result is None:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
 
     try:
-        task = create_task(result.code, raw_vulnerability)
+        task = create_task(result.code, vulnerability)
         print(f"Task code: {repr(task.contract_code)}")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -229,11 +325,11 @@ async def get_hybrid_task(request: Request):
 
 @app.post("/valid_contract")
 async def get_valid_contract(request: Request):
-    tries = int(os.getenv("MAX_TRIES", "3"))
+    tries = Config.TASK_MAX_TRIES
     is_valid, result = False, None
 
-
     while tries > 0:
+        tries -= 1
         result = await generate_contract(prompt=PROMPT_VALID_CONTRACT)
 
         print(f"Generated contract: {result}")
@@ -246,7 +342,6 @@ async def get_valid_contract(request: Request):
         if result is not None:
             is_valid = True
             break
-        tries -= 1
     if not is_valid:
         raise HTTPException(status_code=400, detail="Invalid answer from LLM")
 
@@ -264,8 +359,11 @@ async def healthchecker():
     return {"status": "OK"}
 
 
-if __name__ == "__main__":
+def run_model_server():
     import uvicorn
 
-    solc.install_solc()
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("SERVER_PORT", "5000")))
+
+
+if __name__ == "__main__":
+    run_model_server()

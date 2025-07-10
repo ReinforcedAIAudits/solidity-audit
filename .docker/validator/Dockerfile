@@ -10,5 +10,3 @@ RUN pip install setuptools --upgrade
 
 RUN pip install -r requirements.txt
 COPY . /app
-
-RUN pip install -e .

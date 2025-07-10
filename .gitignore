@@ -166,3 +166,7 @@ testing/
 # Editors
 .vscode/
 .idea/
+
+config/local.py
+
+xrun_*.py
