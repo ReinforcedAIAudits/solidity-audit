@@ -4,6 +4,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from llama_cpp import Llama
 from starlette.requests import Request
+from config import Config
 
 app = FastAPI()
 
@@ -119,7 +120,7 @@ def try_prepare_result(result) -> list[dict] | None:
 
 @app.post("/submit")
 async def submit(request: Request):
-    tries = int(os.getenv("MAX_TRIES", "3"))
+    tries = Config.TASK_MAX_TRIES
     is_valid, result = False, None
     contract_code = (await request.body()).decode("utf-8")
     while tries > 0:
@@ -134,7 +135,11 @@ async def submit(request: Request):
     return result
 
 
-if __name__ == "__main__":
+def run_model_server():
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("SERVER_PORT", "5001")))
+
+
+if __name__ == "__main__":
+    run_model_server()

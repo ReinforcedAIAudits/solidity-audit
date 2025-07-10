@@ -111,7 +111,6 @@ To install the subnet, you need to make some simple instructions:
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-pip install -e .
 ```
 
 This commands will create virtual python environment and install required dependencies.
@@ -125,7 +124,7 @@ This commands will create virtual python environment and install required depend
 To run the default miner server with local LLM, you simply need to execute the command:
 
 ```bash
-python model_servers/miner.py
+python run.py miner_model_server
 ```
 
 To run a miner, navigate to the `solidity-audit` directory, run this command:
@@ -134,20 +133,19 @@ To run a miner, navigate to the `solidity-audit` directory, run this command:
 export BT_AXON_PORT=<MINER_PORT> \
     CHAIN_ENDPOINT=<CHAIN_ENDPOINT> \
     NETWORK_TYPE=<NETWORK_TYPE> \
-    NETWORK_UID=<NETWORK_UID> \
     MNEMONIC_HOTKEY=<YOUR_WALLET_HOTKEY_MNEMONIC> \
     MODEL_SERVER=<MODEL_SERVER_URL>
     
-python neurons/miner.py
+python run.py miner
 ```
 
 ### For mainnet 
 
-`NET_UID` must be `92`, `NETWORK_TYPE` must be `mainnet` AND `CHAIN_ENDPOINT` must be `wss://entrypoint-finney.opentensor.ai:443/`
+`NETWORK_TYPE` must be `mainnet` AND `CHAIN_ENDPOINT` must be `wss://entrypoint-finney.opentensor.ai:443/`
 
 ### For testnet
 
-`NET_UID` must be `222`, `NETWORK_TYPE` must be `testnet` AND `CHAIN_ENDPOINT` must be `wss://test.finney.opentensor.ai:443/`
+`NETWORK_TYPE` must be `testnet` AND `CHAIN_ENDPOINT` must be `wss://test.finney.opentensor.ai:443/`
 
 > **IMPORTANT**: Do not run more than one miner per machine. Running multiple miners will result in the loss of incentive and emissions on all miners.
 
@@ -158,23 +156,21 @@ python neurons/miner.py
 Similar to running a miner in the above section, navigate to the `solidity-audit` directory and run the following:
 
 ```
-export BT_AXON_PORT=<VALIDATOR_PORT> \
-    CHAIN_ENDPOINT=<CHAIN_ENDPOINT> \
+export CHAIN_ENDPOINT=<CHAIN_ENDPOINT> \
     NETWORK_TYPE=<NETWORK_TYPE> \
-    NETWORK_UID=<NETWORK_UID> \
     MNEMONIC_HOTKEY=<YOUR_WALLET_HOTKEY_MNEMONIC> \
     MODEL_SERVER=<MODEL_SERVER_URL> \
     
-python neurons/validator.py
+python run.py validator
 ```
 
 ### For mainnet 
 
-`NET_UID` must be `92`, `NETWORK_TYPE` must be `mainnet` AND `CHAIN_ENDPOINT` must be `wss://entrypoint-finney.opentensor.ai:443/`
+`NETWORK_TYPE` must be `mainnet` AND `CHAIN_ENDPOINT` must be `wss://entrypoint-finney.opentensor.ai:443/`
 
 ### For testnet
 
-`NET_UID` must be `222`, `NETWORK_TYPE` must be `testnet` AND `CHAIN_ENDPOINT` must be `wss://test.finney.opentensor.ai:443/`
+`NETWORK_TYPE` must be `testnet` AND `CHAIN_ENDPOINT` must be `wss://test.finney.opentensor.ai:443/`
 
 
 ## Installation (docker) <a id="install-docker"></a>
@@ -189,7 +185,6 @@ docker compose up -d miner
 
 To make this work you need to set environment variables:
 * **MNEMONIC_HOTKEY** - seed phrase of miner hot key
-* **NETWORK_UID** - UID of Solidity Audit network (222 for testnet, 92 for mainnet)
 * **NETWORK_TYPE** - network type (`testnet` for testnet, `mainnet` for mainnet)
 * **CHAIN_ENDPOINT** - network endpoint (`wss://test.finney.opentensor.ai:443/` for testnet, `wss://entrypoint-finney.opentensor.ai:443/` for mainnet)
 * **EXTERNAL_IP** - external ip of machine where miner would running
@@ -203,7 +198,6 @@ docker compose up -d validator
 
 To make this work you need to set environment variables:
 * **MNEMONIC_HOTKEY** - seed phrase of validator hot key
-* **NETWORK_UID** - UID of Solidity Audit network (222 for testnet, 92 for mainnet)
 * **NETWORK_TYPE** - network type (`testnet` for testnet, `mainnet` for mainnet)
 * **CHAIN_ENDPOINT** - network endpoint (``wss://test.finney.opentensor.ai:443/` for testnet, `wss://entrypoint-finney.opentensor.ai:443/` for mainnet)
 * **MODEL_SERVER** - url for validator model_server to generate contracts (`'http://validator_server:5000'`)

@@ -6,11 +6,10 @@ services:
       dockerfile: ./docker/validator/Dockerfile
     image: validator_server
     container_name: validator_server
-    command: python model_servers/validator.py
+    command: python run.py validator_model_server
     environment:
-      SERVER_PORT: 5000
       OPEN_ROUTER_API_KEY: ${OPEN_ROUTER_API_KEY}
-      MAX_TRIES: 3
+      MAX_TRIES: 1
     restart: unless-stopped
     networks:
       - solidity-audit
@@ -24,7 +23,7 @@ services:
     environment:
       SERVER_PORT: 5000
       MAX_TRIES: 3
-    command: python model_servers/miner.py
+    command: python run.py miner_model_server
     restart: unless-stopped
     networks:
       - solidity-audit
@@ -35,9 +34,10 @@ services:
       dockerfile: ./docker/neuron/Dockerfile
     image: miner
     container_name: miner
+    command: python run.py miner
     environment:
       MNEMONIC_HOTKEY: ${MINER_HOTKEY_MNEMONIC}
-      NETWORK_UID: ${NETWORK_UID}
+      NETWORK_TYPE: ${NETWORK_TYPE}
       CHAIN_ENDPOINT: ${CHAIN_ENDPOINT}
       EXTERNAL_IP: ${EXTERNAL_IP}
       MODEL_SERVER: 'http://miner_server:5000'
@@ -54,12 +54,12 @@ services:
       dockerfile: ./docker/neuron/Dockerfile
     image: validator
     container_name: validator
+    command: python run.py validator
     environment:
       MNEMONIC_HOTKEY: ${VALIDATOR_HOTKEY_MNEMONIC}
-      NETWORK_UID: ${NETWORK_UID}
+      NETWORK_TYPE: ${NETWORK_TYPE}
       CHAIN_ENDPOINT: ${CHAIN_ENDPOINT}
       VALIDATOR_TIME: ${VALIDATOR_TIME}
-      BT_AXON_PORT: 8100
       MODEL_SERVER: 'http://validator_server:5000'
     restart: unless-stopped
     networks:

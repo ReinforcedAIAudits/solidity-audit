@@ -1,24 +1,24 @@
 import collections
 import dataclasses
 import logging
-import os
 import sys
 import time
 
 import requests
 import uvicorn
-from async_substrate_interface.sync_substrate import Keypair
-from bittensor.utils import networking as net
-from solidity_audit_lib import SubtensorWrapper
-from solidity_audit_lib.relayer_client.client import RelayerClient
+from bittensor_wallet import Keypair
 from substrateinterface import Keypair as CryptoKeypair
 
-__all__ = ["ReinforcedNeuron", "ReinforcedConfig", "ScoresBuffer", "ReinforcedError"]
-
+from solidity_audit_lib import SubtensorWrapper
+from solidity_audit_lib.relayer_client.client import RelayerClient
 from solidity_audit_lib.relayer_client.relayer_types import RegisterParams
 from unique_playgrounds import UniqueHelper
 
 from ai_audits.subnet_utils import create_session
+from config import Config
+
+
+__all__ = ["ReinforcedNeuron", "ReinforcedConfig", "ScoresBuffer", "ReinforcedError"]
 
 
 class ScoresBuffer:
@@ -125,13 +125,28 @@ class ReinforcedNeuron:
     def __init__(self, config: ReinforcedConfig):
         self.log = logging.getLogger(f'reinforced.{self.NEURON_TYPE}')
         self.config = config
-        self.hotkey = Keypair.create_from_uri(os.getenv('MNEMONIC_HOTKEY', '//Alice'))
-        self.crypto_hotkey = CryptoKeypair.create_from_uri(os.getenv('MNEMONIC_HOTKEY', '//Alice'))
+        hotkey = Config.MNEMONIC_HOTKEY.strip()
+        if hotkey.startswith('0x'):
+            hotkey_size = len(hotkey) // 2 - 1
+            if hotkey_size not in (32, 64):
+                raise ReinforcedError('Invalid MNEMONIC_HOTKEY, only seed phrase, seed and full private key supported')
+            self.hotkey = (
+                Keypair.create_from_private_key(hotkey) if hotkey_size == 64 else
+                Keypair.create_from_seed(hotkey)
+            )
+            self.crypto_hotkey = (
+                CryptoKeypair.create_from_private_key(hotkey, ss58_format=42) if hotkey_size == 64 else
+                CryptoKeypair.create_from_seed(hotkey, ss58_format=42)
+            )
+        else:
+            self.hotkey = Keypair.create_from_uri(hotkey)
+            self.crypto_hotkey = CryptoKeypair.create_from_uri(hotkey)
+
         self._axons_cache = None
         self._axons_cache_time = 0
         self.uid = None
-        self.ip = os.getenv('EXTERNAL_IP', net.get_external_ip())
-        self.port = int(os.getenv('BT_AXON_PORT', '8091'))
+        self.ip = Config.EXTERNAL_IP
+        self.port = Config.BT_AXON_PORT
         self._uid_check_time = 0
         self.log_handler = None
         self.init_logging()
@@ -142,11 +157,8 @@ class ReinforcedNeuron:
         )
 
     def get_settings(self):
-        settings = create_session().get('https://audit.reinforced.app/api/settings').json()
-        if os.getenv('NETWORK_TYPE'):
-            relayer = [x for x in settings['relayers'] if x['network'] == os.getenv('NETWORK_TYPE')][0]
-        else:
-            relayer = [x for x in settings['relayers'] if x['subnet_uid'] == self.config.net_uid][0]
+        settings = create_session().get(f'{Config.SECURE_WEB_URL}/config/settings.json').json()
+        relayer = [x for x in settings['relayers'] if x['network'] == Config.NETWORK_TYPE][0]
         self.settings = ReinforcedSettings(
             unique_endpoint=settings['unique_endpoint'], trusted_keys=settings['trusted_keys'],
             relayer_ip=relayer['ip'], relayer_port=relayer['port'], network_id=relayer['network_id']
@@ -238,10 +250,10 @@ class ReinforcedNeuron:
 
     @classmethod
     def serve_uvicorn(cls, app):
-        uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('BT_AXON_PORT', '8091')), log_level='error')
+        uvicorn.run(app, host="0.0.0.0", port=Config.BT_AXON_PORT, log_level='error')
 
     def wait_for_server(self, url, max_attempts=10, delay=5):
-        if os.getenv("SKIP_HEALTHCHECK", "false") == "true":
+        if Config.SKIP_HEALTHCHECK:
             return True
         for _ in range(max_attempts):
             try:

@@ -1,12 +1,8 @@
 import unittest
-
+from ai_audits.nft_protocol import TestMessage
 from bittensor import Keypair as BTKeypair
 from hypothesis import given, strategies as st
-from solidity_audit_lib.messaging import TimestampedMessage
 
-
-class TestMessage(TimestampedMessage):
-    content: str
 
 class TestNFTProtocol(unittest.TestCase):
 

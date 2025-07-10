@@ -121,34 +121,34 @@ class ValidatorTestCase(unittest.TestCase):
 
         # Approximate match should score less than 1 but more than 0
         score = Validator.validate_reports_by_reference([approximate_vulnerability_report], validator_task)
-        print(score)
+
         self.assertGreater(score, 0)
         self.assertLess(score, 1)
 
     def test_validate_responses(self):
         miners = [
-            MinerInfo(uid=0, ip='0.0.0.0', port=8090, hotkey='hotkey0'),
-            MinerInfo(uid=1, ip='0.0.0.0', port=8091, hotkey='hotkey1'),
-            MinerInfo(uid=2, ip='0.0.0.0', port=8092, hotkey='hotkey2'),
+            MinerInfo(uid=0, ip="0.0.0.0", port=8090, hotkey="hotkey0"),
+            MinerInfo(uid=1, ip="0.0.0.0", port=8091, hotkey="hotkey1"),
+            MinerInfo(uid=2, ip="0.0.0.0", port=8092, hotkey="hotkey2"),
         ]
         responses = [
             MinerResult(
-                uid=0, time=1,
-                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
+                uid=0, time=61, response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
             ),
             MinerResult(
-                uid=1, time=2,
-                response=[VulnerabilityReport(vulnerabilityClass="Outdated solidity version", **DEFAULT_FIELDS)]
+                uid=1,
+                time=62,
+                response=[VulnerabilityReport(vulnerabilityClass="Outdated solidity version", **DEFAULT_FIELDS)],
             ),
             MinerResult(
-                uid=2, time=0.5,
-                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
-            )
+                uid=2, time=60.5, response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
+            ),
         ]
 
         task = ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS)
+        task_map = {miner.uid: task for miner in miners}
 
-        scores = Validator.validate_responses(responses, task, miners)
+        scores = Validator.validate_responses(responses, task_map, miners, validate_extra_fields=False)
 
         self.assertEqual(len(scores), 3)
         self.assertGreater(scores[0], scores[1])
@@ -160,53 +160,48 @@ class ValidatorTestCase(unittest.TestCase):
 
     def test_validate_responses_with_no_responses(self):
         responses = []
-        task = ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS)
 
-        scores = Validator.validate_responses(responses, task, [])
+        scores = Validator.validate_responses(responses, {}, [], validate_extra_fields=False)
 
         self.assertEqual(scores, [])
 
     def test_validate_responses_with_no_success_responses(self):
         miners = [
-            MinerInfo(uid=0, ip='0.0.0.0', port=8090, hotkey='hotkey0'),
-            MinerInfo(uid=1, ip='0.0.0.0', port=8091, hotkey='hotkey1')
+            MinerInfo(uid=0, ip="0.0.0.0", port=8090, hotkey="hotkey0"),
+            MinerInfo(uid=1, ip="0.0.0.0", port=8091, hotkey="hotkey1"),
         ]
         responses = [
             MinerResult(
-                uid=0, time=1,
-                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
+                uid=0, time=1, response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
             ),
             MinerResult(
-                uid=1, time=2,
-                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
-            )
+                uid=1, time=2, response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
+            ),
         ]
 
         task = ValidatorTask(vulnerabilityClass="integer overflow", **DEFAULT_TASK_FIELDS)
-
-        scores = Validator.validate_responses(responses, task, miners)
+        task_map = {miner.uid: task for miner in miners}
+        scores = Validator.validate_responses(responses, task_map, miners, validate_extra_fields=False)
 
         self.assertEqual(scores, [0.0, 0.0])
 
     def test_validate_responses_with_same_time(self):
         miners = [
-            MinerInfo(uid=0, ip='0.0.0.0', port=8090, hotkey='hotkey0'),
-            MinerInfo(uid=1, ip='0.0.0.0', port=8091, hotkey='hotkey1')
+            MinerInfo(uid=0, ip="0.0.0.0", port=8090, hotkey="hotkey0"),
+            MinerInfo(uid=1, ip="0.0.0.0", port=8091, hotkey="hotkey1"),
         ]
         responses = [
             MinerResult(
-                uid=0, time=1,
-                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
+                uid=0, time=1, response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
             ),
             MinerResult(
-                uid=1, time=1,
-                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
-            )
+                uid=1, time=1, response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
+            ),
         ]
 
         task = ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS)
-
-        scores = Validator.validate_responses(responses, task, miners)
+        task_map = {miner.uid: task for miner in miners}
+        scores = Validator.validate_responses(responses, task_map, miners, validate_extra_fields=False)
 
         self.assertEqual(len(scores), 2)
         self.assertEqual(scores[0], scores[1])
@@ -214,26 +209,26 @@ class ValidatorTestCase(unittest.TestCase):
 
     def test_validate_responses_with_multiple_reports(self):
         miners = [
-            MinerInfo(uid=0, ip='0.0.0.0', port=8090, hotkey='hotkey0'),
-            MinerInfo(uid=1, ip='0.0.0.0', port=8091, hotkey='hotkey1')
+            MinerInfo(uid=0, ip="0.0.0.0", port=8090, hotkey="hotkey0"),
+            MinerInfo(uid=1, ip="0.0.0.0", port=8091, hotkey="hotkey1"),
         ]
         responses = [
             MinerResult(
-                uid=0, time=1,
+                uid=0,
+                time=1,
                 response=[
                     VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS),
                     VulnerabilityReport(vulnerabilityClass="Outdated solidity version", **DEFAULT_FIELDS),
-                ]
+                ],
             ),
             MinerResult(
-                uid=1, time=1,
-                response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
-            )
+                uid=1, time=1, response=[VulnerabilityReport(vulnerabilityClass="Reentrancy", **DEFAULT_FIELDS)]
+            ),
         ]
 
         task = ValidatorTask(vulnerabilityClass="reentrancy", **DEFAULT_TASK_FIELDS)
-
-        scores = Validator.validate_responses(responses, task, miners)
+        task_map = {miner.uid: task for miner in miners}
+        scores = Validator.validate_responses(responses, task_map, miners, validate_extra_fields=False)
 
         self.assertEqual(len(scores), 2)
         self.assertLessEqual(1 - scores[0], 0.05)  # Multiple reports should have slightly lower score
