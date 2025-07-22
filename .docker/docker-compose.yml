@@ -2,7 +2,7 @@ services:
 
   validator_server:
     build:
-      context: .
+      context: ..
       dockerfile: ./docker/validator/Dockerfile
     image: validator_server
     container_name: validator_server
@@ -16,7 +16,7 @@ services:
 
   miner_server:
     build:
-      context: .
+      context: ..
       dockerfile: ./docker/miner/Dockerfile
     image: miner_server
     container_name: miner_server
@@ -30,7 +30,7 @@ services:
 
   miner:
     build:
-      context: .
+      context: ..
       dockerfile: ./docker/neuron/Dockerfile
     image: miner
     container_name: miner
@@ -50,7 +50,7 @@ services:
 
   validator:
     build:
-      context: .
+      context: ..
       dockerfile: ./docker/neuron/Dockerfile
     image: validator
     container_name: validator
@@ -67,5 +67,3 @@ services:
 
 networks:
   solidity-audit:
-
-

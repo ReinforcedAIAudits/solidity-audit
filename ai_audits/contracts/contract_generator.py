@@ -1,3 +1,4 @@
+import random
 import re
 import os
 import time
@@ -10,14 +11,14 @@ from solc_ast_parser.models.ast_models import (
 )
 from solc_ast_parser.comments import insert_comments_into_ast
 from solc_ast_parser.enrichment import restore_function_definitions, restore_storages
-from solc_ast_parser.utils import find_node_with_properties, replace_node_to_multiple, remove_node, insert_node
+from solc_ast_parser.utils import find_node_with_properties, replace_node_to_multiple, remove_node, insert_node, shuffle_functions_and_storages
 from solc_ast_parser.models import ast_models
 from solc_ast_parser.models.ast_models import (
     SourceUnit,
     VariableDeclaration,
     FunctionDefinition,
 )
-from solc_ast_parser.models.base_ast_models import NodeType
+from solc_ast_parser.models.base_ast_models import NodeType, SolidityConfig, QuotePreference
 from solc_ast_parser.utils import (
     create_ast_from_source,
     create_ast_with_standart_input,
@@ -366,7 +367,10 @@ def create_task(contract_source: str, raw_vulnerability: Vulnerability) -> Valid
         print(f"Error during contract with vulnerability compilation: {e}")
         raise ValueError(f"Error during contract with vulnerability compilation")
 
-    contract_source = ast_contract_with_vul.to_solidity()
+    if not shuffle_functions_and_storages(ast_contract_with_vul):
+        print("Error: Failed to shuffle functions and storages in the contract with vulnerability.")
+    
+    contract_source = ast_contract_with_vul.to_solidity(config=SolidityConfig(quote_preference=random.choice([QuotePreference.SINGLE, QuotePreference.DOUBLE])))
     from_line, to_line = find_function_boundaries(
         ast_contract_with_vul,
         contract_source,

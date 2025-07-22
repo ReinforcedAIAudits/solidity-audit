@@ -7,7 +7,9 @@ from solc_ast_parser.models import ast_models
 from solc_ast_parser.utils import find_node_with_properties
 
 
-__all__ = ["create_session", "ROLES", "is_synonyms", "SolcSingleton", "get_invalid_code", "solc"]
+__all__ = [
+    "create_session", "ROLES", "is_synonyms", "SolcSingleton", "get_invalid_code", "solc", "has_chained_member_access"
+]
 
 
 class ROLES:

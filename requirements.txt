@@ -8,10 +8,10 @@ python-dotenv==1.0.1
 openai==1.51.0
 httpx==0.27.2
 py-solc-x==2.0.3
-solc_ast_parser==1.4.5
+solc_ast_parser==1.4.6
 hypothesis==6.124.9
-solidity-vulnerabilities-db2==0.0.6
+solidity-vulnerabilities-db2==2507.22.1
 websocket-client==1.8.0
 async-substrate-interface==1.3.1
 unique-playgrounds-py==0.0.2
-solidity_audit_lib @ git+https://github.com/ReinforcedAIAudits/lib.git
+solidity-audit-client==2507.22.1
