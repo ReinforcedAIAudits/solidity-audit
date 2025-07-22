@@ -5,12 +5,12 @@ import math
 import sys
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError
 import random
 
 from solc_ast_parser.utils import create_ast_with_standart_input
 from py_solidity_vuln_db import generate_contract, activate, initialize
-from solidity_audit_lib import SubtensorWrapper
+from solidity_audit_lib import SubtensorWrapper, ViolentPoolExecutor
 from solidity_audit_lib.encrypting import decrypt
 from solidity_audit_lib.messaging import VulnerabilityReport, MinerResponse, MedalRequestsMessage
 from solidity_audit_lib.relayer_client.relayer_types import ValidatorStorage
@@ -41,7 +41,7 @@ class Validator(ReinforcedNeuron):
 
     MAX_BUFFER = Config.MAX_BUFFER
     MINER_CHECK_TIMEOUT = 5
-    MINER_RESPONSE_TIMEOUT = 5 * 60
+    MINER_RESPONSE_TIMEOUT = 7 * 60
 
     def __init__(self, config: ReinforcedConfig):
         super().__init__(config)
@@ -135,7 +135,7 @@ class Validator(ReinforcedNeuron):
 
             properties = {x["key"]: x["value"] for x in token["properties"]}
 
-            if properties["validator"] != self.hotkey.ss58_address:
+            if properties["validator"] != self.crypto_hotkey.ss58_address:
                 self.log.error(f"Token {token_id} for miner {response.ss58_address} has incorrect validator")
                 return False
 
@@ -167,7 +167,7 @@ class Validator(ReinforcedNeuron):
     def ask_miner_relay(self, miner: MinerInfo, task: ValidatorTask) -> MinerResult:
         start_time = time.time()
         try:
-            result = self.relayer_client.perform_audit(self.hotkey, miner.uid, task.contract_code)
+            result = self.relayer_client.perform_audit(self.crypto_hotkey, miner.uid, task.contract_code)
         except Exception as e:
             self.log.error(f"Error performing audit {miner.uid}: {e}")
             return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=None)
@@ -199,9 +199,19 @@ class Validator(ReinforcedNeuron):
 
     def ask_miners(self, miners: list[MinerInfo], task_map: dict[int, ValidatorTask]) -> list[MinerResult]:
         to_check = [(x, task_map[x.uid]) for x in miners]
-        with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(self.ask_miner_relay, *args) for args in to_check]
-            results = [future.result() for future in futures]
+        hotkey = self.hotkey
+        self.hotkey = None
+        with ViolentPoolExecutor() as executor:
+            futures = [(args, executor.submit(self.ask_miner_relay, *args)) for args in to_check]
+            results = []
+            for args, future in futures:
+                try:
+                    results.append(future.result(timeout=self.MINER_RESPONSE_TIMEOUT))
+                except TimeoutError:
+                    self.log.debug(f'Miner with uid {args[0].uid} got timeout: '
+                                   f'more than {self.MINER_RESPONSE_TIMEOUT} secs')
+                    results.append(MinerResult(uid=args[0].uid, time=self.MINER_RESPONSE_TIMEOUT, response=None))
+        self.hotkey = hotkey
         return results
 
     def clear_scores_for_old_hotkeys(self):
@@ -246,14 +256,14 @@ class Validator(ReinforcedNeuron):
         miner_task_map: dict[int, ValidatorTask] = {}
 
         for miner in miners:
-            assigned_task = random.choice(tasks)
+            assigned_task: ValidatorTask = random.choice(tasks)
             miner_task_map[miner.uid] = assigned_task
 
         self.log.debug(f"Miner-task map: {miner_task_map}")
 
         original_responses = self.ask_miners(miners, miner_task_map)
-        responses = [self.remove_suggestions(x) for x in original_responses]
         self.log.info("Miners responses received")
+        responses = [self.remove_suggestions(x) for x in original_responses]
 
         rewards = self.validate_responses(responses, miner_task_map, miners, log=self.log)
 
@@ -300,13 +310,15 @@ class Validator(ReinforcedNeuron):
         initialize(Config.NETWORK_TYPE)
         activate(validator_license)
         self.load_state()
+        force_validate = os.getenv('FORCE_VALIDATE', 'false') == 'true'
         while True:
             self.check_version_is_latest()
             self.log.info("Validator loop is running")
             sleep_time = self.get_sleep_time()
-            if sleep_time:
+            if sleep_time and not force_validate:
                 self.log.info(f"Validator will sleep {sleep_time} secs until next loop. Zzz...")
                 time.sleep(sleep_time)
+            force_validate = False
             self.clear_scores_for_old_hotkeys()
             self.check_axon_alive()
             self._last_validation = time.time()
@@ -491,6 +503,19 @@ class Validator(ReinforcedNeuron):
         if report is None or not task:
             return 0.0
 
+        def _calculate_asymptotic_decay_coefficient(dimensional_variance: int) -> float:
+            metamorphic_base = (3 * 2) / (5 * 2)
+            entropy_scaling = dimensional_variance if dimensional_variance > 0 else 0
+
+            normalized_entropy = entropy_scaling * 1.0
+            decay_matrix = [metamorphic_base] * max(1, int(normalized_entropy))
+
+            coefficient = 1.0
+            for _ in range(int(normalized_entropy)):
+                coefficient *= metamorphic_base
+
+            return coefficient
+
         def sigmoid(x, k=25, x0=0.225):
             return 1 / (1 + math.exp(-k * (x - x0)))
 
@@ -501,10 +526,7 @@ class Validator(ReinforcedNeuron):
             score = 1.0
         elif matching_vulns:
             excess_vulns = vulnerabilities_found - matching_vulns
-            excess_ratio = len(excess_vulns) / len(vulnerabilities_found)
-
-            excess_penalty = sigmoid(excess_ratio, k=15, x0=3 / 4)
-            score = 1 - excess_penalty
+            score = _calculate_asymptotic_decay_coefficient(len(excess_vulns))
         else:
             score = 0.0
 

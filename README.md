@@ -19,13 +19,12 @@
 - [Secure Proof-of-Work Validation](#secure-proof-of-work-validation-via-unique-network-integration)
 - [Validator Operation Principle](#validator-operation-principle)
 - [Relayer](#relayer)
-- [Installation (local)](#install-local)
-  - [Install SolidityAudit](#install-solidityaudit)
-  - [Running a Miner](#running-a-miner-local)
-  - [Running a Validator](#running-a-validator-local)
 - [Installation (Docker)](#install-docker)
   - [Running a Miner](#running-a-miner-docker)
   - [Running a Validator](#running-a-validator-docker)
+- [Installation (local)](#install-local)
+  - [Install SolidityAudit](#install-solidityaudit)
+  - [Running a Miner](#running-a-miner-local)
 - [Model servers](#model-servers)
 
 
@@ -101,6 +100,71 @@ Key Advantages of This Approach:
 - Load Distribution – The relayer maintains up-to-date information about miner availability, helping prevent axon overload and acting as a protection layer from external access attempts outside the metagraph.
 
 
+## Installation (docker) <a id="install-docker"></a>
+
+The project is adapted for installation in Docker, so this option may be preferable for deployment.
+
+### Running a Miner <a id="running-a-miner-docker"></a>
+
+```bash
+docker compose up -d miner
+```
+
+To make this work you need to set environment variables:
+* **MNEMONIC_HOTKEY** - seed phrase of miner hot key
+* **NETWORK_TYPE** - network type (`testnet` for testnet, `mainnet` for mainnet)
+* **CHAIN_ENDPOINT** - network endpoint (`wss://test.finney.opentensor.ai:443/` for testnet, `wss://entrypoint-finney.opentensor.ai:443/` for mainnet)
+* **EXTERNAL_IP** - external ip of machine where miner would running
+* **MODEL_SERVER** - url for miner model_server to perform audit (`'http://miner_server:5000'`)
+
+### Running a Validator <a id="running-a-validator-docker"></a>
+
+The simplest (and best) way to run a validator on SN92 is using Docker. The validator code will update automatically, so you’ll always stay up to date and maintain a good vtrust.
+
+> **Important note:** services must include `restart: unless-stopped` because the container may shut down occasionally (this is also required for auto-updating).
+
+To run the validator, you’ll also need an API key from [OpenRouter](https://openrouter.ai/).
+
+```yaml
+services:
+  validator-server:
+    image: reinforcedai/solidity-audit
+    container_name: validator-server
+    environment:
+      OPEN_ROUTER_API_KEY: 'sk-or-v1-xxxx (Your real OpenRouter key)'
+      NETWORK_TYPE: 'mainnet'
+      SA_SERVICE: 'validator_model_server'
+    restart: unless-stopped
+    networks:
+      - solidity-audit
+
+  validator-uid-x:
+    image: reinforcedai/solidity-audit
+    container_name: validator-uid-x
+    environment:
+      MNEMONIC_HOTKEY: '//Alice (your real hotkey)'
+      CHAIN_ENDPOINT: 'wss://entrypoint-finney.opentensor.ai:443/'
+      MODEL_SERVER: 'http://validator-server:5000'
+      NETWORK_TYPE: 'mainnet'
+      SA_SERVICE: 'validator'
+    restart: unless-stopped
+    networks:
+      - solidity-audit
+
+networks:
+  solidity-audit:
+```
+
+```bash
+docker compose up -d validator-uid-x validator-server
+```
+
+To make this work you need to set environment variables:
+* **MNEMONIC_HOTKEY** - seed phrase of validator hot key
+* **NETWORK_TYPE** - network type (`testnet` for testnet, `mainnet` for mainnet)
+* **CHAIN_ENDPOINT** - network endpoint (``wss://test.finney.opentensor.ai:443/` for testnet, `wss://entrypoint-finney.opentensor.ai:443/` for mainnet)
+* **MODEL_SERVER** - url for validator model_server to generate contracts (`'http://validator_server:5000'`)
+
 ## Installation (local) <a id="install-local"></a>
 
 ### Install SolidityAudit
@@ -116,8 +180,6 @@ pip install -r requirements.txt
 This commands will create virtual python environment and install required dependencies.
 
 ### Running a Miner <a id="running-a-miner-local"></a>
-
-> **IMPORTANT:** Before running a miner with localnet, be sure you have a local subtensor up and running. Please see the [Subtensor guide](#install-local-subtensor) for more details.
 
 #### Model server
 
@@ -148,59 +210,6 @@ python run.py miner
 `NETWORK_TYPE` must be `testnet` AND `CHAIN_ENDPOINT` must be `wss://test.finney.opentensor.ai:443/`
 
 > **IMPORTANT**: Do not run more than one miner per machine. Running multiple miners will result in the loss of incentive and emissions on all miners.
-
-### Running a Validator <a id="running-a-validator-local"></a>
-
-> **IMPORTANT:** Before running a validator in localnet, be sure you have a local subtensor up and running. Please see the [Subtensor guide](#install-local-subtensor) for more details.
-
-Similar to running a miner in the above section, navigate to the `solidity-audit` directory and run the following:
-
-```
-export CHAIN_ENDPOINT=<CHAIN_ENDPOINT> \
-    NETWORK_TYPE=<NETWORK_TYPE> \
-    MNEMONIC_HOTKEY=<YOUR_WALLET_HOTKEY_MNEMONIC> \
-    MODEL_SERVER=<MODEL_SERVER_URL> \
-    
-python run.py validator
-```
-
-### For mainnet 
-
-`NETWORK_TYPE` must be `mainnet` AND `CHAIN_ENDPOINT` must be `wss://entrypoint-finney.opentensor.ai:443/`
-
-### For testnet
-
-`NETWORK_TYPE` must be `testnet` AND `CHAIN_ENDPOINT` must be `wss://test.finney.opentensor.ai:443/`
-
-
-## Installation (docker) <a id="install-docker"></a>
-
-The project is adapted for installation in Docker, so this option may be preferable for deployment.
-
-### Running a Miner <a id="running-a-miner-docker"></a>
-
-```bash
-docker compose up -d miner
-```
-
-To make this work you need to set environment variables:
-* **MNEMONIC_HOTKEY** - seed phrase of miner hot key
-* **NETWORK_TYPE** - network type (`testnet` for testnet, `mainnet` for mainnet)
-* **CHAIN_ENDPOINT** - network endpoint (`wss://test.finney.opentensor.ai:443/` for testnet, `wss://entrypoint-finney.opentensor.ai:443/` for mainnet)
-* **EXTERNAL_IP** - external ip of machine where miner would running
-* **MODEL_SERVER** - url for miner model_server to perform audit (`'http://miner_server:5000'`)
-
-### Running a Validator <a id="running-a-validator-docker"></a>
-
-```bash
-docker compose up -d validator
-```
-
-To make this work you need to set environment variables:
-* **MNEMONIC_HOTKEY** - seed phrase of validator hot key
-* **NETWORK_TYPE** - network type (`testnet` for testnet, `mainnet` for mainnet)
-* **CHAIN_ENDPOINT** - network endpoint (``wss://test.finney.opentensor.ai:443/` for testnet, `wss://entrypoint-finney.opentensor.ai:443/` for mainnet)
-* **MODEL_SERVER** - url for validator model_server to generate contracts (`'http://validator_server:5000'`)
 
 ## Model servers <a id="model-servers"></a>
 
