@@ -1,6 +1,7 @@
 import collections
 import dataclasses
 import logging
+import os
 import sys
 import time
 
@@ -251,6 +252,29 @@ class ReinforcedNeuron:
     @classmethod
     def serve_uvicorn(cls, app):
         uvicorn.run(app, host="0.0.0.0", port=Config.BT_AXON_PORT, log_level='error')
+
+    @classmethod
+    def code_version(cls):
+        version = getattr(cls, '_code_version', None)
+        if version is None:
+            with open(os.path.join(Config.BASE_DIR, 'requirements.version.txt'), 'r') as f:
+                current_version = f.read().strip()
+            setattr(cls, '_code_version', current_version)
+        return getattr(cls, '_code_version')
+
+    @classmethod
+    def current_version(cls) -> tuple[str, str]:
+        current_version = cls.code_version()
+        config = create_session().get(f'{Config.SECURE_WEB_URL}/config/settings.json').json()
+        version = None
+        try:
+            for ver in config['versions']:
+                if ver['network'] == Config.NETWORK_TYPE:
+                    version = ver['version']
+                    break
+        except:
+            pass
+        return current_version, version
 
     def wait_for_server(self, url, max_attempts=10, delay=5):
         if Config.SKIP_HEALTHCHECK:

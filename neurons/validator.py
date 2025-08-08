@@ -69,7 +69,7 @@ class Validator(ReinforcedNeuron):
                     try:
                         ast = create_ast_with_standart_input(create_contract(vulnerability.code))
                         if has_chained_member_access(ast):
-                            raise ValueError('Vulnerability with chained member access')  # TODO: fix this
+                            raise ValueError("Vulnerability with chained member access")  # TODO: fix this
                     except Exception as e:
                         self.log.error(f"Hybrid Task compilation error: {e}")
                         tries -= 1
@@ -82,7 +82,7 @@ class Validator(ReinforcedNeuron):
                     raise ValueError(f"Unable to generate vulnerability for hybrid task")
             result = create_session().post(
                 f"{Config.MODEL_SERVER}/{task_type}",
-                json=None if vulnerability is None else dataclasses.asdict(vulnerability)
+                json=None if vulnerability is None else dataclasses.asdict(vulnerability),
             )
 
             if result.status_code != 200:
@@ -125,8 +125,10 @@ class Validator(ReinforcedNeuron):
             self.log.error(f"Tokens for miner {response.ss58_address} not found")
             return False
 
-        for token_id in response.token_ids:
-            with UniqueHelper(self.settings.unique_endpoint) as helper:
+        metadata_encrypted = []
+
+        with UniqueHelper(self.settings.unique_endpoint) as helper:
+            for token_id in response.token_ids:
                 token = helper.nft.get_token_info(response.collection_id, token_id)
 
             if not token:
@@ -139,35 +141,40 @@ class Validator(ReinforcedNeuron):
                 self.log.error(f"Token {token_id} for miner {response.ss58_address} has incorrect validator")
                 return False
 
-            try:
-                metadata = NFTMetadata(
-                    **json.loads(decrypt(properties["audit"][2:], self.crypto_hotkey, response.ss58_address))
-                )
-            except Exception as e:
-                self.log.error(f"Error decrypting token {token_id} for miner {response.ss58_address}: {e}")
-                return False
+            metadata_encrypted.append(properties["audit"][2:])
 
-            if metadata.task != task.contract_code:
-                self.log.error(f"Token {token_id} for miner {response.ss58_address} has incorrect task")
-                return False
+        metadata_encrypted = "".join(metadata_encrypted)
 
-            if metadata.miner_info.uid != response.uid:
-                self.log.error(f"Token {token_id} for miner {response.ss58_address} has incorrect miner info")
-                return False
+        try:
+            metadata = NFTMetadata(**json.loads(decrypt(metadata_encrypted, self.crypto_hotkey, response.ss58_address)))
+        except Exception as e:
+            self.log.error(f"Error decrypting tokens for miner {response.ss58_address}: {e}")
+            return False
 
-            response_vulns = {x.vulnerability_class for x in response.report if not x.is_suggestion}
-            vulns_in_nft = {x.vulnerability_class for x in metadata.audit if not x.is_suggestion}
+        if metadata.task != task.contract_code:
+            self.log.error(f"Tokens for miner {response.ss58_address} has incorrect task")
+            return False
 
-            if vulns_in_nft != response_vulns:
-                self.log.warning(f"Token {token_id} for miner {response.ss58_address} has incorrect data")
-                return False
+        if metadata.miner_info.uid != response.uid:
+            self.log.error(f"Tokens for miner {response.ss58_address} has incorrect miner info")
+            return False
+
+        response_vulns = {x.vulnerability_class for x in response.report if not x.is_suggestion}
+        vulns_in_nft = {x.vulnerability_class for x in metadata.audit if not x.is_suggestion}
+
+        if vulns_in_nft != response_vulns:
+            self.log.warning(f"Tokens for miner {response.ss58_address} has incorrect data")
+            return False
 
         return True
 
     def ask_miner_relay(self, miner: MinerInfo, task: ValidatorTask) -> MinerResult:
         start_time = time.time()
         try:
-            result = self.relayer_client.perform_audit(self.crypto_hotkey, miner.uid, task.contract_code)
+            current_version = self.code_version()
+            result = self.relayer_client.perform_audit(
+                self.crypto_hotkey, miner.uid, task.contract_code, validator_version=current_version
+            )
         except Exception as e:
             self.log.error(f"Error performing audit {miner.uid}: {e}")
             return MinerResult(uid=miner.uid, time=abs(time.time() - start_time), response=None)
@@ -193,8 +200,11 @@ class Validator(ReinforcedNeuron):
             return MinerResult(uid=miner.uid, time=elapsed_time, response=None)
 
         return MinerResult(
-            uid=miner.uid, time=elapsed_time, response=response.report,
-            collection_id=response.collection_id, tokens=response.token_ids
+            uid=miner.uid,
+            time=elapsed_time,
+            response=response.report,
+            collection_id=response.collection_id,
+            tokens=response.token_ids,
         )
 
     def ask_miners(self, miners: list[MinerInfo], task_map: dict[int, ValidatorTask]) -> list[MinerResult]:
@@ -208,8 +218,9 @@ class Validator(ReinforcedNeuron):
                 try:
                     results.append(future.result(timeout=self.MINER_RESPONSE_TIMEOUT))
                 except TimeoutError:
-                    self.log.debug(f'Miner with uid {args[0].uid} got timeout: '
-                                   f'more than {self.MINER_RESPONSE_TIMEOUT} secs')
+                    self.log.debug(
+                        f"Miner with uid {args[0].uid} got timeout: " f"more than {self.MINER_RESPONSE_TIMEOUT} secs"
+                    )
                     results.append(MinerResult(uid=args[0].uid, time=self.MINER_RESPONSE_TIMEOUT, response=None))
         self.hotkey = hotkey
         return results
@@ -231,7 +242,7 @@ class Validator(ReinforcedNeuron):
             time=miner_answer.time,
             response=[x for x in miner_answer.response if not x.is_suggestion],
             collection_id=miner_answer.collection_id,
-            tokens=miner_answer.tokens
+            tokens=miner_answer.tokens,
         )
 
     def validate(self):
@@ -254,16 +265,20 @@ class Validator(ReinforcedNeuron):
         self.log.info(f"{num_tasks} tasks for miners generated")
 
         miner_task_map: dict[int, ValidatorTask] = {}
+        reverse_task_map: dict[str, dict] = {}
 
         for miner in miners:
             assigned_task: ValidatorTask = random.choice(tasks)
             miner_task_map[miner.uid] = assigned_task
+            reverse_task_map.setdefault(
+                assigned_task.contract_code, {"task": assigned_task.model_dump(), "miners": []}
+            )["miners"].append(miner.uid)
 
         self.log.debug(f"Miner-task map: {miner_task_map}")
-
         original_responses = self.ask_miners(miners, miner_task_map)
         self.log.info("Miners responses received")
         responses = [self.remove_suggestions(x) for x in original_responses]
+        self.log.info("Miners responses suggestions removed")
 
         rewards = self.validate_responses(responses, miner_task_map, miners, log=self.log)
 
@@ -288,29 +303,41 @@ class Validator(ReinforcedNeuron):
         self.set_weights()
 
     def check_version_is_latest(self):
-        with open(os.path.join(Config.BASE_DIR, 'requirements.version.txt'), 'r') as f:
-            current_version = f.read().strip()
-        config = create_session().get(f'{Config.SECURE_WEB_URL}/config/settings.json').json()
-        version = None
-        try:
-            for ver in config['versions']:
-                if ver['network'] == Config.NETWORK_TYPE:
-                    version = ver['version']
-                    break
-        except:
-            pass
+        current_version, version = self.current_version()
         if version is None or version != current_version:
             self.log.warning(
                 f"Outdated validator version. Current: {current_version}, actual: {version}. Restarting..."
             )
             sys.exit(-1)
 
+    def check_version_is_latest_for_model_server(self):
+        try:
+            result = create_session().get(f"{Config.MODEL_SERVER}/check_version", timeout=10)
+            if result.status_code == 200:
+                return
+            elif result.status_code == 418:
+                # Model server detected outdated version
+                self.log.warning(f"Model server detected outdated version: {result.text}")
+                return
+            elif result.status_code == 404:
+                # Endpoint doesn't exist (old model server)
+                self.log.error(
+                    "Model server version endpoint not found (404). Update model server to the latest version."
+                )
+            else:
+                self.log.warning(
+                    f"Model server version endpoint returned {result.status_code}, falling back to direct check"
+                )
+        except Exception as e:
+            # Network errors, timeouts, etc.
+            self.log.debug(f"Model server version check undefined error: {e}")
+
     def run(self):
         validator_license = self.relayer_client.get_activation_code(self.hotkey)
         initialize(Config.NETWORK_TYPE)
         activate(validator_license)
         self.load_state()
-        force_validate = os.getenv('FORCE_VALIDATE', 'false') == 'true'
+        force_validate = os.getenv("FORCE_VALIDATE", "false") == "true"
         while True:
             self.check_version_is_latest()
             self.log.info("Validator loop is running")
@@ -366,8 +393,11 @@ class Validator(ReinforcedNeuron):
                 matching_reports.append(report)
 
         return MinerResult(
-            uid=result.uid, time=result.time, response=matching_reports if matching_reports else None,
-            collection_id=result.collection_id, tokens=result.tokens
+            uid=result.uid,
+            time=result.time,
+            response=matching_reports if matching_reports else None,
+            collection_id=result.collection_id,
+            tokens=result.tokens,
         )
 
     @classmethod
@@ -377,7 +407,7 @@ class Validator(ReinforcedNeuron):
         task_map: dict[int, ValidatorTask],
         miners: list[MinerInfo],
         log: logging.Logger = logging.getLogger("empty"),
-        validate_extra_fields: bool = True
+        validate_extra_fields: bool = True,
     ) -> list[float]:
         min_time = cls._get_min_response_time(results)
         scores = []
@@ -420,8 +450,10 @@ class Validator(ReinforcedNeuron):
     @classmethod
     def validate_responses_extra_fields(
         cls,
-        scores: list[int | float], results: list[MinerResult], task_map: dict[int, ValidatorTask],
-        log: logging.Logger = logging.getLogger("empty")
+        scores: list[int | float],
+        results: list[MinerResult],
+        task_map: dict[int, ValidatorTask],
+        log: logging.Logger = logging.getLogger("empty"),
     ):
         results_by_uid = {x.uid: x for x in results}
         filtered_responses_to_estimate: dict[str, list[MinerResult]] = {}
@@ -439,16 +471,21 @@ class Validator(ReinforcedNeuron):
             return scores
         scorings = []
         for task_code, task_responses in filtered_responses_to_estimate.items():
-            chunk = create_session().post(
-                f"{Config.MODEL_SERVER}/estimate_response",
-                json={
-                    'task': task_code,
-                    'responses': [result.model_dump() for result in task_responses]
-                }
-            )
-            if chunk.status_code != 200:
+            for i in range(Config.ESTIMATION_RETRIES):
+                log.debug(f"Estimating responses for task: {task_code} with {len(task_responses)} responses")
+                chunk = create_session().post(
+                    f"{Config.MODEL_SERVER}/estimate_response",
+                    json={"task": task_code, "responses": [result.model_dump() for result in task_responses]},
+                )
+                if chunk.status_code == 200:
+                    log.debug(f"Received scoring response for task: {task_code}")
+                    break
+                elif chunk.status_code != 200 and i == Config.ESTIMATION_RETRIES - 1:
+                    log.error(f"Failed to get scoring response for task: {task_code} after {Config.ESTIMATION_RETRIES} retries")
+                    raise ValueError(f"Failed to get scoring response for task: {task_code}")
                 log.error("Invalid status code from model server")
-                raise ValueError("Invalid scoring response from model server")
+                log.info(f"Retrying estimation for task: {task_code}")
+
             scorings_chunk = chunk.json()
 
             if not isinstance(scorings_chunk, list):
@@ -570,10 +607,7 @@ class Validator(ReinforcedNeuron):
 
     @classmethod
     def validate_report_by_additional_fields(
-        cls,
-        scorings: list[ValidatorEstimation],
-        scores: list[float],
-        miners: list[int]
+        cls, scorings: list[ValidatorEstimation], scores: list[float], miners: list[int]
     ) -> list[float]:
         if not scorings or not scores:
             return scores
@@ -600,8 +634,9 @@ class Validator(ReinforcedNeuron):
 
     def save_state(self):
         state = {
-            'last_validation': int(self._last_validation), 'scores': self._buffer_scores.dump(),
-            'hotkeys': {str(k): v for k, v in self.hotkeys.items()}
+            "last_validation": int(self._last_validation),
+            "scores": self._buffer_scores.dump(),
+            "hotkeys": {str(k): v for k, v in self.hotkeys.items()},
         }
         self.log.info("Saving validator state.")
 
@@ -649,5 +684,5 @@ def run_validator():
     validator.run()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_validator()
