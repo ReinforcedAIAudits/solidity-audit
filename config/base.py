@@ -18,9 +18,12 @@ class BaseConfig:
     EXTERNAL_IP = os.getenv('EXTERNAL_IP', net.get_external_ip())
     BT_AXON_PORT = int(os.getenv('BT_AXON_PORT', '8091'))
 
+    MAX_MINER_FORWARD_REQUESTS = int(os.getenv("MAX_MINER_FORWARD_REQUESTS", 5))
+
     MODEL_SERVER = os.getenv('MODEL_SERVER')
 
     TASK_MAX_TRIES: int = int(os.getenv("MAX_TRIES", "3"))
+    ESTIMATION_RETRIES: int = int(os.getenv("ESTIMATION_RETRIES", "3"))
 
     CYCLE_TIME = int(os.getenv("VALIDATOR_SEND_REQUESTS_EVERY_X_SECS", "3600"))
 

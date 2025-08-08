@@ -1,7 +1,9 @@
+import json
 import random
 import re
 import os
 import time
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 from solc_ast_parser.models.ast_models import (
     build_function_header,
@@ -11,7 +13,14 @@ from solc_ast_parser.models.ast_models import (
 )
 from solc_ast_parser.comments import insert_comments_into_ast
 from solc_ast_parser.enrichment import restore_function_definitions, restore_storages
-from solc_ast_parser.utils import find_node_with_properties, replace_node_to_multiple, remove_node, insert_node, shuffle_functions_and_storages
+from solc_ast_parser.utils import (
+    find_node_with_properties,
+    replace_node_to_multiple,
+    remove_node,
+    insert_node,
+    shuffle_functions_and_storages,
+    update_node_fields,
+)
 from solc_ast_parser.models import ast_models
 from solc_ast_parser.models.ast_models import (
     SourceUnit,
@@ -27,7 +36,140 @@ from solc_ast_parser.utils import (
 from solcx.exceptions import SolcError
 
 from ai_audits.protocol import ValidatorTask, TaskType
-from config import Config
+
+
+def extract_funcs_and_vars_from_code(
+    code: str,
+) -> tuple[list[str], list[str]]:
+
+    ast = create_ast_with_standart_input(code)
+
+    functions = [node.name for node in get_contract_nodes(ast, NodeType.FUNCTION_DEFINITION)]
+
+    variables = [node.name for node in get_contract_nodes(ast, NodeType.VARIABLE_DECLARATION)]
+
+    return functions, variables
+
+
+def replace_functions_names(code: str, synonims: dict[str, str]) -> str:
+    ast = create_ast_from_source(code)
+    functions_names_from_ast = [f.name for f in find_node_with_properties(ast, node_type=NodeType.FUNCTION_DEFINITION)]
+
+    for original_name in functions_names_from_ast:
+        if original_name in synonims:
+            new_name = synonims[original_name]
+            update_node_fields(
+                ast, {"node_type": NodeType.FUNCTION_DEFINITION, "name": original_name}, {"name": new_name}
+            )
+            update_node_fields(
+                ast,
+                {"node_type": NodeType.IDENTIFIER, "name": original_name},
+                {"node_type": NodeType.IDENTIFIER, "name": new_name},
+            )
+
+    return ast.to_solidity()
+
+
+class Synonymizer:
+    MIN_SYNONYMS = 5
+    RESERVED = set(
+        """
+        after,alias,apply,auto,byte,case,copyof,default,define,final,implements,in,inline,let,macro,match,mutable,
+        null,of,partial,promise,reference,relocatable,sealed,sizeof,static,supports,switch,typedef,typeof,var,seconds,
+        minutes,hours,days,weeks,years,wei,gwei,ether,finney,szabo,blockhash,blobhash,block,basefee,blobbasefee,chainid,
+        coinbase,difficulty,gaslimit,number,prevrandao,timestamp,gasleft,msg,data,sender,sig,value,tx,gasprice,origin,
+        now,gas,abi,decode,encode,encodePacked,encodeWithSelector,encodeWithSignature,encodeCall,bytes,concat,assert,
+        require,revert,addmod,mulmod,keccak256,sha3,sha256,ripemd160,ecrecover,balance,code,codehash,transfer,send,call,
+        delegatecall,staticcall,callcode,this,super,selfdestruct,suicide,type,name,creationCode,runtimeCode,interfaceId,
+        min,max,bool,true,false,int,uint,unchecked,fixed,ufixed,address,payable,length,memory,unicode,hex,enum,contract,
+        function,enum,mapping,constant,public,view,pure,internal,external,returns,wrap,unwrap,delete,selector,value,
+        event,return
+    """.replace(
+            "\n", ""
+        ).split(
+            ","
+        )
+    )
+
+    synonims: dict[str, list[str]]
+    client: AsyncOpenAI
+    model: str
+
+    def __init__(self, client: AsyncOpenAI, model: str):
+        self.synonims = {}
+        self.client = client
+        self.model = model
+
+    @staticmethod
+    def is_reserved(name: str) -> bool:
+        name = name.strip()
+        if name in Synonymizer.RESERVED:
+            return True
+        return bool(re.match(r"^(bytes|int|uint)\d+$", name))
+
+    @staticmethod
+    def is_valid_identifier(name: str) -> bool:
+        return re.match(r"^[a-zA-Z$_][a-zA-Z0-9$_]*$", name) is not None
+
+    async def get_synonim(self, function_name: str, contract_code: str):
+        if function_name not in self.synonims:
+            syns = await self._generate_with_llm(contract_code, function_name)
+            self.synonims[function_name] = syns
+        return random.choice(self.synonims[function_name])
+
+    async def synonymize_function_names(self, code: str):
+        funcs, _ = extract_funcs_and_vars_from_code(code)
+        replacements: dict[str, str] = {}
+        for f in funcs:
+            while True:
+                syn = await self.get_synonim(f, code)
+                if syn not in replacements:
+                    replacements[syn] = f
+                    break
+
+        synonims = {v: k for k, v in replacements.items()}
+        synonymized_code = replace_functions_names(code, synonims)
+
+        return synonymized_code
+
+    async def _generate_with_llm(self, contract_code: str, function_name: str) -> list[str]:
+        prompt = (
+            "We are creating a large solidity code dataset, you are helping us with that task.\n"
+            "We need to create some entries, that don't exist in the original dataset, but based on the entries we have. "
+            "For that - we want to create synonyms for many identifiers.\n"
+            f"Function: {function_name}\n"
+            f"Full contract code:\n{contract_code}\n"
+            "Generate 10 alternative names to identifier '{function_name}'."
+            "Those names should be valid solidity identifiers.\n"
+            "Respond ONLY with a JSON array of at least 10 unique valid Solidity identifiers, e.g.:\n"
+            '["fooBar", "barFoo", "bazQux", ...]'
+        )
+        for retry in range(3):
+            try:
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "system", "content": prompt}],
+                    temperature=0.7,
+                )
+                llm_res: list[str] = json.loads(response.choices[0].message.content)
+                llm_res = [
+                    v.lstrip("_").strip()
+                    for v in llm_res
+                    if v.strip()
+                    and not self.is_reserved(v.lstrip("_").strip())
+                    and self.is_valid_identifier(v.lstrip("_").strip())
+                ]
+                llm_res.append(function_name)
+                llm_res = list(set(llm_res))
+                if len(llm_res) < self.MIN_SYNONYMS:
+                    raise ValueError(
+                        f"Can't generate enough synonyms for {function_name}, LLM responded with {llm_res}"
+                    )
+                return llm_res
+            except Exception as e:
+                if retry == 2:
+                    raise e
+                continue
 
 
 def get_contract_nodes_from_source(source: str, node_type: NodeType) -> list[ast_models.ASTNode]:
@@ -369,8 +511,10 @@ def create_task(contract_source: str, raw_vulnerability: Vulnerability) -> Valid
 
     if not shuffle_functions_and_storages(ast_contract_with_vul):
         print("Error: Failed to shuffle functions and storages in the contract with vulnerability.")
-    
-    contract_source = ast_contract_with_vul.to_solidity(config=SolidityConfig(quote_preference=random.choice([QuotePreference.SINGLE, QuotePreference.DOUBLE])))
+
+    contract_source = ast_contract_with_vul.to_solidity(
+        config=SolidityConfig(quote_preference=random.choice([QuotePreference.SINGLE, QuotePreference.DOUBLE]))
+    )
     from_line, to_line = find_function_boundaries(
         ast_contract_with_vul,
         contract_source,

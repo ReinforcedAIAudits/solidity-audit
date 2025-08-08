@@ -83,5 +83,5 @@ class MinerInfo(BaseModel):
 
 class NFTMetadata(BaseModel):
     miner_info: MinerInfo
-    task: str
+    task: str | None
     audit: list[VulnerabilityReport]
