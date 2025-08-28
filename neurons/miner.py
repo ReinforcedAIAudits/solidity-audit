@@ -4,7 +4,7 @@ import time
 import requests
 from solidity_audit_lib.encrypting import encrypt
 from solidity_audit_lib.messaging import VulnerabilityReport, MinerResponseMessage, MinerResponse
-from solidity_audit_lib.relayer_client.relayer_types import TaskModel
+from solidity_audit_lib.relayer_client.relayer_types import TaskModel, MinerStorage
 from unique_playgrounds import UniqueHelper
 from unique_playgrounds.types_system import SignParams
 from unique_playgrounds.types_unique import CrossAccountId, Property
