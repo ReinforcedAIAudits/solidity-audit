@@ -263,18 +263,23 @@ class ReinforcedNeuron:
         return getattr(cls, '_code_version')
 
     @classmethod
-    def current_version(cls) -> tuple[str, str]:
+    def current_version(cls) -> tuple[str, str, str]:
         current_version = cls.code_version()
         config = create_session().get(f'{Config.SECURE_WEB_URL}/config/settings.json').json()
         version = None
+        validators_version = None
         try:
             for ver in config['versions']:
                 if ver['network'] == Config.NETWORK_TYPE:
                     version = ver['version']
                     break
+            for ver in config['validators']:
+                if ver['network'] == Config.NETWORK_TYPE:
+                    validators_version = ver['version']
+                    break
         except:
             pass
-        return current_version, version
+        return current_version, version, validators_version
 
     def wait_for_server(self, url, max_attempts=10, delay=5):
         if Config.SKIP_HEALTHCHECK:

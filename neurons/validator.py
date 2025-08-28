@@ -219,7 +219,7 @@ class Validator(ReinforcedNeuron):
                     results.append(future.result(timeout=self.MINER_RESPONSE_TIMEOUT))
                 except TimeoutError:
                     self.log.debug(
-                        f"Miner with uid {args[0].uid} got timeout: " f"more than {self.MINER_RESPONSE_TIMEOUT} secs"
+                        f"Miner with uid {args[0].uid} got timeout: more than {self.MINER_RESPONSE_TIMEOUT} secs"
                     )
                     results.append(MinerResult(uid=args[0].uid, time=self.MINER_RESPONSE_TIMEOUT, response=None))
         self.hotkey = hotkey
@@ -265,16 +265,13 @@ class Validator(ReinforcedNeuron):
         self.log.info(f"{num_tasks} tasks for miners generated")
 
         miner_task_map: dict[int, ValidatorTask] = {}
-        reverse_task_map: dict[str, dict] = {}
 
         for miner in miners:
             assigned_task: ValidatorTask = random.choice(tasks)
             miner_task_map[miner.uid] = assigned_task
-            reverse_task_map.setdefault(
-                assigned_task.contract_code, {"task": assigned_task.model_dump(), "miners": []}
-            )["miners"].append(miner.uid)
 
         self.log.debug(f"Miner-task map: {miner_task_map}")
+
         original_responses = self.ask_miners(miners, miner_task_map)
         self.log.info("Miners responses received")
         responses = [self.remove_suggestions(x) for x in original_responses]
@@ -303,10 +300,16 @@ class Validator(ReinforcedNeuron):
         self.set_weights()
 
     def check_version_is_latest(self):
-        current_version, version = self.current_version()
+        self.check_version_is_latest_for_model_server()
+        current_version, version, current_validators_version = self.current_version()
         if version is None or version != current_version:
             self.log.warning(
                 f"Outdated validator version. Current: {current_version}, actual: {version}. Restarting..."
+            )
+            sys.exit(-1)
+        if current_validators_version is None or current_validators_version != self.current_validators_version:
+            self.log.warning(
+                f"Outdated validators version. Current: {current_validators_version}, actual: {self.current_validators_version}. Restarting..."
             )
             sys.exit(-1)
 
@@ -338,6 +341,8 @@ class Validator(ReinforcedNeuron):
         activate(validator_license)
         self.load_state()
         force_validate = os.getenv("FORCE_VALIDATE", "false") == "true"
+        _, _, current_validators_version = self.current_version()
+        self.current_validators_version = current_validators_version
         while True:
             self.check_version_is_latest()
             self.log.info("Validator loop is running")
@@ -354,17 +359,25 @@ class Validator(ReinforcedNeuron):
 
     def set_weights(self):
         with SubtensorWrapper(self.config.ws_endpoint) as client:
-            result, error = client.set_weights(
-                self.hotkey, self.config.net_uid, dict(zip(self._buffer_scores.uids(), self._buffer_scores.scores()))
-            )
+            weights_dict = dict(zip(self._buffer_scores.uids(), self._buffer_scores.scores()))
+            commitment_enabled = client.api.query(
+                module="SubtensorModule", storage_function="CommitRevealWeightsEnabled",
+                params=[self.config.net_uid],
+            ).value
+            self.log.info(f'CommitRevealWeightsEnabled: {commitment_enabled}')
+            try:
+                if commitment_enabled:
+                    result, error = client.commit_weights(self.hotkey, self.config.net_uid, weights_dict)
+                else:
+                    result, error = client.set_weights(self.hotkey, self.config.net_uid, weights_dict)
+            except:
+                result, error = False, 'SubstrateError'
         if result:
             self.log.info("set_weights on chain successfully!")
-        elif error["name"] == "RateLimit":
-            self.log.warning("set_weights failed due to rate limit, will retry later.")
-            time.sleep(12 * error["blocks"])
-            self.set_weights()
         else:
-            self.log.error(f"set_weights failed: {error}")
+            self.log.error(f"set_weights failed: {error}, will retry later")
+            time.sleep(120)
+            self.set_weights()
 
     @classmethod
     def _get_min_response_time(cls, responses: list[MinerResult]) -> float:
@@ -401,14 +414,14 @@ class Validator(ReinforcedNeuron):
         )
 
     @classmethod
-    def validate_responses(
+    def formal_validation_of_miner_results(
         cls,
         results: list[MinerResult],
         task_map: dict[int, ValidatorTask],
         miners: list[MinerInfo],
         log: logging.Logger = logging.getLogger("empty"),
-        validate_extra_fields: bool = True,
     ) -> list[float]:
+        """Calculate scores for miners based on formal validation of results and response time."""
         min_time = cls._get_min_response_time(results)
         scores = []
         results_by_uid = {x.uid: x for x in results}
@@ -435,14 +448,36 @@ class Validator(ReinforcedNeuron):
             scores.append(report_score + time_score)
 
         log.debug(f"Scores based on reports and time: {scores}")
+        return scores
 
+    @classmethod
+    def validate_extra_fields_with_error_handling(
+        cls,
+        scores: list[float],
+        results: list[MinerResult],
+        task_map: dict[int, ValidatorTask],
+        log: logging.Logger = logging.getLogger("empty"),
+    ) -> list[float]:
+        """Validate extra fields with proper error handling."""
+        try:
+            scores = cls.validate_responses_extra_fields(scores, results, task_map, log)
+            log.info("Extra fields validated successfully")
+        except Exception as e:
+            log.warning(f"Unable to validate extra fields: {e}")
+        return scores
+
+    @classmethod
+    def validate_responses(
+        cls,
+        results: list[MinerResult],
+        task_map: dict[int, ValidatorTask],
+        miners: list[MinerInfo],
+        log: logging.Logger = logging.getLogger("empty"),
+        validate_extra_fields: bool = True,
+    ) -> list[float]:
+        scores = cls.formal_validation_of_miner_results(results, task_map, miners, log)
         if validate_extra_fields:
-            try:
-                scores = cls.validate_responses_extra_fields(scores, results, task_map, log)
-            except Exception as e:
-                log.warning(f"Unable to validate extra fields: {e}")
-            else:
-                log.info(f"Extra fields validated successfully")
+            scores = cls.validate_extra_fields_with_error_handling(scores, results, task_map, log)
 
         log.debug(f"Final scores: {scores}")
         return scores
@@ -481,7 +516,9 @@ class Validator(ReinforcedNeuron):
                     log.debug(f"Received scoring response for task: {task_code}")
                     break
                 elif chunk.status_code != 200 and i == Config.ESTIMATION_RETRIES - 1:
-                    log.error(f"Failed to get scoring response for task: {task_code} after {Config.ESTIMATION_RETRIES} retries")
+                    log.error(
+                        f"Failed to get scoring response for task: {task_code} after {Config.ESTIMATION_RETRIES} retries"
+                    )
                     raise ValueError(f"Failed to get scoring response for task: {task_code}")
                 log.error("Invalid status code from model server")
                 log.info(f"Retrying estimation for task: {task_code}")
