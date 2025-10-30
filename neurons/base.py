@@ -121,6 +121,12 @@ class ReinforcedNeuron:
     NEURON_TYPE = 'Base'
     AXONS_CACHE_INVALIDATION = 5 * 60
     UID_CACHE_INVALIDATION = 5 * 60
+    UNIQUE = 10 ** 18
+    
+    DEFAULT_TOKEN_SIZE_LIMIT = 8 * 1024
+    EXTENDED_TOKEN_SIZE_LIMIT = 32 * 1024
+    MAX_TOKEN_SIZE_LIMIT = 64 * 1024
+
     settings: ReinforcedSettings
 
     def __init__(self, config: ReinforcedConfig):

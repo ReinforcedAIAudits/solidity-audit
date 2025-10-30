@@ -29,6 +29,7 @@ class BaseConfig:
 
     MAX_BUFFER = int(os.getenv("VALIDATOR_BUFFER", "24"))
     VALIDATOR_TIME = os.getenv("VALIDATOR_TIME", None)
+    MINER_REQUEST_TIMEOUT = int(os.getenv("MINER_REQUEST_TIMEOUT", "300"))
     REQUEST_PERIOD = int(os.getenv("MINER_ACCEPT_REQUESTS_EVERY_X_SECS", 20 * 60))
     SKIP_HEALTHCHECK = os.getenv("SKIP_HEALTHCHECK", "false").lower() == "true"
     WHITELISTED_KEYS = os.getenv("WHITELISTED_KEYS", "")

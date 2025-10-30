@@ -131,17 +131,34 @@ class Validator(ReinforcedNeuron):
             for token_id in response.token_ids:
                 token = helper.nft.get_token_info(response.collection_id, token_id)
 
-            if not token:
-                self.log.error(f"Token {token_id} for miner {response.ss58_address} not found")
-                return False
+                if not token:
+                    self.log.error(f"Token {token_id} for miner {response.ss58_address} not found")
+                    return False
 
-            properties = {x["key"]: x["value"] for x in token["properties"]}
+                properties = {x["key"]: x["value"] for x in token["properties"]}
 
-            if properties["validator"] != self.crypto_hotkey.ss58_address:
-                self.log.error(f"Token {token_id} for miner {response.ss58_address} has incorrect validator")
-                return False
+                if properties["validator"] != self.crypto_hotkey.ss58_address:
+                    self.log.error(f"Token {token_id} for miner {response.ss58_address} has incorrect validator")
+                    return False
 
-            metadata_encrypted.append(properties["audit"][2:])
+                metadata_encrypted.append(properties["audit"][2:])
+
+            if (
+                len(metadata_encrypted) > 1
+                and helper.get_constant("Common", "PropertySizeLimitUpgradePriceExtended") is not None
+                and helper.get_constant("Common", "PropertySizeLimitUpgradePriceMax") is not None
+            ):
+                if all(len(x) <= 0.9 * self.EXTENDED_TOKEN_SIZE_LIMIT for x in metadata_encrypted):
+                    self.log.error(
+                        f"Token's property size for miner {response.ss58_address} must be extended at Unique"
+                    )
+                    return False
+
+                if all(len(x) <= 0.9 * self.MAX_TOKEN_SIZE_LIMIT for x in metadata_encrypted):
+                    self.log.error(
+                        f"Token's property size for miner {response.ss58_address} must be upgraded at Unique"
+                    )
+                    return False
 
         metadata_encrypted = "".join(metadata_encrypted)
 
@@ -280,7 +297,6 @@ class Validator(ReinforcedNeuron):
         rewards = self.validate_responses(responses, miner_task_map, miners, log=self.log)
 
         self.log.info(f"Scored responses: {rewards}")
-        rewards_dict = dict(zip([x.uid for x in miners], rewards))
 
         try:
             self.set_top_miners(responses, rewards, miners)
@@ -361,17 +377,18 @@ class Validator(ReinforcedNeuron):
         with SubtensorWrapper(self.config.ws_endpoint) as client:
             weights_dict = dict(zip(self._buffer_scores.uids(), self._buffer_scores.scores()))
             commitment_enabled = client.api.query(
-                module="SubtensorModule", storage_function="CommitRevealWeightsEnabled",
+                module="SubtensorModule",
+                storage_function="CommitRevealWeightsEnabled",
                 params=[self.config.net_uid],
             ).value
-            self.log.info(f'CommitRevealWeightsEnabled: {commitment_enabled}')
+            self.log.info(f"CommitRevealWeightsEnabled: {commitment_enabled}")
             try:
                 if commitment_enabled:
                     result, error = client.commit_weights(self.hotkey, self.config.net_uid, weights_dict)
                 else:
                     result, error = client.set_weights(self.hotkey, self.config.net_uid, weights_dict)
             except:
-                result, error = False, 'SubstrateError'
+                result, error = False, "SubstrateError"
         if result:
             self.log.info("set_weights on chain successfully!")
         else:

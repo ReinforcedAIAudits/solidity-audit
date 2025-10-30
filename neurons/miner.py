@@ -12,7 +12,7 @@ from unique_playgrounds.types_unique import CrossAccountId, Property
 from ai_audits.protocol import MinerInfo, NFTMetadata
 from config import Config
 from neurons.base import ReinforcedNeuron, ReinforcedConfig
-from neurons.server import AxonServer, AxonServerOptions
+from neurons.server import AxonServer, AxonServerFeedback, AxonServerOptions
 
 __all__ = ["Miner", "run_miner"]
 
@@ -20,7 +20,6 @@ __all__ = ["Miner", "run_miner"]
 class Miner(ReinforcedNeuron):
     NEURON_TYPE = "miner"
     REQUEST_PERIOD = Config.REQUEST_PERIOD
-    MAX_TOKEN_SIZE = 1024 * 31
     _last_call: dict[str, float]
     _callers_whitelist: list[str]
 
@@ -32,6 +31,38 @@ class Miner(ReinforcedNeuron):
         )
         self.collection_id = None
         self.nonce = self.get_nft_nonce()
+        self.MAX_TOKEN_SIZE = self.DEFAULT_TOKEN_SIZE_LIMIT
+
+    def upgrade_token_properties_size_limit(self, collection_id: int) -> bool:
+        with UniqueHelper(self.settings.unique_endpoint) as helper:
+            extended_price = helper.get_constant("Common", "PropertySizeLimitUpgradePriceExtended")
+            max_price = helper.get_constant("Common", "PropertySizeLimitUpgradePriceMax")
+            
+            if extended_price is None or max_price is None:
+                self.MAX_TOKEN_SIZE = self.EXTENDED_TOKEN_SIZE_LIMIT
+                return True
+
+            properties_limit = helper.call_query("Common", "CollectionTokenPropertiesLimit", [collection_id])
+            if not properties_limit:
+                self.log.error("Unable to fetch current properties limit.")
+                return False
+
+            if properties_limit < self.MAX_TOKEN_SIZE_LIMIT:
+                try:
+                    helper.execute_extrinsic(self.hotkey, "Unique.upgrade_tokens_properties_limit", {"collection_id": collection_id, 'new_limit': 'Max'})
+                except Exception as e:
+                    if "NotSufficientFunds" in str(e):
+                        self.log.error(f"Insufficient balance detected while upgrading properties limit, needs {max_price.value / self.UNIQUE} UNQs for correct work.")
+                        raise Exception(f"Insufficient balance to upgrade properties limit, needs {max_price.value / self.UNIQUE} UNQs for correct work.")
+
+                    self.log.error(f"Unable to upgrade properties limit: {e}")
+                    return False
+                
+                self.log.info(f"Upgraded properties limit to {self.MAX_TOKEN_SIZE_LIMIT} for collection {collection_id}")
+                self.MAX_TOKEN_SIZE = self.MAX_TOKEN_SIZE_LIMIT
+            
+            return True
+
 
     def create_nft_collection(self) -> int:
         existed = self.relayer_client.get_storage(self.hotkey)
@@ -39,6 +70,11 @@ class Miner(ReinforcedNeuron):
             if self.check_nft_collection_ownership(existed.result["collection_id"], self.hotkey.ss58_address):
                 self.collection_id = existed.result["collection_id"]
                 self.log.info(f"Collection #{self.collection_id} found for {self.hotkey.ss58_address}")
+                
+                if not self.upgrade_token_properties_size_limit(self.collection_id):
+                    self.log.error("Unable to upgrade token properties size limit. Exiting.")
+                    sys.exit(1)
+
                 return self.collection_id
         collection_data = {
             "name": f"Miner {self.hotkey.ss58_address[:4]}...{self.hotkey.ss58_address[-4:]} "
@@ -65,6 +101,11 @@ class Miner(ReinforcedNeuron):
 
         self.collection_id = collection_id
         self.log.info(f"Created collection #{self.collection_id} for {self.hotkey.ss58_address}")
+
+        if not self.upgrade_token_properties_size_limit(self.collection_id):
+            self.log.error("Unable to upgrade token properties size limit. Exiting.")
+            sys.exit(1)
+            
         return self.collection_id
 
     def mint_token_with_nonce(self, collection_id: int, properties: list[Property]) -> int:
@@ -172,7 +213,7 @@ class Miner(ReinforcedNeuron):
 
         self.log.info(f"Dividing audit report into {number_of_parts} tokens.")
 
-        return list(split_string(data, number_of_parts))
+        return list(split_string(data, self.MAX_TOKEN_SIZE))
 
     def do_audit_code(self, task: TaskModel) -> list[VulnerabilityReport]:
         result = requests.post(
@@ -227,12 +268,15 @@ class Miner(ReinforcedNeuron):
         self._last_call[request.ss58_address] = time.time()
         return False, None
 
-    def forward(self, task: TaskModel) -> MinerResponseMessage:
+    def forward(self, task: TaskModel, server_feedback: AxonServerFeedback) -> MinerResponseMessage:
         self.check_axon_alive()
         self.log.info(f"Got task from {task.ss58_address}")
         is_blacklisted, error = self.check_blacklist(task)
         if is_blacklisted:
             return MinerResponseMessage(success=False, error=error)
+        
+        if task.ss58_address in self._callers_whitelist:
+            server_feedback.set_request_timeout(Config.MINER_REQUEST_TIMEOUT * 3)
 
         self.log.info(f"Task is valid, contract code:\n{task.contract_code}")
         max_retries = 5
@@ -259,12 +303,11 @@ class Miner(ReinforcedNeuron):
             uid=task.uid,
         )
         response.sign(self.hotkey)
-
         return MinerResponseMessage(success=True, result=response)
 
-    def forward_web(self, task: str):
+    def forward_web(self, task: str, server_feedback: AxonServerFeedback) -> dict:
         try:
-            result = self.forward(TaskModel(**json.loads(task)))
+            result = self.forward(TaskModel(**json.loads(task)), server_feedback=server_feedback)
         except Exception as e:
             self.log.error(f"Exception in forward: {e}")
             result = MinerResponseMessage(success=False, error="MinerInternalError")
@@ -298,7 +341,7 @@ def run_miner():
     server = AxonServer(
         listen_address="0.0.0.0",
         port=Config.BT_AXON_PORT,
-        options=AxonServerOptions(max_post_requests=Config.MAX_MINER_FORWARD_REQUESTS),
+        options=AxonServerOptions(max_post_requests=Config.MAX_MINER_FORWARD_REQUESTS, post_request_timeout=Config.MINER_REQUEST_TIMEOUT),
     )
     server.get("/miner_running", healthchecker)
     server.get("/version", miner_version(miner.code_version()))
