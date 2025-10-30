@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from http import HTTPMethod, HTTPStatus
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
-from typing import Any
+from typing import Any, Callable
 import threading
 import time
 import json
@@ -10,7 +10,7 @@ import multiprocessing
 from multiprocessing.connection import Connection
 
 
-__all__ = ["AxonServer", "AxonServerOptions"]
+__all__ = ["AxonServer", "AxonServerOptions", "AxonServerFeedback"]
 
 
 @dataclass
@@ -40,6 +40,20 @@ class AxonServerOptions:
     Time in seconds after which the POST request handler will receive SIGKILL
     if it has not finished after receiving SIGTERM.
     """
+
+
+@dataclass
+class AxonServerFeedback:
+    set_request_timeout: Callable[[int], None]
+    """
+    Overrides `AxonServerOptions.post_request_timeout` for the current request,
+    does not affect the timeout for processing other requests.
+    """
+
+
+@dataclass
+class _HandlerFeedback:
+    new_timeout: int | None = None
 
 
 class AxonServer(ThreadingMixIn, HTTPServer):
@@ -139,6 +153,9 @@ class AxonHandler(BaseHTTPRequestHandler):
 
             result = self.__run_handler(handler, body, server._options)
             self.__response(result)
+        except BrokenPipeError:
+            # Client closed the connection before we sent a response.
+            pass
         except:
             self.__response(HTTPStatus.INTERNAL_SERVER_ERROR)
             raise
@@ -165,9 +182,13 @@ class AxonHandler(BaseHTTPRequestHandler):
     def __run_handler(self, handler: callable, body: str, options: AxonServerOptions):
         POLL_INTERVAL = 0.2
 
-        def worker(pipe: Connection, handler: callable, body: str):
+        def worker(pipe: Connection, handler: Callable[[str, AxonServerFeedback], Any], body: str):
+            feedback = AxonServerFeedback(
+                set_request_timeout=lambda timeout: pipe.send(_HandlerFeedback(timeout))
+            )
+
             try:
-                handler_ret = handler(body)
+                handler_ret = handler(body, feedback)
                 pipe.send(handler_ret)
             except Exception as e:
                 pipe.send(e)
@@ -185,9 +206,17 @@ class AxonHandler(BaseHTTPRequestHandler):
 
         # Try to receive response.
         start_time = time.time()
-        while time.time() - start_time < options.post_request_timeout:
+        timeout = options.post_request_timeout
+    
+        while time.time() - start_time < timeout:
             if parent_pipe.poll(POLL_INTERVAL):
                 result = parent_pipe.recv()
+
+                # Feedback means that the handler is working properly,
+                # but it needs more time to process the request.
+                if isinstance(result, _HandlerFeedback):
+                    timeout = result.new_timeout
+                    continue
 
                 process.join()
 
